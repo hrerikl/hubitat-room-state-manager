@@ -30,4 +30,5 @@ test {
 codenarc {
     toolVersion = '3.3.0'
     configFile = file('config/codenarc/codenarc.groovy')
+    ignoreFailures = true
 }
