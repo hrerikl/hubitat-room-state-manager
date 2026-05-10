@@ -60,10 +60,10 @@ preferences {
         }
 
         section("Inputs: neighbor/courtesy") {
-            input "neighborRoomDevices", "capability.switch", title: "Neighbor Room devices that should trigger courtesy lighting", multiple: true, required: false
-            paragraph "Select other Room meta-devices. Only devices exposing roomState or lightingIntent attributes are used internally. Neighbor rooms trigger Courtesy only when their roomState is Occupied or Engaged. Locked rooms do not propagate Courtesy."
-            input "addThisRoomToSelectedNeighborsNow", "button", title: "Add this room back to selected neighbors"
-            paragraph "One-time setup helper: for each selected neighbor room, attempts to add this room's meta-device to that room's neighbor list. Each child app still owns its own neighbor list after the shortcut runs."
+            input "neighborChildAppIds", "enum", title: "Neighbor rooms that should trigger courtesy lighting", options: safeNeighborRoomOptions(), multiple: true, required: false
+            paragraph "Select other Simple Room State rooms. Neighbor rooms trigger Courtesy only when their roomState is Occupied or Engaged. Locked rooms do not propagate Courtesy."
+            input "syncReciprocalNeighborsOnSave", "bool", title: "Add this room back to selected neighbors on save", defaultValue: false, required: true
+            paragraph "When enabled, saving this room attempts to add it to each selected neighbor's courtesy list. Each child app still owns its own neighbor list."
         }
 
         section("Inputs: external lock") {
@@ -100,11 +100,7 @@ def appButtonHandler(btn) {
         assignChildDevicesToHubitatRoom()
     }
     if (btn == "addThisRoomToSelectedNeighborsNow") {
-        try {
-            parent.addThisRoomToSelectedNeighbors(app.id)
-        } catch (Exception e) {
-            log.warn "${roomDeviceLabel()}: Reciprocal neighbor setup failed: ${e.message}"
-        }
+        syncReciprocalNeighbors()
     }
 }
 
@@ -131,6 +127,11 @@ def initializeChild() {
 
     ensureInitialState()
 
+    if (syncReciprocalNeighborsOnSave) {
+        syncReciprocalNeighbors()
+        clearSyncReciprocalNeighborsOnSave()
+    }
+
     subscribe(roomDevice(), "switch.on", roomSwitchOnHandler)
     subscribe(roomDevice(), "switch.off", roomSwitchOffHandler)
 
@@ -148,8 +149,9 @@ def initializeChild() {
     subscribe(activitySwitches, "switch.on", activitySwitchOnHandler)
     subscribe(engagementSwitches, "switch.on", engagementSwitchOnHandler)
 
-    subscribe(selectedNeighborRoomDevices(), "roomState", neighborRoomHandler)
-    subscribe(selectedNeighborRoomDevices(), "switch", neighborRoomHandler)
+    List neighborDevices = selectedNeighborRoomDevices()
+    debugNeighborResolution(neighborDevices)
+    subscribe(neighborDevices, "roomState", neighborRoomHandler)
     subscribe(externalLockedSwitches, "switch", externalLockHandler)
 
     refreshDerivedStates()
@@ -164,6 +166,18 @@ private void ensureInitialState() {
     if (state.roomState == null) state.roomState = "Off"
     if (state.lightingIntent == null) state.lightingIntent = "Off"
     if (state.lastActivityAt == null) state.lastActivityAt = null
+}
+
+// -------------------- UI Option Helpers --------------------
+
+private Map safeNeighborRoomOptions() {
+    try {
+        if (!parent) return [:]
+        return parent.neighborRoomOptions(app.id) ?: [:]
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not load neighbor room options: ${e.message}"
+        return [:]
+    }
 }
 
 // -------------------- Naming --------------------
@@ -312,16 +326,42 @@ private def engagedDevice() { getChildDevice(dniFor("Engaged")) }
 private def lockedDevice()  { getChildDevice(dniFor("Locked")) }
 
 private List selectedNeighborRoomDevices() {
-    if (!neighborRoomDevices) return []
+    if (!neighborChildAppIds) return []
 
-    List devices = neighborRoomDevices instanceof List ? neighborRoomDevices : [neighborRoomDevices]
+    try {
+        if (!parent) return []
+        return parent.neighborRoomDevicesForChildIds(neighborChildAppIds) ?: []
+    } catch (Exception e) {
+        log.warn "${roomDeviceLabel()}: Could not resolve neighbor rooms from parent: ${e.message}"
+        return []
+    }
+}
 
-    return devices.findAll { dev ->
-        try {
-            dev?.currentValue("roomState") != null || dev?.currentValue("lightingIntent") != null
-        } catch (Exception ignored) {
-            false
-        }
+private void debugNeighborResolution(List neighborDevices) {
+    if (!debugLogging) return
+
+    List selectedIds = getSelectedNeighborChildAppIds()
+    List resolvedLabels = neighborDevices.collect { dev ->
+        "${dev.displayName ?: dev.label ?: dev.id} (${dev.id})"
+    }
+
+    debug "Selected neighbor child app IDs: ${selectedIds ? selectedIds.join(', ') : 'none'}"
+    debug "Resolved neighbor Room devices: ${resolvedLabels ? resolvedLabels.join(', ') : 'none'}"
+}
+
+private void syncReciprocalNeighbors() {
+    try {
+        parent.addThisRoomToSelectedNeighbors(app.id)
+    } catch (Exception e) {
+        log.warn "${roomDeviceLabel()}: Reciprocal neighbor setup failed: ${e.message}"
+    }
+}
+
+private void clearSyncReciprocalNeighborsOnSave() {
+    try {
+        app.updateSetting("syncReciprocalNeighborsOnSave", [type: "bool", value: false])
+    } catch (Exception e) {
+        log.warn "${roomDeviceLabel()}: Could not clear reciprocal neighbor sync option: ${e.message}"
     }
 }
 
@@ -329,6 +369,14 @@ private List selectedNeighborRoomDevices() {
 // -------------------- Parent Setup Helper API --------------------
 // These methods are called by the parent app for the optional one-time
 // "Add this room back to selected neighbors" setup shortcut.
+
+def getChildAppId() {
+    return app.id?.toString()
+}
+
+def getManagedRoomDevice() {
+    return roomDevice()
+}
 
 def getManagedRoomDeviceId() {
     return roomDevice()?.id?.toString()
@@ -338,29 +386,26 @@ def getManagedRoomDeviceLabel() {
     return roomDevice()?.displayName ?: roomDeviceLabel()
 }
 
-def getSelectedNeighborRoomDeviceIds() {
-    return selectedNeighborRoomDevices().collect { it.id?.toString() }.findAll { it }
+def getSelectedNeighborChildAppIds() {
+    if (!neighborChildAppIds) return []
+    return neighborChildAppIds instanceof List ? neighborChildAppIds.collect { "${it}" } : ["${neighborChildAppIds}"]
 }
 
-def addNeighborRoomDeviceById(String newNeighborDeviceId) {
-    if (!newNeighborDeviceId) return false
+def addNeighborChildAppId(String newNeighborChildAppId) {
+    if (!newNeighborChildAppId) return false
 
-    List existingIds = []
-    if (neighborRoomDevices) {
-        List devices = neighborRoomDevices instanceof List ? neighborRoomDevices : [neighborRoomDevices]
-        existingIds = devices.collect { it.id?.toString() }.findAll { it }
-    }
+    List existingIds = getSelectedNeighborChildAppIds()
 
-    if (existingIds.contains(newNeighborDeviceId.toString())) {
-        debug "Reciprocal neighbor already present: ${newNeighborDeviceId}"
+    if (existingIds.contains(newNeighborChildAppId.toString())) {
+        debug "Reciprocal neighbor already present: child app ${newNeighborChildAppId}"
         return false
     }
 
-    existingIds << newNeighborDeviceId.toString()
+    existingIds << newNeighborChildAppId.toString()
 
     try {
-        app.updateSetting("neighborRoomDevices", [type: "capability.switch", value: existingIds])
-        debug "Added reciprocal neighbor device id ${newNeighborDeviceId}"
+        app.updateSetting("neighborChildAppIds", [type: "enum", value: existingIds])
+        debug "Added reciprocal neighbor child app id ${newNeighborChildAppId}"
         unsubscribe()
         unschedule()
         initializeChild()

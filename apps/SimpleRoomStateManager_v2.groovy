@@ -5,7 +5,7 @@
  *   Name: Simple Room State Manager v2
  *   Namespace: lundby
  *
- * Provides parent container plus one-time setup helper for reciprocal neighbors.
+ * Provides parent container plus one-time setup helper for reciprocal neighbors. Neighbor relationships are stored by child app ID.
  */
 
 definition(
@@ -61,23 +61,17 @@ def initialize() {
  * After this runs, each child app continues to own its own neighbor list.
  */
 def addThisRoomToSelectedNeighbors(sourceChildAppId) {
-    def sourceChild = childApps?.find { "${it.id}" == "${sourceChildAppId}" }
+    def sourceChild = childApps?.find { childAppId(it) == "${sourceChildAppId}" }
 
     if (!sourceChild) {
         log.warn "Simple Room State Manager v2: Reciprocal neighbor setup failed. Could not find source child app ${sourceChildAppId}."
         return
     }
 
-    String sourceRoomDeviceId = sourceChild.getManagedRoomDeviceId()
     String sourceRoomLabel = sourceChild.getManagedRoomDeviceLabel()
-    List selectedNeighborIds = sourceChild.getSelectedNeighborRoomDeviceIds() ?: []
+    List selectedNeighborChildIds = normalizeIdList(sourceChild.getSelectedNeighborChildAppIds())
 
-    if (!sourceRoomDeviceId) {
-        log.warn "${sourceChild.label}: Cannot add reciprocal neighbors because this room's meta-device was not found."
-        return
-    }
-
-    if (!selectedNeighborIds) {
+    if (!selectedNeighborChildIds) {
         log.info "${sourceChild.label}: No selected neighbor rooms to update."
         return
     }
@@ -86,14 +80,15 @@ def addThisRoomToSelectedNeighbors(sourceChildAppId) {
     Integer matched = 0
 
     childApps?.each { targetChild ->
-        if ("${targetChild.id}" == "${sourceChildAppId}") {
+        String targetChildAppId = childAppId(targetChild)
+
+        if (targetChildAppId == "${sourceChildAppId}") {
             return
         }
 
-        String targetRoomDeviceId = targetChild.getManagedRoomDeviceId()
-        if (targetRoomDeviceId && selectedNeighborIds.contains(targetRoomDeviceId.toString())) {
+        if (selectedNeighborChildIds.contains(targetChildAppId)) {
             matched++
-            Boolean added = targetChild.addNeighborRoomDeviceById(sourceRoomDeviceId)
+            Boolean added = targetChild.addNeighborChildAppId(sourceChildAppId.toString())
             if (added) {
                 changed++
                 log.info "${sourceChild.label}: Added ${sourceRoomLabel} as reciprocal neighbor to ${targetChild.label}."
@@ -104,9 +99,74 @@ def addThisRoomToSelectedNeighbors(sourceChildAppId) {
     }
 
     if (matched == 0) {
-        log.warn "${sourceChild.label}: No child app matched the selected neighbor room devices. Make sure selected neighbors are Room meta-devices created by Simple Room State Child v2."
+        log.warn "${sourceChild.label}: No child app matched the selected neighbor room IDs."
     } else {
         log.info "${sourceChild.label}: Reciprocal neighbor setup complete. Matched ${matched} selected neighbor room(s), updated ${changed}."
     }
 }
 
+// -------------------- Room Child Registry --------------------
+
+Map neighborRoomOptions(def requestingChildAppId) {
+    try {
+        Map opts = [:]
+        childApps?.each { child ->
+            String id = child?.id?.toString()
+            if (id == "${requestingChildAppId}") return
+
+            String label = child?.label ?: child?.name ?: "Child App ${id}"
+            if (id && label) {
+                opts[(id)] = label
+            }
+        }
+        return opts.sort { it.value }
+    } catch (Exception e) {
+        log.warn "Simple Room State Manager v2: Could not build neighbor room options: ${e.message}"
+        return [:]
+    }
+}
+
+List neighborRoomDevicesForChildIds(def selectedChildIds) {
+    List ids = normalizeIdList(selectedChildIds)
+    if (!ids) return []
+
+    try {
+        List allChildren = childApps ?: []
+        List matchedChildren = allChildren.findAll { child -> ids.contains(child?.id?.toString()) }
+        List devices = matchedChildren.collect { child ->
+                try {
+                    child.getManagedRoomDevice()
+                } catch (Throwable ignored) {
+                    null
+                }
+            }.findAll { it != null }
+
+        log.debug "Simple Room State Manager v2: neighbor child IDs=${ids.join(', ')}, available children=${allChildren.collect { it?.id }.join(', ') ?: 'none'}, matched children=${matchedChildren.collect { it?.id }.join(', ') ?: 'none'}, resolved devices=${devices*.displayName?.join(', ') ?: 'none'}"
+        return devices
+    } catch (Exception e) {
+        log.warn "Simple Room State Manager v2: Could not resolve neighbor room devices: ${e.message}"
+        return []
+    }
+}
+
+private String childAppId(def child) {
+    if (!child) return null
+
+    return child.id?.toString()
+}
+
+private List normalizeIdList(def rawIds) {
+    if (!rawIds) return []
+
+    List ids = rawIds instanceof List ? rawIds : [rawIds]
+    return ids
+        .collectMany { raw ->
+            String text = "${raw}".trim()
+            if (text.startsWith("[") && text.endsWith("]")) {
+                return text.substring(1, text.length() - 1).split(",").collect { it.trim() }
+            }
+            return [text]
+        }
+        .findAll { it }
+        .unique()
+}
