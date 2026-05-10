@@ -5,15 +5,22 @@
  *   Name: Simple Room State Child v2
  *   Namespace: lundby
  *
- * Requires driver:
+ * Requires drivers:
  *   Simple Room Meta Device
+ *   Simple Room Meta Light Device
  *
  * Model:
  *   Room <Name>          = public room meta-device
  *     switch             = simple Alexa/dashboard control surface; locking preserves current switch state
+ *     level              = room-level virtual lighting level for dashboard/voice/control use
  *     roomState          = Off | Occupied | Engaged | Locked
  *     lightingIntent     = Off | Courtesy | On; locking preserves current lightingIntent
  *
+ *   Room <Name> MetaLight = component child of the Room meta-device
+ *     switch/level       = On at room level when occupied/engaged, On at courtesy level when courtesy is active
+ *
+ *   Room <Name> Courtesy = component child of the Room meta-device
+ *     switch             = enables/disables courtesy lighting from neighboring rooms
  *   <Name> Engaged       = user/app-facing child switch
  *   <Name> Locked        = user/app-facing child switch
  *
@@ -42,7 +49,7 @@ preferences {
         section("Room") {
             input "hubitatRoomId", "enum", title: "Hubitat Room", options: hubitatRoomOptions(), required: false, submitOnChange: true
             input "roomName", "text", title: "Room name override, optional", required: false, submitOnChange: true
-            paragraph "Select the Hubitat Room explicitly. If the room name override is blank, the selected Hubitat Room name is used. Creates: Room <name>, plus optional custom labels for Engaged and Locked. Occupied and Courtesy are internal states, not child switches."
+            paragraph "Select the Hubitat Room explicitly. If the room name override is blank, the selected Hubitat Room name is used. Creates: Room <name>, its MetaLight and Courtesy component outputs, and Engaged and Locked switches."
         }
 
         section("Optional custom labels") {
@@ -54,6 +61,7 @@ preferences {
             input "motionSensors", "capability.motionSensor", title: "Motion sensors", multiple: true, required: false
             input "doorContactSensors", "capability.contactSensor", title: "Door contact sensors. Opening a door counts as occupancy evidence.", multiple: true, required: false
             input "activitySwitches", "capability.switch", title: "Switches that imply room activity when turned on", multiple: true, required: false
+            input "activitySwitchesPhysicalOnly", "bool", title: "Only physical activity switch events imply room activity", defaultValue: false, required: true
             input "engagementSwitches", "capability.switch", title: "Switches that imply engaged state when turned on", multiple: true, required: false
             input "engageOnMotionWithDoorsClosed", "bool", title: "Engage on motion with doors closed", defaultValue: false, required: true
             paragraph "When enabled, motion marks the room Engaged if every configured door contact is closed. Opening any configured door clears Engaged and still counts as occupancy evidence."
@@ -77,14 +85,19 @@ preferences {
             input "unlockImpliesActivity", "bool", title: "Treat unlock as occupancy activity", defaultValue: false, required: true
         }
 
+        section("Room lighting levels") {
+            input "occupiedLightingLevel", "number", title: "Default occupied lighting level. Blank uses the last on level.", required: false
+            input "courtesyLightingLevel", "number", title: "Courtesy/convenience lighting level", defaultValue: 20, required: true
+        }
+
 
         section("Child devices") {
             input "createDevicesNow", "bool", title: "Create/update child devices on save", defaultValue: true, required: true
         }
 
         section("Hubitat Room assignment") {
-            paragraph "Optional helper. After child devices are created, use this button to try assigning app-created devices to the selected Hubitat Room. This uses Hubitat room APIs that may vary by platform version."
-            input "assignToHubitatRoomNow", "button", title: "Assign app devices to Hubitat Room"
+            paragraph "Optional helper. When enabled, saving this room attempts to assign app-created devices to the selected Hubitat Room, then clears this option."
+            input "assignToHubitatRoomOnSave", "bool", title: "Assign app devices to Hubitat Room on save", defaultValue: false, required: true
         }
 
         section("Debug") {
@@ -132,8 +145,16 @@ def initializeChild() {
         clearSyncReciprocalNeighborsOnSave()
     }
 
+    if (assignToHubitatRoomOnSave) {
+        assignChildDevicesToHubitatRoom()
+        clearAssignToHubitatRoomOnSave()
+    }
+
     subscribe(roomDevice(), "switch.on", roomSwitchOnHandler)
     subscribe(roomDevice(), "switch.off", roomSwitchOffHandler)
+    subscribe(roomDevice(), "level", roomLevelHandler)
+
+    subscribe(roomDevice(), "courtesyEnabled", courtesyEnabledHandler)
 
     subscribe(engagedDevice(), "switch.on", engagedOnHandler)
     subscribe(engagedDevice(), "switch.off", engagedOffHandler)
@@ -165,6 +186,7 @@ private void ensureInitialState() {
     if (state.locked == null) state.locked = isOn(lockedDevice())
     if (state.roomState == null) state.roomState = "Off"
     if (state.lightingIntent == null) state.lightingIntent = "Off"
+    if (state.roomLevel == null) state.roomLevel = configuredOccupiedLightingLevel() ?: 100
     if (state.lastActivityAt == null) state.lastActivityAt = null
 }
 
@@ -233,6 +255,9 @@ private String labelFor(String deviceName) {
     if (deviceName == "Room") {
         return roomDeviceLabel()
     }
+    if (deviceName == "MetaLight") {
+        return "${safeRoomName()} MetaLight"
+    }
     if (deviceName == "Engaged") {
         return engagedLabel?.trim() ? engagedLabel.trim() : "${safeRoomName()} Engaged"
     }
@@ -261,15 +286,41 @@ private void assignChildDevicesToHubitatRoom() {
         }
 
         [roomDevice(), engagedDevice(), lockedDevice()].findAll { it != null }.each { dev ->
-            try {
-                dev.setRoom(room.id)
+            if (assignDeviceToHubitatRoom(dev, room)) {
                 log.info "${roomDeviceLabel()}: Assigned ${dev.displayName} to Hubitat Room ${room.name}"
-            } catch (Exception deviceException) {
-                log.warn "${roomDeviceLabel()}: Could not assign ${dev.displayName} to Hubitat Room ${room.name}: ${deviceException.message}"
+            } else {
+                log.warn "${roomDeviceLabel()}: Could not assign ${dev.displayName} to Hubitat Room ${room.name}"
             }
         }
     } catch (Exception e) {
         log.warn "${roomDeviceLabel()}: Hubitat Room assignment failed: ${e.message}"
+    }
+}
+
+private Boolean assignDeviceToHubitatRoom(def dev, def room) {
+    List attempts = [
+        { dev.roomId = room.id },
+        { dev.roomId = "${room.id}" },
+        { dev.updateDataValue("roomId", "${room.id}") }
+    ]
+
+    for (Closure attempt : attempts) {
+        try {
+            attempt.call()
+            return true
+        } catch (Throwable ignored) {
+            // Hubitat room assignment APIs vary by platform and device wrapper.
+        }
+    }
+
+    return false
+}
+
+private void clearAssignToHubitatRoomOnSave() {
+    try {
+        app.updateSetting("assignToHubitatRoomOnSave", [type: "bool", value: false])
+    } catch (Exception e) {
+        log.warn "${roomDeviceLabel()}: Could not clear Hubitat Room assignment option: ${e.message}"
     }
 }
 
@@ -301,9 +352,15 @@ private void createOrUpdateRoomDevice() {
         child.setLabel(desiredLabel)
         log.info "Updated room meta-device label: ${desiredLabel}"
     }
+
+    try {
+        child.initialize()
+    } catch (Exception e) {
+        log.warn "${roomDeviceLabel()}: Could not initialize room meta-device components: ${e.message}"
+    }
 }
 
-private void createOrUpdateVirtualSwitch(String deviceName) {
+private void createOrUpdateVirtualSwitch(String deviceName, Boolean defaultOn = false) {
     String dni = dniFor(deviceName)
     def child = getChildDevice(dni)
     String desiredLabel = labelFor(deviceName)
@@ -315,6 +372,9 @@ private void createOrUpdateVirtualSwitch(String deviceName) {
             isComponent: false
         ])
         log.info "Created child switch: ${desiredLabel}"
+        if (defaultOn) {
+            child.on()
+        }
     } else if (child.label != desiredLabel) {
         child.setLabel(desiredLabel)
         log.info "Updated child switch label: ${desiredLabel}"
@@ -386,6 +446,18 @@ def getManagedRoomDeviceLabel() {
     return roomDevice()?.displayName ?: roomDeviceLabel()
 }
 
+def getHubitatRoomId() {
+    return hubitatRoomId?.toString()
+}
+
+def getHubitatRoomName() {
+    return selectedHubitatRoom()?.name?.toString()
+}
+
+def getConfiguredRoomName() {
+    return safeRoomName()
+}
+
 def getSelectedNeighborChildAppIds() {
     if (!neighborChildAppIds) return []
     return neighborChildAppIds instanceof List ? neighborChildAppIds.collect { "${it}" } : ["${neighborChildAppIds}"]
@@ -437,12 +509,62 @@ private void childOff(def dev) {
 
 def roomSwitchOnHandler(evt) {
     debug "Room switch ON"
+
+    if (state.locked) {
+        debug "Room is locked; routing room switch on to MetaLight only"
+        publishMetaLightDevice(true, nextRoomControlLevel())
+        return
+    }
+
+    state.roomLevel = nextRoomControlLevel()
     setOccupied("room switch on")
 }
 
 def roomSwitchOffHandler(evt) {
     debug "Room switch OFF"
+
+    if (state.locked) {
+        debug "Room is locked; routing room switch off to MetaLight only"
+        publishMetaLightDevice(false, 0)
+        return
+    }
+
     clearRoomStateFromRoomSwitch()
+}
+
+def roomLevelHandler(evt) {
+    Integer level = normalizedPercent(evt.value, 0)
+    String eventType = ""
+    try {
+        eventType = evt.type?.toString()
+    } catch (Throwable ignored) {
+        eventType = ""
+    }
+
+    if (eventType != "digital") {
+        debug "Ignoring app-published room level event: ${level}"
+        return
+    }
+
+    debug "Room level set to ${level}"
+    if (state.locked) {
+        debug "Room is locked; routing room level to MetaLight only"
+        publishMetaLightDevice(level > 0, level)
+        return
+    }
+
+    if (level > 0) {
+        state.roomLevel = level
+        setOccupied("room level set")
+    } else {
+        clearRoomStateFromRoomSwitch()
+    }
+}
+
+def courtesyEnabledHandler(evt) {
+    debug "Courtesy enabled ${evt.value}"
+    refreshCourtesyState()
+    recomputeAndPublish()
 }
 
 def engagedOnHandler(evt) {
@@ -523,6 +645,11 @@ def doorClosedHandler(evt) {
 
 def activitySwitchOnHandler(evt) {
     debug "Activity switch on: ${evt.displayName}"
+
+    if (activitySwitchesPhysicalOnly && !isPhysicalEvent(evt)) {
+        debug "Ignoring activity switch on because event is not physical: ${eventType(evt) ?: 'unknown'}"
+        return
+    }
 
     if (state.locked) {
         recordLatentActivity("activity switch on while locked")
@@ -608,6 +735,7 @@ private Boolean hasRecentActivityWithinOccupiedTimeout() {
 private void setOccupied(String reason) {
     debug "Occupied true: ${reason}"
     recordActivity(reason)
+    state.roomLevel = currentRoomControlLevel()
     state.occupied = true
     recomputeAndPublish()
 }
@@ -848,6 +976,12 @@ private void refreshLockedState() {
 }
 
 private void refreshCourtesyState() {
+    if (!courtesyEnabled()) {
+        state.courtesy = false
+        debug "Courtesy false because Courtesy switch is off"
+        return
+    }
+
     Boolean anyNeighborActive = selectedNeighborRoomDevices().any { dev ->
         String neighborState = dev.currentValue("roomState")
         neighborState in ["Occupied", "Engaged"]
@@ -855,6 +989,22 @@ private void refreshCourtesyState() {
 
     state.courtesy = anyNeighborActive
     debug "Courtesy ${state.courtesy ? 'true' : 'false'} from neighbor Room devices"
+}
+
+private Boolean courtesyEnabled() {
+    return roomDevice()?.currentValue("courtesyEnabled") != "off"
+}
+
+private Boolean isPhysicalEvent(evt) {
+    return eventType(evt) == "physical"
+}
+
+private String eventType(evt) {
+    try {
+        return evt.type?.toString()
+    } catch (Throwable ignored) {
+        return ""
+    }
 }
 
 // -------------------- State Computation and Output --------------------
@@ -872,19 +1022,59 @@ private String computeLightingIntent(String roomState) {
     return "Off"
 }
 
+private Integer computeLightingLevel(String lightingIntent) {
+    if (lightingIntent == "On") return currentRoomControlLevel()
+    if (lightingIntent == "Courtesy") return normalizedPercent(courtesyLightingLevel, 20)
+    return 0
+}
+
+private Integer currentRoomControlLevel() {
+    Integer currentDeviceLevel = normalizedPercent(roomDevice()?.currentValue("level"), 0)
+    if (currentDeviceLevel > 0) return currentDeviceLevel
+    return nextRoomControlLevel()
+}
+
+private Integer nextRoomControlLevel() {
+    Integer configuredLevel = configuredOccupiedLightingLevel()
+    if (configuredLevel != null) return configuredLevel
+    if (state.roomLevel != null) return normalizedPercent(state.roomLevel, 100)
+    return 100
+}
+
+private Integer configuredOccupiedLightingLevel() {
+    if (occupiedLightingLevel == null || "${occupiedLightingLevel}".trim() == "") return null
+    return normalizedPercent(occupiedLightingLevel, 100)
+}
+
+private Integer normalizedPercent(value, Integer fallback) {
+    Integer percent = fallback
+    try {
+        percent = (value == null ? fallback : value) as Integer
+    } catch (Exception ignored) {
+        percent = fallback
+    }
+    return Math.max(Math.min(percent, 100), 0)
+}
+
 private void recomputeAndPublish() {
     ensureInitialState()
 
     String previousLightingIntent = state.lightingIntent ?: "Off"
     Boolean previousSwitchOn = roomDevice()?.currentSwitch == "on"
+    Integer previousRoomLevel = normalizedPercent(roomDevice()?.currentValue("level"), 0)
+    Integer previousMetaLightLevel = normalizedPercent(state.metaLightLevel, 0)
 
     String newRoomState = computeRoomState()
     String newLightingIntent = state.locked ? previousLightingIntent : computeLightingIntent(newRoomState)
+    Integer effectiveLightingLevel = state.locked ? previousMetaLightLevel : computeLightingLevel(newLightingIntent)
+    Integer roomControlLevel = state.locked ? previousRoomLevel : (newRoomState in ["Occupied", "Engaged"] ? currentRoomControlLevel() : 0)
 
     // Locking should not change the public switch. It is a freeze/hold state, not an on/off request.
     Boolean roomSwitchShouldBeOn = state.locked ? previousSwitchOn : (newRoomState in ["Occupied", "Engaged"])
+    Boolean metaLightShouldBeOn = state.locked ? (state.metaLightSwitch == "on") : (newLightingIntent in ["On", "Courtesy"])
 
-    publishRoomDevice(roomSwitchShouldBeOn, newRoomState, newLightingIntent)
+    publishRoomDevice(roomSwitchShouldBeOn, newRoomState, newLightingIntent, roomControlLevel)
+    publishMetaLightDevice(metaLightShouldBeOn, effectiveLightingLevel)
 
     if (state.roomState != newRoomState || state.lightingIntent != newLightingIntent) {
         log.info "${roomDeviceLabel()}: roomState=${newRoomState}, lightingIntent=${newLightingIntent}"
@@ -894,7 +1084,7 @@ private void recomputeAndPublish() {
     state.lightingIntent = newLightingIntent
 }
 
-private void publishRoomDevice(Boolean switchOn, String roomState, String lightingIntent) {
+private void publishRoomDevice(Boolean switchOn, String roomState, String lightingIntent, Integer lightingLevel) {
     def dev = roomDevice()
     if (!dev) return
 
@@ -914,6 +1104,32 @@ private void publishRoomDevice(Boolean switchOn, String roomState, String lighti
         dev.setSwitchState(switchOn ? "on" : "off")
     } catch (Exception e) {
         log.warn "${roomDeviceLabel()}: Could not set switch state on room device: ${e.message}"
+    }
+
+    try {
+        dev.setRoomLevel(lightingLevel)
+    } catch (Exception e) {
+        log.warn "${roomDeviceLabel()}: Could not set lighting level on room device: ${e.message}"
+    }
+}
+
+private void publishMetaLightDevice(Boolean switchOn, Integer lightingLevel) {
+    def dev = roomDevice()
+    if (!dev) return
+
+    try {
+        dev.setMetaLightSwitchState(switchOn ? "on" : "off")
+        state.metaLightSwitch = switchOn ? "on" : "off"
+    } catch (Exception e) {
+        log.warn "${roomDeviceLabel()}: Could not set switch state on meta-light device: ${e.message}"
+    }
+
+    try {
+        Integer level = switchOn ? lightingLevel : 0
+        dev.setMetaLightLevel(level)
+        state.metaLightLevel = level
+    } catch (Exception e) {
+        log.warn "${roomDeviceLabel()}: Could not set level on meta-light device: ${e.message}"
     }
 }
 

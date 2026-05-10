@@ -114,15 +114,51 @@ Map neighborRoomOptions(def requestingChildAppId) {
             String id = child?.id?.toString()
             if (id == "${requestingChildAppId}") return
 
-            String label = child?.label ?: child?.name ?: "Child App ${id}"
-            if (id && label) {
-                opts[(id)] = label
+            try {
+                String label = child.getManagedRoomDeviceLabel()
+                if (id && label) {
+                    opts[(id)] = label
+                }
+            } catch (Throwable ignored) {
+                // Ignore non-room child apps, such as template builders.
             }
         }
         return opts.sort { it.value }
     } catch (Exception e) {
         log.warn "Simple Room State Manager v2: Could not build neighbor room options: ${e.message}"
         return [:]
+    }
+}
+
+Map roomStateChildOptions(def requestingChildAppId) {
+    return neighborRoomOptions(requestingChildAppId)
+}
+
+Map roomStateChildInfo(def childAppId) {
+    def child = childApps?.find { it?.id?.toString() == "${childAppId}" }
+    if (!child) return [:]
+
+    try {
+        return [
+            id           : child.id?.toString(),
+            label        : child.getManagedRoomDeviceLabel(),
+            hubitatRoomId: child.getHubitatRoomId(),
+            hubitatRoom  : child.getHubitatRoomName(),
+            roomName     : child.getConfiguredRoomName()
+        ]
+    } catch (Throwable ignored) {
+        return [:]
+    }
+}
+
+def roomStateChildRoomDevice(def childAppId) {
+    def child = childApps?.find { it?.id?.toString() == "${childAppId}" }
+    if (!child) return null
+
+    try {
+        return child.getManagedRoomDevice()
+    } catch (Throwable ignored) {
+        return null
     }
 }
 
