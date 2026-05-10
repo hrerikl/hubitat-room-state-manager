@@ -1,0 +1,33 @@
+plugins {
+    id 'groovy'
+    id 'codenarc'
+}
+
+dependencies {
+    implementation localGroovy()
+
+    testImplementation platform('org.spockframework:spock-bom:2.3-groovy-3.0')
+    testImplementation 'org.spockframework:spock-core'
+}
+
+sourceSets {
+    main {
+        groovy {
+            srcDirs = ['apps', 'drivers', 'src/main/groovy']
+        }
+    }
+    test {
+        groovy {
+            srcDirs = ['src/test/groovy']
+        }
+    }
+}
+
+test {
+    useJUnitPlatform()
+}
+
+codenarc {
+    toolVersion = '3.3.0'
+    configFile = file('config/codenarc/codenarc.groovy')
+}
