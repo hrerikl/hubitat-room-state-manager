@@ -8,12 +8,15 @@
  * This device is the public Room device:
  *   switch = on/off for dashboard/control use
  *   level = room-level virtual lighting level for dashboard/voice/control use
+ *   lock = locked/unlocked for room automation lock control
  *   roomState = Off | Occupied | Engaged | Locked
  *   lightingIntent = Off | Courtesy | On
  *
  * It owns component children:
  *   <Room display name> MetaLight = automation-facing effective switch/level output
  *   <Room display name> Courtesy = enables/disables neighbor courtesy lighting
+ *   <Room display name> Engaged = enables/disables engaged room state
+ *   <Room display name> Locked = freezes room state automation
  *****************************************************************************************/
 
 metadata {
@@ -25,11 +28,14 @@ metadata {
         capability 'Actuator'
         capability 'Switch'
         capability 'SwitchLevel'
+        capability 'Lock'
         capability 'Sensor'
 
         attribute 'roomState', 'enum', ['Off', 'Occupied', 'Engaged', 'Locked']
         attribute 'lightingIntent', 'enum', ['Off', 'Courtesy', 'On']
         attribute 'courtesyEnabled', 'enum', ['off', 'on']
+        attribute 'engagedEnabled', 'enum', ['off', 'on']
+        attribute 'lockedEnabled', 'enum', ['off', 'on']
         attribute 'presenceActivity', 'number'
         attribute 'lastPresenceActivity', 'string'
 
@@ -40,6 +46,10 @@ metadata {
         command 'setMetaLightSwitchState', [[name: 'Switch State', type: 'ENUM', constraints: ['off', 'on']]]
         command 'setMetaLightLevel', [[name: 'MetaLight Level', type: 'NUMBER']]
         command 'setCourtesySwitchState', [[name: 'Courtesy Switch State', type: 'ENUM', constraints: ['off', 'on']]]
+        command 'setEngagedSwitchState', [[name: 'Engaged Switch State', type: 'ENUM', constraints: ['off', 'on']]]
+        command 'setLockedSwitchState', [[name: 'Locked Switch State', type: 'ENUM', constraints: ['off', 'on']]]
+        command 'setEngagedSwitchLabel', [[name: 'Engaged Switch Label', type: 'STRING']]
+        command 'setLockedSwitchLabel', [[name: 'Locked Switch Label', type: 'STRING']]
         command 'recordPresenceActivity', [[name: 'Epoch milliseconds', type: 'STRING']]
     }
 }
@@ -59,6 +69,9 @@ void initialize() {
     if (device.currentValue('level') == null) {
         sendEvent(name: 'level', value: 0, unit: '%')
     }
+    if (device.currentValue('lock') == null) {
+        sendEvent(name: 'lock', value: 'unlocked')
+    }
     if (device.currentValue('roomState') == null) {
         sendEvent(name: 'roomState', value: 'Off')
     }
@@ -68,6 +81,12 @@ void initialize() {
     if (device.currentValue('courtesyEnabled') == null) {
         sendEvent(name: 'courtesyEnabled', value: 'on')
     }
+    if (device.currentValue('engagedEnabled') == null) {
+        sendEvent(name: 'engagedEnabled', value: 'off')
+    }
+    if (device.currentValue('lockedEnabled') == null) {
+        sendEvent(name: 'lockedEnabled', value: 'off')
+    }
     if (device.currentValue('presenceActivity') == null) {
         sendEvent(name: 'presenceActivity', value: 0)
     }
@@ -75,7 +94,9 @@ void initialize() {
         sendEvent(name: 'lastPresenceActivity', value: 'Never')
     }
     createOrUpdateMetaLightDevice()
-    createOrUpdateCourtesyDevice()
+    createOrUpdateChildSwitchDevice('Courtesy')
+    createOrUpdateChildSwitchDevice('Engaged')
+    createOrUpdateChildSwitchDevice('Locked')
 }
 
 void on() {
@@ -91,6 +112,14 @@ void setLevel(value) {
     Integer normalized = normalizeLevel(value)
     sendEvent(name: 'level', value: normalized, unit: '%', type: 'digital')
     sendEvent(name: 'switch', value: normalized > 0 ? 'on' : 'off', type: 'digital')
+}
+
+void lock() {
+    setLockedSwitchState('on')
+}
+
+void unlock() {
+    setLockedSwitchState('off')
 }
 
 void setSwitchState(String value) {
@@ -120,27 +149,32 @@ void setMetaLightLevel(value) {
 }
 
 void setCourtesySwitchState(String value) {
-    String normalized = value == 'off' ? 'off' : 'on'
-    if (device.currentValue('courtesyEnabled') != normalized) {
-        sendEvent(name: 'courtesyEnabled', value: normalized)
-    }
+    setChildSwitchState('Courtesy', value, 'courtesyEnabled')
+}
 
-    def child = courtesyDevice()
-    if (child) {
-        child.setSwitchState(normalized)
-    }
+void setEngagedSwitchState(String value) {
+    setChildSwitchState('Engaged', value, 'engagedEnabled')
+}
+
+void setLockedSwitchState(String value) {
+    setChildSwitchState('Locked', value, 'lockedEnabled')
+    setLockAttribute(value == 'on' ? 'locked' : 'unlocked')
+}
+
+void setEngagedSwitchLabel(String value) {
+    updateChildSwitchLabel('Engaged', value)
+}
+
+void setLockedSwitchLabel(String value) {
+    updateChildSwitchLabel('Locked', value)
 }
 
 void componentOn(def childDevice) {
-    if (childDevice?.deviceNetworkId == courtesyDni()) {
-        setCourtesySwitchState('on')
-    }
+    setComponentSwitchFromChild(childDevice, 'on')
 }
 
 void componentOff(def childDevice) {
-    if (childDevice?.deviceNetworkId == courtesyDni()) {
-        setCourtesySwitchState('off')
-    }
+    setComponentSwitchFromChild(childDevice, 'off')
 }
 
 void setRoomState(String value) {
@@ -200,9 +234,9 @@ private void createOrUpdateMetaLightDevice() {
     }
 }
 
-private void createOrUpdateCourtesyDevice() {
-    String dni = courtesyDni()
-    String desiredLabel = "${device.displayName ?: device.name} Courtesy"
+private void createOrUpdateChildSwitchDevice(String role) {
+    String dni = childSwitchDni(role)
+    String desiredLabel = childSwitchLabel(role)
     def child = getChildDevice(dni)
 
     if (!child) {
@@ -211,13 +245,13 @@ private void createOrUpdateCourtesyDevice() {
             label: desiredLabel,
             isComponent: true
         ])
-        log.info "Created component Courtesy switch: ${desiredLabel}"
+        log.info "Created component ${role} switch: ${desiredLabel}"
     } else if (child.label != desiredLabel) {
         child.setLabel(desiredLabel)
-        log.info "Updated component Courtesy switch label: ${desiredLabel}"
+        log.info "Updated component ${role} switch label: ${desiredLabel}"
     }
 
-    child.setSwitchState((device.currentValue('courtesyEnabled') ?: 'on') as String)
+    child.setSwitchState((device.currentValue(attributeForRole(role)) ?: defaultSwitchStateForRole(role)) as String)
 }
 
 private def metaLightDevice() {
@@ -229,11 +263,11 @@ private def metaLightDevice() {
     return child
 }
 
-private def courtesyDevice() {
-    def child = getChildDevice(courtesyDni())
+private def childSwitchDevice(String role) {
+    def child = getChildDevice(childSwitchDni(role))
     if (!child) {
-        createOrUpdateCourtesyDevice()
-        child = getChildDevice(courtesyDni())
+        createOrUpdateChildSwitchDevice(role)
+        child = getChildDevice(childSwitchDni(role))
     }
     return child
 }
@@ -242,6 +276,63 @@ private String metaLightDni() {
     return "${device.deviceNetworkId}-MetaLight"
 }
 
-private String courtesyDni() {
-    return "${device.deviceNetworkId}-Courtesy"
+private void setChildSwitchState(String role, String value, String attributeName) {
+    String normalized = value == 'on' ? 'on' : 'off'
+    if (device.currentValue(attributeName) != normalized) {
+        sendEvent(name: attributeName, value: normalized)
+    }
+
+    def child = childSwitchDevice(role)
+    if (child) {
+        child.setSwitchState(normalized)
+    }
+}
+
+private void setLockAttribute(String value) {
+    String normalized = value == 'locked' ? 'locked' : 'unlocked'
+    if (device.currentValue('lock') != normalized) {
+        sendEvent(name: 'lock', value: normalized)
+    }
+}
+
+private void setComponentSwitchFromChild(def childDevice, String value) {
+    String role = roleFromDni(childDevice?.deviceNetworkId)
+    if (!role) return
+
+    setChildSwitchState(role, value, attributeForRole(role))
+}
+
+private void updateChildSwitchLabel(String role, String value) {
+    if (value?.trim()) {
+        state["${role}Label"] = value.trim()
+    }
+    createOrUpdateChildSwitchDevice(role)
+}
+
+private String childSwitchLabel(String role) {
+    String configured = state["${role}Label"]?.toString()
+    if (configured) return configured
+    return "${device.displayName ?: device.name} ${role}"
+}
+
+private String defaultSwitchStateForRole(String role) {
+    return role == 'Courtesy' ? 'on' : 'off'
+}
+
+private String attributeForRole(String role) {
+    if (role == 'Courtesy') return 'courtesyEnabled'
+    if (role == 'Engaged') return 'engagedEnabled'
+    if (role == 'Locked') return 'lockedEnabled'
+    return null
+}
+
+private String roleFromDni(String dni) {
+    if (dni == childSwitchDni('Courtesy')) return 'Courtesy'
+    if (dni == childSwitchDni('Engaged')) return 'Engaged'
+    if (dni == childSwitchDni('Locked')) return 'Locked'
+    return null
+}
+
+private String childSwitchDni(String role) {
+    return "${device.deviceNetworkId}-${role}"
 }

@@ -21,8 +21,8 @@
  *
  *   Room <Name> Courtesy = component child of the Room meta-device
  *     switch             = enables/disables courtesy lighting from neighboring rooms
- *   <Name> Engaged       = user/app-facing child switch
- *   <Name> Locked        = user/app-facing child switch
+ *   Room <Name> Engaged = component child of the Room meta-device
+ *   Room <Name> Locked = component child of the Room meta-device
  *
  * Internal only:
  *   state.occupied       = true/false
@@ -49,7 +49,7 @@ preferences {
         section("Room") {
             input "hubitatRoomId", "enum", title: "Hubitat Room", options: hubitatRoomOptions(), required: false, submitOnChange: true
             input "roomName", "text", title: "Room name override, optional", required: false, submitOnChange: true
-            paragraph "Select the Hubitat Room explicitly. If the room name override is blank, the selected Hubitat Room name is used. Creates: Room <name>, its MetaLight and Courtesy component outputs, and Engaged and Locked switches."
+            paragraph "Select the Hubitat Room explicitly. If the room name override is blank, the selected Hubitat Room name is used. Creates: Room <name>, plus MetaLight, Courtesy, Engaged, and Locked component devices."
         }
 
         section("Optional custom labels") {
@@ -88,6 +88,16 @@ preferences {
         section("Room lighting levels") {
             input "occupiedLightingLevel", "number", title: "Default occupied lighting level. Blank uses the last on level.", required: false
             input "courtesyLightingLevel", "number", title: "Courtesy/convenience lighting level", defaultValue: 20, required: true
+            input "useModeBasedLightingLevels", "bool", title: "Use Location Mode based lighting levels", defaultValue: false, required: true, submitOnChange: true
+
+            if (useModeBasedLightingLevels) {
+                input "changeLightingLevelOnModeChange", "bool", title: "Change level on Location Mode change", defaultValue: false, required: true
+
+                locationModeNames().each { modeName ->
+                    input modeLevelSettingName("occupiedLightingLevel", modeName), "number", title: "Occupied level - ${modeName}. Blank uses default.", required: false
+                    input modeLevelSettingName("courtesyLightingLevel", modeName), "number", title: "Courtesy level - ${modeName}. Blank uses default.", required: false
+                }
+            }
         }
 
 
@@ -155,12 +165,9 @@ def initializeChild() {
     subscribe(roomDevice(), "level", roomLevelHandler)
 
     subscribe(roomDevice(), "courtesyEnabled", courtesyEnabledHandler)
-
-    subscribe(engagedDevice(), "switch.on", engagedOnHandler)
-    subscribe(engagedDevice(), "switch.off", engagedOffHandler)
-
-    subscribe(lockedDevice(), "switch.on", lockedOnHandler)
-    subscribe(lockedDevice(), "switch.off", lockedOffHandler)
+    subscribe(roomDevice(), "engagedEnabled", engagedEnabledHandler)
+    subscribe(roomDevice(), "lockedEnabled", lockedEnabledHandler)
+    subscribe(location, "mode", locationModeHandler)
 
     subscribe(motionSensors, "motion.active", motionActiveHandler)
     subscribe(motionSensors, "motion.inactive", motionInactiveHandler)
@@ -182,8 +189,8 @@ def initializeChild() {
 private void ensureInitialState() {
     if (state.occupied == null) state.occupied = false
     if (state.courtesy == null) state.courtesy = false
-    if (state.engaged == null) state.engaged = isOn(engagedDevice())
-    if (state.locked == null) state.locked = isOn(lockedDevice())
+    if (state.engaged == null) state.engaged = engagedEnabled()
+    if (state.locked == null) state.locked = lockedEnabled()
     if (state.roomState == null) state.roomState = "Off"
     if (state.lightingIntent == null) state.lightingIntent = "Off"
     if (state.roomLevel == null) state.roomLevel = configuredOccupiedLightingLevel() ?: 100
@@ -215,6 +222,21 @@ private Map hubitatRoomOptions() {
         log.warn "${app.label}: Could not load Hubitat Room list: ${e.message}"
         return [:]
     }
+}
+
+private List locationModeNames() {
+    try {
+        return location?.modes?.collect { mode ->
+            mode?.name?.toString() ?: mode?.toString()
+        }?.findAll { it } ?: []
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not load Location Modes: ${e.message}"
+        return []
+    }
+}
+
+private String modeLevelSettingName(String prefix, String modeName) {
+    return "${prefix}ForMode_${modeName.replaceAll('[^A-Za-z0-9]', '_')}"
 }
 
 private String safeRoomName() {
@@ -285,7 +307,7 @@ private void assignChildDevicesToHubitatRoom() {
             return
         }
 
-        [roomDevice(), engagedDevice(), lockedDevice()].findAll { it != null }.each { dev ->
+        [roomDevice()].findAll { it != null }.each { dev ->
             if (assignDeviceToHubitatRoom(dev, room)) {
                 log.info "${roomDeviceLabel()}: Assigned ${dev.displayName} to Hubitat Room ${room.name}"
             } else {
@@ -332,8 +354,6 @@ private String dniFor(String deviceName) {
 
 private void createOrUpdateChildDevices() {
     createOrUpdateRoomDevice()
-    createOrUpdateVirtualSwitch("Engaged")
-    createOrUpdateVirtualSwitch("Locked")
 }
 
 private void createOrUpdateRoomDevice() {
@@ -355,35 +375,14 @@ private void createOrUpdateRoomDevice() {
 
     try {
         child.initialize()
+        child.setEngagedSwitchLabel(labelFor("Engaged"))
+        child.setLockedSwitchLabel(labelFor("Locked"))
     } catch (Exception e) {
         log.warn "${roomDeviceLabel()}: Could not initialize room meta-device components: ${e.message}"
     }
 }
 
-private void createOrUpdateVirtualSwitch(String deviceName, Boolean defaultOn = false) {
-    String dni = dniFor(deviceName)
-    def child = getChildDevice(dni)
-    String desiredLabel = labelFor(deviceName)
-
-    if (!child) {
-        child = addChildDevice("hubitat", "Virtual Switch", dni, [
-            name: desiredLabel,
-            label: desiredLabel,
-            isComponent: false
-        ])
-        log.info "Created child switch: ${desiredLabel}"
-        if (defaultOn) {
-            child.on()
-        }
-    } else if (child.label != desiredLabel) {
-        child.setLabel(desiredLabel)
-        log.info "Updated child switch label: ${desiredLabel}"
-    }
-}
-
 private def roomDevice()    { getChildDevice(dniFor("Room")) }
-private def engagedDevice() { getChildDevice(dniFor("Engaged")) }
-private def lockedDevice()  { getChildDevice(dniFor("Locked")) }
 
 private List selectedNeighborRoomDevices() {
     if (!neighborChildAppIds) return []
@@ -493,15 +492,27 @@ private Boolean isOn(def dev) {
     return dev?.currentSwitch == "on"
 }
 
-private void childOn(def dev) {
-    if (dev && dev.currentSwitch != "on") {
-        dev.on()
-    }
+private void componentSwitchOn(String role) {
+    setRoomComponentSwitch(role, true)
 }
 
-private void childOff(def dev) {
-    if (dev && dev.currentSwitch != "off") {
-        dev.off()
+private void componentSwitchOff(String role) {
+    setRoomComponentSwitch(role, false)
+}
+
+private void setRoomComponentSwitch(String role, Boolean switchOn) {
+    def dev = roomDevice()
+    if (!dev) return
+
+    String value = switchOn ? "on" : "off"
+    try {
+        if (role == "Engaged") {
+            dev.setEngagedSwitchState(value)
+        } else if (role == "Locked") {
+            dev.setLockedSwitchState(value)
+        }
+    } catch (Exception e) {
+        log.warn "${roomDeviceLabel()}: Could not set ${role} component switch ${value}: ${e.message}"
     }
 }
 
@@ -567,26 +578,30 @@ def courtesyEnabledHandler(evt) {
     recomputeAndPublish()
 }
 
-def engagedOnHandler(evt) {
-    debug "Engaged ON"
-    setEngaged("engaged switch on")
+def engagedEnabledHandler(evt) {
+    debug "Engaged enabled ${evt.value}"
+    if (evt.value == "on") {
+        setEngaged("engaged switch on")
+    } else {
+        state.engaged = false
+        scheduleOccupiedTimeout("engaged turned off")
+        recomputeAndPublish()
+    }
 }
 
-def engagedOffHandler(evt) {
-    debug "Engaged OFF"
-    state.engaged = false
-    scheduleOccupiedTimeout("engaged turned off")
+def lockedEnabledHandler(evt) {
+    debug "Locked enabled ${evt.value}"
+    setLocked(evt.value == "on", evt.value == "on" ? "locked switch on" : "locked switch off")
+}
+
+def locationModeHandler(evt) {
+    debug "Location Mode changed to ${evt.value}"
+    if (!useModeBasedLightingLevels || !changeLightingLevelOnModeChange) {
+        debug "Ignoring Location Mode level update because mode-change level adjustment is disabled"
+        return
+    }
+
     recomputeAndPublish()
-}
-
-def lockedOnHandler(evt) {
-    debug "Locked ON"
-    setLocked(true, "locked switch on")
-}
-
-def lockedOffHandler(evt) {
-    debug "Locked OFF"
-    setLocked(false, "locked switch off")
 }
 
 def motionActiveHandler(evt) {
@@ -626,7 +641,7 @@ def doorOpenHandler(evt) {
     if (engageOnMotionWithDoorsClosed && state.engaged) {
         debug "Clearing engaged because a door opened"
         state.engaged = false
-        childOff(engagedDevice())
+        componentSwitchOff("Engaged")
     }
 
     setOccupied("door opened")
@@ -686,10 +701,10 @@ def externalLockHandler(evt) {
     debug "External lock switch ${evt.value}: ${evt.displayName}"
 
     if (anyExternalLockOn()) {
-        childOn(lockedDevice())
+        componentSwitchOn("Locked")
         setLocked(true, "external lock on")
     } else {
-        childOff(lockedDevice())
+        componentSwitchOff("Locked")
         setLocked(false, "external lock off")
     }
 }
@@ -749,7 +764,7 @@ private void setEngaged(String reason) {
 
     state.occupied = true
     state.engaged = true
-    childOn(engagedDevice())
+    componentSwitchOn("Engaged")
 
     scheduleEngagedTimeout("engaged on")
     recomputeAndPublish()
@@ -766,11 +781,11 @@ private void setLocked(Boolean locked, String reason) {
         unschedule(clearOccupiedIfStillInactive)
         unschedule(clearEngagedIfStillInactive)
         unschedule(autoClearLock)
-        childOn(lockedDevice())
+        componentSwitchOn("Locked")
         scheduleLockAutoClear()
     } else {
         unschedule(autoClearLock)
-        childOff(lockedDevice())
+        componentSwitchOff("Locked")
 
         // On unlock, optionally stamp activity now, then restore Occupied
         // only if last activity is still within the normal occupied timeout.
@@ -788,7 +803,7 @@ private void setLocked(Boolean locked, String reason) {
         } else {
             state.occupied = false
             state.engaged = false
-            childOff(engagedDevice())
+            componentSwitchOff("Engaged")
             state.lastInactiveAt = null
             state.lastActivityAt = null
             state.lastEngagedInactiveAt = null
@@ -811,8 +826,8 @@ private void clearRoomStateFromRoomSwitch() {
     state.occupied = false
     state.engaged = false
     state.locked = false
-    childOff(engagedDevice())
-    childOff(lockedDevice())
+    componentSwitchOff("Engaged")
+    componentSwitchOff("Locked")
 
     refreshCourtesyState()
     recomputeAndPublish()
@@ -864,7 +879,7 @@ def autoClearLock() {
     }
 
     debug "Lock auto-clear firing"
-    childOff(lockedDevice())
+    componentSwitchOff("Locked")
     setLocked(false, "lock auto-cleared")
 }
 
@@ -937,7 +952,7 @@ def clearEngagedIfStillInactive() {
 
     state.lastEngagedInactiveAt = null
     state.engaged = false
-    childOff(engagedDevice())
+    componentSwitchOff("Engaged")
     scheduleOccupiedTimeout("engaged cleared")
     recomputeAndPublish()
 }
@@ -968,10 +983,10 @@ private Boolean anyExternalLockOn() {
 
 private void refreshLockedState() {
     if (anyExternalLockOn()) {
-        childOn(lockedDevice())
+        componentSwitchOn("Locked")
         setLocked(true, "refresh locked state from external lock")
     } else {
-        setLocked(isOn(lockedDevice()), "refresh locked state")
+        setLocked(lockedEnabled(), "refresh locked state")
     }
 }
 
@@ -993,6 +1008,14 @@ private void refreshCourtesyState() {
 
 private Boolean courtesyEnabled() {
     return roomDevice()?.currentValue("courtesyEnabled") != "off"
+}
+
+private Boolean engagedEnabled() {
+    return roomDevice()?.currentValue("engagedEnabled") == "on"
+}
+
+private Boolean lockedEnabled() {
+    return roomDevice()?.currentValue("lockedEnabled") == "on"
 }
 
 private Boolean isPhysicalEvent(evt) {
@@ -1024,7 +1047,7 @@ private String computeLightingIntent(String roomState) {
 
 private Integer computeLightingLevel(String lightingIntent) {
     if (lightingIntent == "On") return currentRoomControlLevel()
-    if (lightingIntent == "Courtesy") return normalizedPercent(courtesyLightingLevel, 20)
+    if (lightingIntent == "Courtesy") return configuredCourtesyLightingLevel()
     return 0
 }
 
@@ -1042,8 +1065,35 @@ private Integer nextRoomControlLevel() {
 }
 
 private Integer configuredOccupiedLightingLevel() {
+    Integer modeLevel = modeBasedLightingLevel("occupiedLightingLevel")
+    if (modeLevel != null) return modeLevel
     if (occupiedLightingLevel == null || "${occupiedLightingLevel}".trim() == "") return null
     return normalizedPercent(occupiedLightingLevel, 100)
+}
+
+private Integer configuredCourtesyLightingLevel() {
+    Integer modeLevel = modeBasedLightingLevel("courtesyLightingLevel")
+    if (modeLevel != null) return modeLevel
+    return normalizedPercent(courtesyLightingLevel, 20)
+}
+
+private Integer modeBasedLightingLevel(String prefix) {
+    if (!useModeBasedLightingLevels) return null
+
+    String modeName = currentLocationModeName()
+    if (!modeName) return null
+
+    def value = settings[modeLevelSettingName(prefix, modeName)]
+    if (value == null || "${value}".trim() == "") return null
+    return normalizedPercent(value, prefix == "occupiedLightingLevel" ? 100 : 20)
+}
+
+private String currentLocationModeName() {
+    try {
+        return location?.mode?.toString()
+    } catch (Exception ignored) {
+        return null
+    }
 }
 
 private Integer normalizedPercent(value, Integer fallback) {

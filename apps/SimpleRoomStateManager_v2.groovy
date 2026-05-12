@@ -30,6 +30,16 @@ preferences {
                 multiple: true
             )
         }
+
+        section("House mode") {
+            app(
+                name: "modeApps",
+                appName: "Simple Mode Manager v2",
+                namespace: "lundby",
+                title: "Add mode manager",
+                multiple: true
+            )
+        }
     }
 }
 
@@ -120,7 +130,7 @@ Map neighborRoomOptions(def requestingChildAppId) {
                     opts[(id)] = label
                 }
             } catch (Throwable ignored) {
-                // Ignore non-room child apps, such as template builders.
+                // Ignore non-room child apps.
             }
         }
         return opts.sort { it.value }
