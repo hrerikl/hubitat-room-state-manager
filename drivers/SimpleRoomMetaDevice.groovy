@@ -33,6 +33,8 @@ metadata {
 
         attribute 'roomState', 'enum', ['Off', 'Occupied', 'Engaged', 'Locked']
         attribute 'lightingIntent', 'enum', ['Off', 'Courtesy', 'On']
+        attribute 'metaLightSwitch', 'enum', ['off', 'on']
+        attribute 'metaLightLevel', 'number'
         attribute 'courtesyEnabled', 'enum', ['off', 'on']
         attribute 'engagedEnabled', 'enum', ['off', 'on']
         attribute 'lockedEnabled', 'enum', ['off', 'on']
@@ -77,6 +79,12 @@ void initialize() {
     }
     if (device.currentValue('lightingIntent') == null) {
         sendEvent(name: 'lightingIntent', value: 'Off')
+    }
+    if (device.currentValue('metaLightSwitch') == null) {
+        sendEvent(name: 'metaLightSwitch', value: 'off')
+    }
+    if (device.currentValue('metaLightLevel') == null) {
+        sendEvent(name: 'metaLightLevel', value: 0, unit: '%')
     }
     if (device.currentValue('courtesyEnabled') == null) {
         sendEvent(name: 'courtesyEnabled', value: 'on')
@@ -137,15 +145,25 @@ void setRoomLevel(value) {
 }
 
 void setMetaLightSwitchState(String value) {
+    String normalized = value == 'on' ? 'on' : 'off'
+    if (device.currentValue('metaLightSwitch') != normalized) {
+        sendEvent(name: 'metaLightSwitch', value: normalized)
+    }
+
     def child = metaLightDevice()
     if (!child) return
-    child.setSwitchState(value)
+    child.setSwitchState(normalized)
 }
 
 void setMetaLightLevel(value) {
+    Integer normalized = normalizeLevel(value)
+    if ((device.currentValue('metaLightLevel') ?: -1) as Integer != normalized) {
+        sendEvent(name: 'metaLightLevel', value: normalized, unit: '%')
+    }
+
     def child = metaLightDevice()
     if (!child) return
-    child.setRoomLevel(value)
+    child.setRoomLevel(normalized)
 }
 
 void setCourtesySwitchState(String value) {

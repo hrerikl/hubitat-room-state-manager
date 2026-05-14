@@ -40,6 +40,16 @@ preferences {
                 multiple: true
             )
         }
+
+        section("Lighting") {
+            app(
+                name: "lightingApps",
+                appName: "Simple Room Lighting v2",
+                namespace: "lundby",
+                title: "Add room lighting",
+                multiple: true
+            )
+        }
     }
 }
 

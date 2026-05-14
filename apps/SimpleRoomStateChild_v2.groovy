@@ -62,6 +62,10 @@ preferences {
             input "doorContactSensors", "capability.contactSensor", title: "Door contact sensors. Opening a door counts as occupancy evidence.", multiple: true, required: false
             input "activitySwitches", "capability.switch", title: "Switches that imply room activity when turned on", multiple: true, required: false
             input "activitySwitchesPhysicalOnly", "bool", title: "Only physical activity switch events imply room activity", defaultValue: false, required: true
+            input "activityButtons", "capability.pushableButton", title: "Buttons that imply room activity when pushed", multiple: true, required: false
+            input "activityButtonNumbers", "text", title: "Activity button numbers, comma separated. Blank means any pushed button.", required: false
+            input "lockHeldButtonNumber", "number", title: "Held button number that locks this room. Blank disables.", required: false
+            input "unlockHeldButtonNumber", "number", title: "Held button number that unlocks this room. Blank disables.", required: false
             input "engagementSwitches", "capability.switch", title: "Switches that imply engaged state when turned on", multiple: true, required: false
             input "engageOnMotionWithDoorsClosed", "bool", title: "Engage on motion with doors closed", defaultValue: false, required: true
             paragraph "When enabled, motion marks the room Engaged if every configured door contact is closed. Opening any configured door clears Engaged and still counts as occupancy evidence."
@@ -175,6 +179,8 @@ def initializeChild() {
     subscribe(doorContactSensors, "contact.closed", doorClosedHandler)
 
     subscribe(activitySwitches, "switch.on", activitySwitchOnHandler)
+    subscribe(activityButtons, "pushed", activityButtonPushedHandler)
+    subscribe(activityButtons, "held", activityButtonHeldHandler)
     subscribe(engagementSwitches, "switch.on", engagementSwitchOnHandler)
 
     List neighborDevices = selectedNeighborRoomDevices()
@@ -183,6 +189,7 @@ def initializeChild() {
     subscribe(externalLockedSwitches, "switch", externalLockHandler)
 
     refreshDerivedStates()
+    reconcileTimeoutsAfterInitialize()
     recomputeAndPublish()
 }
 
@@ -521,6 +528,11 @@ private void setRoomComponentSwitch(String role, Boolean switchOn) {
 def roomSwitchOnHandler(evt) {
     debug "Room switch ON"
 
+    if (!isDigitalEvent(evt)) {
+        debug "Ignoring app-published room switch on event"
+        return
+    }
+
     if (state.locked) {
         debug "Room is locked; routing room switch on to MetaLight only"
         publishMetaLightDevice(true, nextRoomControlLevel())
@@ -533,6 +545,11 @@ def roomSwitchOnHandler(evt) {
 
 def roomSwitchOffHandler(evt) {
     debug "Room switch OFF"
+
+    if (!isDigitalEvent(evt)) {
+        debug "Ignoring app-published room switch off event"
+        return
+    }
 
     if (state.locked) {
         debug "Room is locked; routing room switch off to MetaLight only"
@@ -552,7 +569,7 @@ def roomLevelHandler(evt) {
         eventType = ""
     }
 
-    if (eventType != "digital") {
+    if (!isDigitalEvent(evt)) {
         debug "Ignoring app-published room level event: ${level}"
         return
     }
@@ -672,6 +689,40 @@ def activitySwitchOnHandler(evt) {
     }
 
     setOccupied("activity switch on")
+}
+
+def activityButtonPushedHandler(evt) {
+    Integer buttonNumber = eventIntegerValue(evt)
+    debug "Activity button pushed ${buttonNumber ?: 'unknown'}: ${evt.displayName}"
+
+    if (!activityButtonAllowed(buttonNumber)) {
+        debug "Ignoring pushed button ${buttonNumber ?: 'unknown'} because it is not configured as activity"
+        return
+    }
+
+    if (state.locked) {
+        recordLatentActivity("activity button pushed while locked")
+        return
+    }
+
+    setOccupied("activity button pushed")
+}
+
+def activityButtonHeldHandler(evt) {
+    Integer buttonNumber = eventIntegerValue(evt)
+    debug "Activity button held ${buttonNumber ?: 'unknown'}: ${evt.displayName}"
+
+    if (buttonNumberMatches(buttonNumber, lockHeldButtonNumber)) {
+        componentSwitchOn("Locked")
+        setLocked(true, "activity button held lock")
+        return
+    }
+
+    if (buttonNumberMatches(buttonNumber, unlockHeldButtonNumber)) {
+        componentSwitchOff("Locked")
+        setLocked(false, "activity button held unlock")
+        return
+    }
 }
 
 def engagementSwitchOnHandler(evt) {
@@ -895,8 +946,10 @@ def clearOccupiedIfStillInactive() {
     }
 
     if (anyMotionActive()) {
-        debug "Occupied timeout blocked: motion still active"
+        Integer seconds = occupiedTimeoutSeconds()
+        debug "Occupied timeout blocked: motion still active; rescheduling in ${seconds} seconds"
         state.lastInactiveAt = null
+        runIn(seconds, clearOccupiedIfStillInactive, [overwrite: true])
         return
     }
 
@@ -977,6 +1030,30 @@ private void refreshDerivedStates() {
     refreshCourtesyState()
 }
 
+private void reconcileTimeoutsAfterInitialize() {
+    if (state.locked) {
+        debug "Initialize reconciliation skipped timeout scheduling because room is locked"
+        return
+    }
+
+    if (state.engaged) {
+        scheduleEngagedTimeout("initialize reconciliation")
+        return
+    }
+
+    if (state.occupied || anyMotionActive()) {
+        if (anyMotionActive()) {
+            debug "Initialize reconciliation found active motion"
+            if (!state.lastActivityAt) {
+                state.lastActivityAt = now()
+            }
+            state.occupied = true
+        }
+
+        scheduleOccupiedTimeout("initialize reconciliation")
+    }
+}
+
 private Boolean anyExternalLockOn() {
     return externalLockedSwitches?.any { it.currentSwitch == "on" } ?: false
 }
@@ -1018,8 +1095,51 @@ private Boolean lockedEnabled() {
     return roomDevice()?.currentValue("lockedEnabled") == "on"
 }
 
+private Boolean activityButtonAllowed(Integer buttonNumber) {
+    List allowedButtons = configuredButtonNumbers(activityButtonNumbers)
+    if (!allowedButtons) return true
+    return buttonNumber != null && allowedButtons.contains(buttonNumber)
+}
+
+private List configuredButtonNumbers(String rawValue) {
+    if (!rawValue?.trim()) return []
+
+    return rawValue
+        .split(",")
+        .collect { value ->
+            try {
+                return value.trim() as Integer
+            } catch (Exception ignored) {
+                return null
+            }
+        }
+        .findAll { it != null }
+}
+
+private Boolean buttonNumberMatches(Integer actual, def expected) {
+    if (actual == null || expected == null || "${expected}".trim() == "") return false
+
+    try {
+        return actual == (expected as Integer)
+    } catch (Exception ignored) {
+        return false
+    }
+}
+
+private Integer eventIntegerValue(evt) {
+    try {
+        return evt.value as Integer
+    } catch (Exception ignored) {
+        return null
+    }
+}
+
 private Boolean isPhysicalEvent(evt) {
     return eventType(evt) == "physical"
+}
+
+private Boolean isDigitalEvent(evt) {
+    return eventType(evt) == "digital"
 }
 
 private String eventType(evt) {
@@ -1123,8 +1243,8 @@ private void recomputeAndPublish() {
     Boolean roomSwitchShouldBeOn = state.locked ? previousSwitchOn : (newRoomState in ["Occupied", "Engaged"])
     Boolean metaLightShouldBeOn = state.locked ? (state.metaLightSwitch == "on") : (newLightingIntent in ["On", "Courtesy"])
 
-    publishRoomDevice(roomSwitchShouldBeOn, newRoomState, newLightingIntent, roomControlLevel)
     publishMetaLightDevice(metaLightShouldBeOn, effectiveLightingLevel)
+    publishRoomDevice(roomSwitchShouldBeOn, newRoomState, newLightingIntent, roomControlLevel)
 
     if (state.roomState != newRoomState || state.lightingIntent != newLightingIntent) {
         log.info "${roomDeviceLabel()}: roomState=${newRoomState}, lightingIntent=${newLightingIntent}"
@@ -1168,18 +1288,20 @@ private void publishMetaLightDevice(Boolean switchOn, Integer lightingLevel) {
     if (!dev) return
 
     try {
+        if (switchOn) {
+            Integer level = lightingLevel
+            dev.setMetaLightLevel(level)
+            state.metaLightLevel = level
+        }
+    } catch (Exception e) {
+        log.warn "${roomDeviceLabel()}: Could not set level on meta-light device: ${e.message}"
+    }
+
+    try {
         dev.setMetaLightSwitchState(switchOn ? "on" : "off")
         state.metaLightSwitch = switchOn ? "on" : "off"
     } catch (Exception e) {
         log.warn "${roomDeviceLabel()}: Could not set switch state on meta-light device: ${e.message}"
-    }
-
-    try {
-        Integer level = switchOn ? lightingLevel : 0
-        dev.setMetaLightLevel(level)
-        state.metaLightLevel = level
-    } catch (Exception e) {
-        log.warn "${roomDeviceLabel()}: Could not set level on meta-light device: ${e.message}"
     }
 }
 
