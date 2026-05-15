@@ -52,6 +52,12 @@ preferences {
             input "physicalControlEventsOnly", "bool", title: "Only physical control events update Room", defaultValue: true, required: true
         }
 
+        section("Pico remote defaults") {
+            input "picoRemotes", "capability.pushableButton", title: "Pico/remotes using the default 5-button room layout", multiple: true, required: false
+            input "picoLevelChangeDimmers", "capability.switchLevel", title: "Dimmers for held button 2/4 level change", multiple: true, required: false
+            input "picoStepSize", "number", title: "Push button 2/4 room level step", defaultValue: 10, required: true
+        }
+
         section("Debug") {
             input "debugLogging", "bool", title: "Enable debug logging", defaultValue: true, required: true
         }
@@ -95,6 +101,9 @@ def initialize() {
     subscribe(controlDimmers, "switch", controlSwitchHandler)
     subscribe(controlDimmers, "level", controlLevelHandler)
     subscribe(controlSwitches, "switch", controlSwitchHandler)
+    subscribe(picoRemotes, "pushed", picoPushedHandler)
+    subscribe(picoRemotes, "held", picoHeldHandler)
+    subscribe(picoRemotes, "released", picoReleasedHandler)
     subscribe(overrideSwitches(), "switch", overrideSwitchHandler)
 
     reassessLighting("initialize")
@@ -162,6 +171,58 @@ def controlLevelHandler(evt) {
     Integer level = normalizedLevel(evt.value, 0)
     debug "Control level ${level}: ${evt.displayName}"
     roomDevice()?.setLevel(level)
+}
+
+def picoPushedHandler(evt) {
+    Integer button = eventIntegerValue(evt)
+    debug "Pico pushed ${button}: ${evt.displayName}"
+
+    def room = roomDevice()
+    if (!room) return
+
+    Integer step = normalizedLevel(picoStepSize, 10)
+    if (step <= 0) step = 10
+
+    if (button == 1) {
+        room.on()
+    } else if (button == 2) {
+        room.setLevel(adjustedRoomLevel(step))
+    } else if (button == 4) {
+        room.setLevel(adjustedRoomLevel(-step))
+    } else if (button == 5) {
+        room.off()
+    } else {
+        debug "No default Pico pushed action for button ${button}"
+    }
+}
+
+def picoHeldHandler(evt) {
+    Integer button = eventIntegerValue(evt)
+    debug "Pico held ${button}: ${evt.displayName}"
+
+    def room = roomDevice()
+    if (!room) return
+
+    if (button == 1) {
+        room.lock()
+    } else if (button == 2) {
+        startLevelChange("up")
+    } else if (button == 4) {
+        startLevelChange("down")
+    } else if (button == 5) {
+        room.unlock()
+    } else {
+        debug "No default Pico held action for button ${button}"
+    }
+}
+
+def picoReleasedHandler(evt) {
+    Integer button = eventIntegerValue(evt)
+    debug "Pico released ${button}: ${evt.displayName}"
+
+    if (button in [2, 4]) {
+        stopLevelChange()
+    }
 }
 
 // -------------------- Matrix Output --------------------
@@ -508,6 +569,26 @@ private void turnOffDevice(def dev, String reason) {
     }
 }
 
+private void startLevelChange(String direction) {
+    levelChangeDimmers().each { dimmer ->
+        try {
+            dimmer.startLevelChange(direction)
+        } catch (Exception e) {
+            log.warn "${app.label}: Could not start ${direction} level change on ${dimmer.displayName}: ${e.message}"
+        }
+    }
+}
+
+private void stopLevelChange() {
+    levelChangeDimmers().each { dimmer ->
+        try {
+            dimmer.stopLevelChange()
+        } catch (Exception e) {
+            log.warn "${app.label}: Could not stop level change on ${dimmer.displayName}: ${e.message}"
+        }
+    }
+}
+
 // -------------------- Control Filtering --------------------
 
 private Boolean shouldAcceptControlEvent(evt) {
@@ -581,6 +662,11 @@ private Boolean isDimmer(def dev) {
     return asList(automatedDimmers).any { it?.id == dev?.id }
 }
 
+private List levelChangeDimmers() {
+    List selected = asList(picoLevelChangeDimmers)
+    return selected ?: asList(automatedDimmers)
+}
+
 private List selectedMatrixModes() {
     if (!matrixModes) return []
     return matrixModes instanceof List ? matrixModes.collect { it.toString() } : [matrixModes.toString()]
@@ -637,6 +723,19 @@ private Integer normalizedLevel(value, Integer fallback) {
         level = fallback == null ? 0 : fallback
     }
     return Math.max(Math.min(level, 100), 0)
+}
+
+private Integer adjustedRoomLevel(Integer delta) {
+    Integer current = normalizedLevel(roomDevice()?.currentValue("level"), 0)
+    return normalizedLevel(current + delta, current)
+}
+
+private Integer eventIntegerValue(evt) {
+    try {
+        return evt.value as Integer
+    } catch (Exception ignored) {
+        return null
+    }
 }
 
 private void debug(String msg) {
