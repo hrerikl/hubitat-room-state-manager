@@ -55,6 +55,7 @@ preferences {
 
         section("Optional custom labels") {
             input "engagedLabel", "text", title: "Engaged device label, optional. Example: Focus Mode", required: false
+            input "asleepLabel", "text", title: "Asleep device label, optional. Example: Sleeping", required: false
             input "lockedLabel", "text", title: "Locked device label, optional. Example: Recording", required: false
         }
 
@@ -303,10 +304,13 @@ private String labelFor(String deviceName) {
         return "${safeRoomName()} MetaLight"
     }
     if (deviceName == "Engaged") {
-        return engagedLabel?.trim() ? engagedLabel.trim() : "${safeRoomName()} Engaged"
+        return engagedLabel?.trim() ? engagedLabel.trim() : "${safeRoomName()} ${roomProfile == 'bedroom' ? 'Awake' : 'Engaged'}"
+    }
+    if (deviceName == "Asleep") {
+        return asleepLabel?.trim() ? asleepLabel.trim() : "${safeRoomName()} Asleep"
     }
     if (deviceName == "Locked") {
-        return lockedLabel?.trim() ? lockedLabel.trim() : "${safeRoomName()} Locked"
+        return lockedLabel?.trim() ? lockedLabel.trim() : "${safeRoomName()} ${roomProfile == 'bedroom' ? 'Do Not Disturb' : 'Locked'}"
     }
     return "${safeRoomName()} ${deviceName}"
 }
@@ -398,6 +402,7 @@ private void createOrUpdateRoomDevice() {
     try {
         child.initialize()
         child.setEngagedSwitchLabel(labelFor("Engaged"))
+        child.setAsleepSwitchLabel(labelFor("Asleep"))
         child.setLockedSwitchLabel(labelFor("Locked"))
     } catch (Exception e) {
         log.warn "${roomDeviceLabel()}: Could not initialize room meta-device components: ${e.message}"
