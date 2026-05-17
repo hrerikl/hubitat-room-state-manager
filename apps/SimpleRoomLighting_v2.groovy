@@ -52,10 +52,11 @@ preferences {
             input "physicalControlEventsOnly", "bool", title: "Only physical control events update Room", defaultValue: true, required: true
         }
 
-        section("Pico remote defaults") {
-            input "picoRemotes", "capability.pushableButton", title: "Pico/remotes using the default 5-button room layout", multiple: true, required: false
-            input "picoLevelChangeDimmers", "capability.switchLevel", title: "Dimmers for held button 2/4 level change", multiple: true, required: false
-            input "picoStepSize", "number", title: "Push button 2/4 room level step", defaultValue: 10, required: true
+        section("Room remote defaults") {
+            input "picoRemotes", "capability.pushableButton", title: "5-button Pico remotes", multiple: true, required: false
+            input "casetaDimmers", "capability.switchLevel", title: "4-button Caseta dimmers/switches", multiple: true, required: false
+            input "picoLevelChangeDimmers", "capability.switchLevel", title: "Dimmers for held level-change buttons", multiple: true, required: false
+            input "picoStepSize", "number", title: "Push level step", defaultValue: 10, required: true
         }
 
         section("Debug") {
@@ -104,6 +105,11 @@ def initialize() {
     subscribe(picoRemotes, "pushed", picoPushedHandler)
     subscribe(picoRemotes, "held", picoHeldHandler)
     subscribe(picoRemotes, "released", picoReleasedHandler)
+    subscribe(picoRemotes, "doubleTapped", picoDoubleTappedHandler)
+    subscribe(casetaDimmers, "pushed", casetaPushedHandler)
+    subscribe(casetaDimmers, "held", casetaHeldHandler)
+    subscribe(casetaDimmers, "released", casetaReleasedHandler)
+    subscribe(casetaDimmers, "doubleTapped", casetaDoubleTappedHandler)
     subscribe(overrideSwitches(), "switch", overrideSwitchHandler)
 
     reassessLighting("initialize")
@@ -184,7 +190,7 @@ def picoPushedHandler(evt) {
     if (step <= 0) step = 10
 
     if (button == 1) {
-        room.on()
+        roomOnAndEngageIfUnlocked()
     } else if (button == 2) {
         room.setLevel(adjustedRoomLevel(step))
     } else if (button == 4) {
@@ -200,17 +206,10 @@ def picoHeldHandler(evt) {
     Integer button = eventIntegerValue(evt)
     debug "Pico held ${button}: ${evt.displayName}"
 
-    def room = roomDevice()
-    if (!room) return
-
-    if (button == 1) {
-        room.lock()
-    } else if (button == 2) {
+    if (button == 2) {
         startLevelChange("up")
     } else if (button == 4) {
         startLevelChange("down")
-    } else if (button == 5) {
-        room.unlock()
     } else {
         debug "No default Pico held action for button ${button}"
     }
@@ -222,6 +221,77 @@ def picoReleasedHandler(evt) {
 
     if (button in [2, 4]) {
         stopLevelChange()
+    }
+}
+
+def picoDoubleTappedHandler(evt) {
+    Integer button = eventIntegerValue(evt)
+    debug "Pico doubleTapped ${button}: ${evt.displayName}"
+
+    if (button == 1) {
+        roomDevice()?.unlock()
+    } else if (button == 5) {
+        roomDevice()?.lock()
+    } else {
+        debug "No default Pico double-tap action for button ${button}"
+    }
+}
+
+def casetaPushedHandler(evt) {
+    Integer button = eventIntegerValue(evt)
+    debug "Caseta pushed ${button}: ${evt.displayName}"
+
+    def room = roomDevice()
+    if (!room) return
+
+    Integer step = normalizedLevel(picoStepSize, 10)
+    if (step <= 0) step = 10
+
+    if (button == 1) {
+        roomOnAndEngageIfUnlocked()
+    } else if (button == 2) {
+        room.setLevel(adjustedRoomLevel(step))
+    } else if (button == 3) {
+        room.setLevel(adjustedRoomLevel(-step))
+    } else if (button == 4) {
+        room.off()
+    } else {
+        debug "No default Caseta pushed action for button ${button}"
+    }
+}
+
+def casetaHeldHandler(evt) {
+    Integer button = eventIntegerValue(evt)
+    debug "Caseta held ${button}: ${evt.displayName}"
+
+    if (button == 2) {
+        startLevelChange("up")
+    } else if (button == 3) {
+        startLevelChange("down")
+    } else {
+        debug "No default Caseta held action for button ${button}"
+    }
+}
+
+def casetaReleasedHandler(evt) {
+    Integer button = eventIntegerValue(evt)
+    debug "Caseta released ${button}: ${evt.displayName}"
+
+    if (button in [2, 3]) {
+        stopLevelChange()
+    }
+}
+
+def casetaDoubleTappedHandler(evt) {
+    Integer button = eventIntegerValue(evt)
+    debug "Caseta doubleTapped ${button}: ${evt.displayName}"
+
+    if (button == 1) {
+        roomDevice()?.unlock()
+    } else if (button == 4) {
+        roomDevice()?.lock()
+    } else {
+        debug "No default Caseta double-tap action for button ${button}"
     }
 }
 
@@ -586,6 +656,24 @@ private void stopLevelChange() {
         } catch (Exception e) {
             log.warn "${app.label}: Could not stop level change on ${dimmer.displayName}: ${e.message}"
         }
+    }
+}
+
+private void roomOnAndEngageIfUnlocked() {
+    def room = roomDevice()
+    if (!room) return
+
+    room.on()
+
+    if (room.currentValue("lock") == "locked" || room.currentValue("lockedEnabled") == "on") {
+        debug "Skipping engage because Room is locked"
+        return
+    }
+
+    try {
+        room.setEngagedSwitchState("on")
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not engage Room from remote button 1: ${e.message}"
     }
 }
 

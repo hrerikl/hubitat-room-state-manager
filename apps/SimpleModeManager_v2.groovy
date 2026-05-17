@@ -45,8 +45,8 @@ preferences {
             input "nightStartTime", "time", title: "Night check starts at", defaultValue: "23:00", required: true
             input "nightReadyRoomChildAppIds", "enum", title: "Rooms that must be Off for Night. Locked rooms count as ready.", options: roomOptions(), multiple: true, required: false
             input "nightReadyMinutes", "number", title: "Rooms must be ready for this many minutes", defaultValue: 10, required: true
-            input "stillUpSwitches", "capability.switch", title: "StillUp switches. On extends Night; during Night, On returns to Day.", multiple: true, required: false
-            input "stillUpButtons", "capability.pushableButton", title: "StillUp buttons. Pushed extends Night; during Night, pushed returns to Day.", multiple: true, required: false
+            input "stillUpSwitches", "capability.switch", title: "StillUp switches. On extends Night; during Night, On returns to Evening.", multiple: true, required: false
+            input "stillUpButtons", "capability.pushableButton", title: "StillUp buttons. Pushed extends Night; during Night, pushed returns to Evening.", multiple: true, required: false
             input "stillUpExtensionMinutes", "number", title: "StillUp extends Night by minutes from activation", defaultValue: 60, required: true
         }
 
