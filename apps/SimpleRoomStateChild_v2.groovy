@@ -95,7 +95,6 @@ preferences {
             section("Bedroom sleep") {
                 input "nightMotionSensors", "capability.motionSensor", title: "Motion sensors that trigger Night lighting while Asleep", multiple: true, required: false
                 input "nightLightingTimeoutMinutes", "number", title: "Night lighting timeout minutes", defaultValue: 5, required: true
-                input "sceneNightExtensionMinutes", "number", title: "Scene button extends Night lighting minutes", defaultValue: 45, required: true
                 input "nightLightingLevel", "number", title: "Night lighting level", defaultValue: 10, required: true
             }
         }
@@ -1058,11 +1057,11 @@ private void activateNightLighting(Integer seconds, String reason) {
         return
     }
 
-    Integer delay = Math.max(seconds ?: nightLightingTimeoutSeconds(), 1)
+    Integer delay = positiveSeconds(seconds, nightLightingTimeoutSeconds())
     state.nightActive = true
-    publishNightLighting(true, Math.ceil(delay / 60.0) as Integer)
+    publishNightLighting(true, minutesRoundedUp(delay))
     debug "Night lighting true for ${delay} seconds: ${reason}"
-    runIn(delay, clearNightLightingIfStillAsleep, [overwrite: true])
+    runIn(delay, "clearNightLightingIfStillAsleep", [overwrite: true])
     recomputeAndPublish()
 }
 
@@ -1091,12 +1090,18 @@ private Integer lockAutoClearSeconds() {
 
 private Integer nightLightingTimeoutSeconds() {
     Integer minutes = (nightLightingTimeoutMinutes ?: 5) as Integer
-    return Math.max(minutes * 60, 1)
+    return positiveSeconds(minutes * 60, 300)
 }
 
-private Integer sceneNightExtensionSeconds() {
-    Integer minutes = (sceneNightExtensionMinutes ?: 45) as Integer
-    return Math.max(minutes * 60, 1)
+private Integer positiveSeconds(value, Integer defaultSeconds) {
+    Integer seconds = value ? value as Integer : defaultSeconds
+    return seconds > 0 ? seconds : 1
+}
+
+private Integer minutesRoundedUp(Integer seconds) {
+    Integer safeSeconds = positiveSeconds(seconds, 60)
+    Integer wholeMinutes = (safeSeconds / 60) as Integer
+    return safeSeconds % 60 == 0 ? wholeMinutes : wholeMinutes + 1
 }
 
 private void scheduleOccupiedTimeout(String reason) {
