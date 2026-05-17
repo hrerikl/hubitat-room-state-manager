@@ -49,6 +49,7 @@ preferences {
         section("Room") {
             input "hubitatRoomId", "enum", title: "Hubitat Room", options: hubitatRoomOptions(), required: false, submitOnChange: true
             input "roomName", "text", title: "Room name override, optional", required: false, submitOnChange: true
+            input "roomProfile", "enum", title: "Room profile", options: roomProfileOptions(), defaultValue: "standard", required: true, submitOnChange: true
             paragraph "Select the Hubitat Room explicitly. If the room name override is blank, the selected Hubitat Room name is used. Creates: Room <name>, plus MetaLight, Courtesy, Engaged, and Locked component devices."
         }
 
@@ -236,6 +237,13 @@ private Map hubitatRoomOptions() {
         log.warn "${app.label}: Could not load Hubitat Room list: ${e.message}"
         return [:]
     }
+}
+
+private Map roomProfileOptions() {
+    return [
+        standard: "Standard",
+        bedroom : "Bedroom"
+    ]
 }
 
 private List locationModeNames() {
@@ -472,7 +480,7 @@ def getConfiguredRoomName() {
 }
 
 def getRoomProfile() {
-    return "standard"
+    return roomProfile ?: "standard"
 }
 
 def getSelectedNeighborChildAppIds() {
