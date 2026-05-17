@@ -203,6 +203,7 @@ def initializeChild() {
 }
 
 private void ensureInitialState() {
+    ensureRoomProfileSetting()
     if (state.occupied == null) state.occupied = false
     if (state.courtesy == null) state.courtesy = false
     if (state.engaged == null) state.engaged = engagedEnabled()
@@ -211,6 +212,16 @@ private void ensureInitialState() {
     if (state.lightingIntent == null) state.lightingIntent = "Off"
     if (state.roomLevel == null) state.roomLevel = configuredOccupiedLightingLevel() ?: 100
     if (state.lastActivityAt == null) state.lastActivityAt = null
+}
+
+private void ensureRoomProfileSetting() {
+    if (roomProfile) return
+
+    try {
+        app.updateSetting("roomProfile", [type: "enum", value: "standard"])
+    } catch (Exception e) {
+        log.warn "${roomDeviceLabel()}: Could not default room profile: ${e.message}"
+    }
 }
 
 // -------------------- UI Option Helpers --------------------
