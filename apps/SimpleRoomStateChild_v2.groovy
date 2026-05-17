@@ -50,7 +50,7 @@ preferences {
             input "hubitatRoomId", "enum", title: "Hubitat Room", options: hubitatRoomOptions(), required: false, submitOnChange: true
             input "roomName", "text", title: "Room name override, optional", required: false, submitOnChange: true
             input "roomProfile", "enum", title: "Room profile", options: roomProfileOptions(), defaultValue: "standard", required: true, submitOnChange: true
-            paragraph "Select the Hubitat Room explicitly. If the room name override is blank, the selected Hubitat Room name is used. Creates: Room <name>, plus MetaLight, Courtesy, Engaged, and Locked component devices."
+            paragraph "Select the Hubitat Room explicitly. If the room name override is blank, the selected Hubitat Room name is used. Creates: Room <name>, plus MetaLight, Courtesy, Engaged, Asleep, and Locked component devices."
         }
 
         section("Optional custom labels") {
@@ -187,11 +187,13 @@ def initializeChild() {
 
     subscribe(roomDevice(), "courtesyEnabled", courtesyEnabledHandler)
     subscribe(roomDevice(), "engagedEnabled", engagedEnabledHandler)
+    subscribe(roomDevice(), "asleepEnabled", asleepEnabledHandler)
     subscribe(roomDevice(), "lockedEnabled", lockedEnabledHandler)
     subscribe(location, "mode", locationModeHandler)
 
     subscribe(motionSensors, "motion.active", motionActiveHandler)
     subscribe(motionSensors, "motion.inactive", motionInactiveHandler)
+    subscribe(nightMotionSensors, "motion.active", nightMotionActiveHandler)
     subscribe(doorContactSensors, "contact.open", doorOpenHandler)
     subscribe(doorContactSensors, "contact.closed", doorClosedHandler)
 
@@ -204,10 +206,27 @@ def initializeChild() {
     debugNeighborResolution(neighborDevices)
     subscribe(neighborDevices, "roomState", neighborRoomHandler)
     subscribe(externalLockedSwitches, "switch", externalLockHandler)
+    subscribe(parent.recoveryDevice(), "switch.on", recoverSimpleHomeHandler)
 
     refreshDerivedStates()
     reconcileTimeoutsAfterInitialize()
     recomputeAndPublish()
+}
+
+def recoverSimpleHomeHandler(evt) {
+    debug "Recover Simple Home requested"
+    refreshDerivedStates()
+    reconcileTimeoutsAfterInitialize()
+    recomputeAndPublish()
+}
+
+def activateNightLightingFromDevice(Integer timeoutMinutes) {
+    Integer seconds = timeoutMinutes && timeoutMinutes > 0 ? timeoutMinutes * 60 : nightLightingTimeoutSeconds()
+    activateNightLighting(seconds, "room device command")
+}
+
+def clearNightLightingFromDevice() {
+    clearNightLighting("room device command")
 }
 
 private void ensureInitialState() {
@@ -564,6 +583,8 @@ private void setRoomComponentSwitch(String role, Boolean switchOn) {
     try {
         if (role == "Engaged") {
             dev.setEngagedSwitchState(value)
+        } else if (role == "Asleep") {
+            dev.setAsleepSwitchState(value)
         } else if (role == "Locked") {
             dev.setLockedSwitchState(value)
         }
@@ -588,6 +609,11 @@ def roomSwitchOnHandler(evt) {
         return
     }
 
+    if (state.asleep) {
+        activateNightLighting(nightLightingTimeoutSeconds(), "room switch on while asleep")
+        return
+    }
+
     state.roomLevel = nextRoomControlLevel()
     setOccupied("room switch on")
 }
@@ -603,6 +629,11 @@ def roomSwitchOffHandler(evt) {
     if (state.locked) {
         debug "Room is locked; routing room switch off to MetaLight only"
         publishMetaLightDevice(false, 0)
+        return
+    }
+
+    if (state.asleep) {
+        clearNightLighting("room switch off while asleep")
         return
     }
 
@@ -627,6 +658,15 @@ def roomLevelHandler(evt) {
     if (state.locked) {
         debug "Room is locked; routing room level to MetaLight only"
         publishMetaLightDevice(level > 0, level)
+        return
+    }
+
+    if (state.asleep) {
+        if (level > 0) {
+            activateNightLighting(nightLightingTimeoutSeconds(), "room level set while asleep")
+        } else {
+            clearNightLighting("room level off while asleep")
+        }
         return
     }
 
@@ -655,6 +695,11 @@ def engagedEnabledHandler(evt) {
     }
 }
 
+def asleepEnabledHandler(evt) {
+    debug "Asleep enabled ${evt.value}"
+    setAsleep(evt.value == "on", evt.value == "on" ? "asleep switch on" : "asleep switch off")
+}
+
 def lockedEnabledHandler(evt) {
     debug "Locked enabled ${evt.value}"
     setLocked(evt.value == "on", evt.value == "on" ? "locked switch on" : "locked switch off")
@@ -678,6 +723,11 @@ def motionActiveHandler(evt) {
         return
     }
 
+    if (state.asleep) {
+        debug "Ignoring normal motion activity while asleep"
+        return
+    }
+
     if (engageOnMotionWithDoorsClosed && allDoorsClosed()) {
         setEngaged("motion active with all doors closed")
     } else {
@@ -693,7 +743,28 @@ def motionInactiveHandler(evt) {
         return
     }
 
+    if (state.asleep) {
+        debug "Ignoring normal motion inactive timeout processing while asleep"
+        return
+    }
+
     scheduleOccupiedTimeout("motion inactive")
+}
+
+def nightMotionActiveHandler(evt) {
+    debug "Night motion active: ${evt.displayName}"
+
+    if (state.locked) {
+        recordLatentActivity("night motion active while locked")
+        return
+    }
+
+    if (!state.asleep) {
+        debug "Ignoring night motion because room is not asleep"
+        return
+    }
+
+    activateNightLighting(nightLightingTimeoutSeconds(), "night motion active")
 }
 
 def doorOpenHandler(evt) {
@@ -839,6 +910,23 @@ private void publishPresenceActivity(Long timestamp, String reason = "") {
     }
 }
 
+private void publishNightLighting(Boolean active, Integer timeoutMinutes) {
+    def dev = roomDevice()
+    if (!dev) return
+
+    try {
+        if (active) {
+            dev.setNightLightingState("on")
+            dev.setNightLightingTimeoutMinutes(timeoutMinutes)
+        } else {
+            dev.setNightLightingState("off")
+            dev.setNightLightingTimeoutMinutes(0)
+        }
+    } catch (Exception e) {
+        log.warn "${roomDeviceLabel()}: Could not publish Night lighting state: ${e.message}"
+    }
+}
+
 private Boolean hasRecentActivityWithinOccupiedTimeout() {
     Long lastActivity = (state.lastActivityAt ?: state.lastInactiveAt) as Long
     if (!lastActivity) return false
@@ -870,6 +958,29 @@ private void setEngaged(String reason) {
     recomputeAndPublish()
 }
 
+private void setAsleep(Boolean asleep, String reason) {
+    debug "Asleep ${asleep}: ${reason}"
+    state.asleep = asleep
+
+    if (asleep) {
+        unschedule(clearOccupiedIfStillInactive)
+        unschedule(clearEngagedIfStillInactive)
+        state.occupied = false
+        state.engaged = false
+        state.nightActive = false
+        componentSwitchOff("Engaged")
+        componentSwitchOn("Asleep")
+        publishNightLighting(false, 0)
+    } else {
+        unschedule(clearNightLightingIfStillAsleep)
+        state.nightActive = false
+        componentSwitchOff("Asleep")
+        publishNightLighting(false, 0)
+    }
+
+    recomputeAndPublish()
+}
+
 private void setLocked(Boolean locked, String reason) {
     debug "Locked ${locked}: ${reason}"
 
@@ -891,6 +1002,13 @@ private void setLocked(Boolean locked, String reason) {
         // only if last activity is still within the normal occupied timeout.
         if (unlockImpliesActivity) {
             recordLatentActivity("unlock implies activity")
+        }
+
+        if (state.asleep) {
+            state.asleep = false
+            state.nightActive = false
+            componentSwitchOff("Asleep")
+            publishNightLighting(false, 0)
         }
 
         refreshCourtesyState()
@@ -918,6 +1036,7 @@ private void clearRoomStateFromRoomSwitch() {
 
     unschedule(clearOccupiedIfStillInactive)
     unschedule(clearEngagedIfStillInactive)
+    unschedule(clearNightLightingIfStillAsleep)
     unschedule(autoClearLock)
     state.lastInactiveAt = null
     state.lastActivityAt = null
@@ -925,11 +1044,43 @@ private void clearRoomStateFromRoomSwitch() {
 
     state.occupied = false
     state.engaged = false
+    state.asleep = false
+    state.nightActive = false
     state.locked = false
     componentSwitchOff("Engaged")
+    componentSwitchOff("Asleep")
     componentSwitchOff("Locked")
+    publishNightLighting(false, 0)
 
     refreshCourtesyState()
+    recomputeAndPublish()
+}
+
+private void activateNightLighting(Integer seconds, String reason) {
+    if (!bedroomProfile()) {
+        debug "Ignoring Night lighting request because room profile is not Bedroom"
+        publishNightLighting(false, 0)
+        return
+    }
+    if (!state.asleep) {
+        debug "Ignoring Night lighting request because room is not asleep"
+        publishNightLighting(false, 0)
+        return
+    }
+
+    Integer delay = positiveSeconds(seconds, nightLightingTimeoutSeconds())
+    state.nightActive = true
+    publishNightLighting(true, minutesRoundedUp(delay))
+    debug "Night lighting true for ${delay} seconds: ${reason}"
+    runIn(delay, "clearNightLightingIfStillAsleep", [overwrite: true])
+    recomputeAndPublish()
+}
+
+private void clearNightLighting(String reason) {
+    debug "Night lighting false: ${reason}"
+    unschedule(clearNightLightingIfStillAsleep)
+    state.nightActive = false
+    publishNightLighting(false, 0)
     recomputeAndPublish()
 }
 
@@ -946,6 +1097,22 @@ private Integer engagedTimeoutSeconds() {
 private Integer lockAutoClearSeconds() {
     Integer minutes = (lockAutoClearMinutes ?: 0) as Integer
     return minutes > 0 ? minutes * 60 : 0
+}
+
+private Integer nightLightingTimeoutSeconds() {
+    Integer minutes = (nightLightingTimeoutMinutes ?: 5) as Integer
+    return positiveSeconds(minutes * 60, 300)
+}
+
+private Integer positiveSeconds(value, Integer defaultSeconds) {
+    Integer seconds = value ? value as Integer : defaultSeconds
+    return seconds > 0 ? seconds : 1
+}
+
+private Integer minutesRoundedUp(Integer seconds) {
+    Integer safeSeconds = positiveSeconds(seconds, 60)
+    Integer wholeMinutes = (safeSeconds / 60) as Integer
+    return safeSeconds % 60 == 0 ? wholeMinutes : wholeMinutes + 1
 }
 
 private void scheduleOccupiedTimeout(String reason) {
@@ -981,6 +1148,17 @@ def autoClearLock() {
     debug "Lock auto-clear firing"
     componentSwitchOff("Locked")
     setLocked(false, "lock auto-cleared")
+}
+
+def clearNightLightingIfStillAsleep() {
+    if (!state.asleep) {
+        debug "Night lighting timeout skipped because room is not asleep"
+        return
+    }
+
+    state.nightActive = false
+    publishNightLighting(false, 0)
+    recomputeAndPublish()
 }
 
 def clearOccupiedIfStillInactive() {
@@ -1207,6 +1385,7 @@ private String eventType(evt) {
 
 private String computeRoomState() {
     if (state.locked) return "Locked"
+    if (state.asleep) return "Asleep"
     if (state.engaged) return "Engaged"
     if (state.occupied) return "Occupied"
     return "Off"
@@ -1214,6 +1393,7 @@ private String computeRoomState() {
 
 private String computeLightingIntent(String roomState) {
     if (roomState in ["Locked", "Engaged", "Occupied"]) return "On"
+    if (roomState == "Asleep") return state.nightActive ? "Night" : "Off"
     if (state.courtesy) return "Courtesy"
     return "Off"
 }
@@ -1221,6 +1401,7 @@ private String computeLightingIntent(String roomState) {
 private Integer computeLightingLevel(String lightingIntent) {
     if (lightingIntent == "On") return currentRoomControlLevel()
     if (lightingIntent == "Courtesy") return configuredCourtesyLightingLevel()
+    if (lightingIntent == "Night") return configuredNightLightingLevel()
     return 0
 }
 
@@ -1248,6 +1429,10 @@ private Integer configuredCourtesyLightingLevel() {
     Integer modeLevel = modeBasedLightingLevel("courtesyLightingLevel")
     if (modeLevel != null) return modeLevel
     return normalizedPercent(courtesyLightingLevel, 20)
+}
+
+private Integer configuredNightLightingLevel() {
+    return normalizedPercent(nightLightingLevel, 10)
 }
 
 private Integer modeBasedLightingLevel(String prefix) {
@@ -1294,7 +1479,7 @@ private void recomputeAndPublish() {
 
     // Locking should not change the public switch. It is a freeze/hold state, not an on/off request.
     Boolean roomSwitchShouldBeOn = state.locked ? previousSwitchOn : (newRoomState in ["Occupied", "Engaged"])
-    Boolean metaLightShouldBeOn = state.locked ? (state.metaLightSwitch == "on") : (newLightingIntent in ["On", "Courtesy"])
+    Boolean metaLightShouldBeOn = state.locked ? (state.metaLightSwitch == "on") : (newLightingIntent in ["On", "Courtesy", "Night"])
 
     publishMetaLightDevice(metaLightShouldBeOn, effectiveLightingLevel)
     publishRoomDevice(roomSwitchShouldBeOn, newRoomState, newLightingIntent, roomControlLevel)
