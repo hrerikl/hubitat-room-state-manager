@@ -91,6 +91,14 @@ preferences {
             input "unlockImpliesActivity", "bool", title: "Treat unlock as occupancy activity", defaultValue: false, required: true
         }
 
+        if (bedroomProfile()) {
+            section("Bedroom sleep") {
+                input "nightMotionSensors", "capability.motionSensor", title: "Motion sensors that trigger Night lighting while Asleep", multiple: true, required: false
+                input "nightLightingTimeoutMinutes", "number", title: "Night lighting timeout minutes", defaultValue: 5, required: true
+                input "nightLightingLevel", "number", title: "Night lighting level", defaultValue: 10, required: true
+            }
+        }
+
         section("Room lighting levels") {
             input "occupiedLightingLevel", "number", title: "Default occupied lighting level. Blank uses the last on level.", required: false
             input "courtesyLightingLevel", "number", title: "Courtesy/convenience lighting level", defaultValue: 20, required: true
@@ -207,6 +215,8 @@ private void ensureInitialState() {
     if (state.occupied == null) state.occupied = false
     if (state.courtesy == null) state.courtesy = false
     if (state.engaged == null) state.engaged = engagedEnabled()
+    if (state.asleep == null) state.asleep = asleepEnabled()
+    if (state.nightActive == null) state.nightActive = false
     if (state.locked == null) state.locked = lockedEnabled()
     if (state.roomState == null) state.roomState = "Off"
     if (state.lightingIntent == null) state.lightingIntent = "Off"
@@ -256,6 +266,10 @@ private Map roomProfileOptions() {
         standard: "Standard",
         bedroom : "Bedroom"
     ]
+}
+
+private Boolean bedroomProfile() {
+    return roomProfile == "bedroom"
 }
 
 private List locationModeNames() {
@@ -1124,6 +1138,10 @@ private Boolean courtesyEnabled() {
 
 private Boolean engagedEnabled() {
     return roomDevice()?.currentValue("engagedEnabled") == "on"
+}
+
+private Boolean asleepEnabled() {
+    return roomDevice()?.currentValue("asleepEnabled") == "on"
 }
 
 private Boolean lockedEnabled() {
