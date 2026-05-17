@@ -50,6 +50,15 @@ preferences {
                 multiple: true
             )
         }
+
+        section("Recovery") {
+            paragraph "Creates a Recover Simple Home switch. Turn it on from Rule Machine, dashboards, or voice assistants to ask child apps to reassert their current state."
+        }
+
+        section("Maintenance") {
+            input "reinitializeChildrenNow", "button", title: "Reinitialize child apps"
+            paragraph "Use after code changes to rebuild child app subscriptions and schedules without opening each child app."
+        }
     }
 }
 
@@ -60,11 +69,101 @@ def installed() {
 
 def updated() {
     log.info "Updated Simple Room State Manager v2"
+    unsubscribe()
+    unschedule()
     initialize()
 }
 
 def initialize() {
-    // Parent currently has no persistent shared room graph.
+    createOrUpdateRecoveryDevice()
+    subscribe(recoveryDevice(), "switch.on", recoverySwitchOnHandler)
+}
+
+def appButtonHandler(String buttonName) {
+    if (buttonName == "reinitializeChildrenNow") {
+        reinitializeChildApps()
+    }
+}
+
+def reinitializeChildApps() {
+    Integer attempted = 0
+    Integer succeeded = 0
+
+    allManagedChildren().each { child ->
+        attempted++
+        try {
+            child.reinitializeFromParent()
+            succeeded++
+        } catch (Throwable e) {
+            log.warn "Simple Room State Manager v2: Could not reinitialize child ${child?.label ?: child?.id}: ${e.message}"
+        }
+    }
+
+    log.info "Simple Room State Manager v2: Reinitialized ${succeeded} of ${attempted} child app(s)."
+}
+
+def componentOn(childDevice) {
+    if (childDevice?.deviceNetworkId == recoveryDeviceNetworkId()) {
+        log.info "Simple Room State Manager v2: Recover Simple Home requested."
+        runIn(1, resetRecoverySwitch, [overwrite: true])
+    }
+}
+
+def componentOff(childDevice) {
+    // Parent-owned recovery switch is momentary. No action needed on off.
+}
+
+def recoverySwitchOnHandler(evt) {
+    log.info "Simple Room State Manager v2: Recover Simple Home switch event received."
+    runIn(1, resetRecoverySwitch, [overwrite: true])
+}
+
+def resetRecoverySwitch() {
+    try {
+        recoveryDevice()?.setSwitchState("off")
+    } catch (Exception e) {
+        log.warn "Simple Room State Manager v2: Could not reset Recover Simple Home switch: ${e.message}"
+    }
+}
+
+def recoveryDevice() {
+    return getChildDevice(recoveryDeviceNetworkId())
+}
+
+private void createOrUpdateRecoveryDevice() {
+    String dni = recoveryDeviceNetworkId()
+    String label = "Recover Simple Home"
+    def child = getChildDevice(dni)
+
+    if (!child) {
+        try {
+            child = addChildDevice("lundby", "Simple Room Child Switch Device", dni, [
+                label      : label,
+                name       : label,
+                isComponent: true
+            ])
+        } catch (Exception e) {
+            log.warn "Simple Room State Manager v2: Could not create Recover Simple Home switch: ${e.message}"
+            return
+        }
+    }
+
+    try {
+        if (child.displayName != label) {
+            child.setLabel(label)
+        }
+        child.initialize()
+    } catch (Exception e) {
+        log.warn "Simple Room State Manager v2: Could not initialize Recover Simple Home switch: ${e.message}"
+    }
+}
+
+private String recoveryDeviceNetworkId() {
+    return "simple-home-recovery-${app.id}"
+}
+
+private List allManagedChildren() {
+    return ((childApps ?: []) + (modeApps ?: []) + (lightingApps ?: [])).findAll { it }
 }
 
 /**
@@ -164,7 +263,8 @@ Map roomStateChildInfo(def childAppId) {
             label        : child.getManagedRoomDeviceLabel(),
             hubitatRoomId: child.getHubitatRoomId(),
             hubitatRoom  : child.getHubitatRoomName(),
-            roomName     : child.getConfiguredRoomName()
+            roomName     : child.getConfiguredRoomName(),
+            roomProfile  : child.getRoomProfile()
         ]
     } catch (Throwable ignored) {
         return [:]

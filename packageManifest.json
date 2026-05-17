@@ -1,0 +1,83 @@
+{
+  "packageName": "Simple Room State Manager",
+  "author": "Erik Lundby",
+  "version": "0.2.0",
+  "minimumHEVersion": "2.3.0",
+  "dateReleased": "2026-05-17",
+  "releaseNotes": "Adds Simple Home recovery, parent-driven child reinitialization, bedroom sleep/Night lighting support, and room remote refinements.",
+  "category": "Convenience",
+  "tags": "Lights & Switches, Presence & Location",
+  "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
+  "communityLink": "https://github.com/hrerikl/hubitat-room-state-manager",
+  "apps": [
+    {
+      "id": "b7af26b8-9787-46d7-857e-ea8c85b920e0",
+      "name": "Simple Room State Manager v2",
+      "namespace": "lundby",
+      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleRoomStateManager_v2.groovy",
+      "required": true,
+      "oauth": false,
+      "primary": true,
+      "description": "Parent app for lightweight room state, mode, and lighting child apps."
+    },
+    {
+      "id": "14661fd7-420a-40f0-bbca-fbf77ce7aa39",
+      "name": "Simple Room State Child v2",
+      "namespace": "lundby",
+      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleRoomStateChild_v2.groovy",
+      "required": true,
+      "oauth": false,
+      "primary": false,
+      "description": "Room state child app that manages occupancy, courtesy, lock, sleep, and room meta-device output."
+    },
+    {
+      "id": "5d6a0a37-9201-42b6-9655-729fdc506d2d",
+      "name": "Simple Mode Manager v2",
+      "namespace": "lundby",
+      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleModeManager_v2.groovy",
+      "required": true,
+      "oauth": false,
+      "primary": false,
+      "description": "Simple mode manager for home, away, vacation, day, evening, and night transitions."
+    },
+    {
+      "id": "80f6efa1-1ba6-42e2-845f-a5b92161f85f",
+      "name": "Simple Room Lighting v2",
+      "namespace": "lundby",
+      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleRoomLighting_v2.groovy",
+      "required": true,
+      "oauth": false,
+      "primary": false,
+      "description": "Room-centric lighting adapter for MetaLight output, physical lights, scenes, remotes, and mode or intent matrices."
+    }
+  ],
+  "drivers": [
+    {
+      "id": "6f05522a-f03d-4bd6-b7fe-9298ac70242d",
+      "name": "Simple Room Meta Device",
+      "namespace": "lundby",
+      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/drivers/SimpleRoomMetaDevice.groovy",
+      "required": true,
+      "oauth": false,
+      "description": "Public room device exposing switch, level, lock, room state, lighting intent, and component child controls."
+    },
+    {
+      "id": "f3edda6e-1a13-4f15-b4b1-79d3d07b6eca",
+      "name": "Simple Room Meta Light Device",
+      "namespace": "lundby",
+      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/drivers/SimpleRoomMetaLightDevice.groovy",
+      "required": true,
+      "oauth": false,
+      "description": "Automation-facing effective room light component device."
+    },
+    {
+      "id": "ff90bef0-f629-4762-9dcc-ae166cfbc065",
+      "name": "Simple Room Child Switch Device",
+      "namespace": "lundby",
+      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/drivers/SimpleRoomChildSwitchDevice.groovy",
+      "required": true,
+      "oauth": false,
+      "description": "Reusable component switch for Simple Room controls such as Courtesy, Engaged, Asleep, Locked, and recovery."
+    }
+  ]
+}

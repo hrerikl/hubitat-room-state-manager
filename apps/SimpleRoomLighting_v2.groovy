@@ -56,7 +56,9 @@ preferences {
             input "picoRemotes", "capability.pushableButton", title: "5-button Pico remotes", multiple: true, required: false
             input "casetaDimmers", "capability.switchLevel", title: "4-button Caseta dimmers/switches", multiple: true, required: false
             input "picoLevelChangeDimmers", "capability.switchLevel", title: "Dimmers for held level-change buttons", multiple: true, required: false
+            input "sceneCycleSwitches", "capability.switch", title: "Button 3 scene switches/activators", multiple: true, required: false
             input "picoStepSize", "number", title: "Push level step", defaultValue: 10, required: true
+            input "sleepSceneTimeoutMinutes", "number", title: "When asleep, button 3 extends Night lighting minutes", defaultValue: 45, required: true
         }
 
         section("Debug") {
@@ -89,6 +91,12 @@ def updated() {
     initialize()
 }
 
+def reinitializeFromParent() {
+    log.info "Reinitializing ${app.label} from parent"
+    unsubscribe()
+    initialize()
+}
+
 def initialize() {
     updateAppLabel()
 
@@ -111,6 +119,7 @@ def initialize() {
     subscribe(casetaDimmers, "released", casetaReleasedHandler)
     subscribe(casetaDimmers, "doubleTapped", casetaDoubleTappedHandler)
     subscribe(overrideSwitches(), "switch", overrideSwitchHandler)
+    subscribe(parent.recoveryDevice(), "switch.on", recoverSimpleHomeHandler)
 
     reassessLighting("initialize")
 }
@@ -157,6 +166,11 @@ def overrideSwitchHandler(evt) {
     reassessLighting("override switch changed")
 }
 
+def recoverSimpleHomeHandler(evt) {
+    debug "Recover Simple Home requested"
+    recoverSimpleHome()
+}
+
 def controlSwitchHandler(evt) {
     if (!shouldAcceptControlEvent(evt)) return
 
@@ -193,6 +207,8 @@ def picoPushedHandler(evt) {
         roomOnAndEngageIfUnlocked()
     } else if (button == 2) {
         room.setLevel(adjustedRoomLevel(step))
+    } else if (button == 3) {
+        cycleSceneSwitch()
     } else if (button == 4) {
         room.setLevel(adjustedRoomLevel(-step))
     } else if (button == 5) {
@@ -210,6 +226,8 @@ def picoHeldHandler(evt) {
         startLevelChange("up")
     } else if (button == 4) {
         startLevelChange("down")
+    } else if (button == 5) {
+        roomDevice()?.setAsleepSwitchState("on")
     } else {
         debug "No default Pico held action for button ${button}"
     }
@@ -268,6 +286,8 @@ def casetaHeldHandler(evt) {
         startLevelChange("up")
     } else if (button == 3) {
         startLevelChange("down")
+    } else if (button == 4) {
+        roomDevice()?.setAsleepSwitchState("on")
     } else {
         debug "No default Caseta held action for button ${button}"
     }
@@ -309,7 +329,7 @@ private void reassessLighting(String reason) {
 
     debug "Reassessing context=${context} intent=${intentBucket} roomIntent=${intent} meta=${switchState}/${metaLevel}: ${reason}"
 
-    if (switchState != "on" || metaLevel <= 0 || !(intent in ["On", "Courtesy"])) {
+    if (switchState != "on" || metaLevel <= 0 || !(intent in ["On", "Courtesy", "Night"])) {
         debug "Skipping activation because MetaLight is off or intent is not active"
         return
     }
@@ -361,6 +381,23 @@ private void applyOffRows(String context, String intentBucket, String reason) {
     }
 }
 
+private void recoverSimpleHome() {
+    def room = roomDevice()
+    if (!room) return
+
+    String switchState = room.currentValue("metaLightSwitch") ?: "off"
+    String intent = room.currentValue("lightingIntent") ?: "Off"
+    Integer metaLevel = normalizedLevel(room.currentValue("metaLightLevel"), 0)
+
+    if (switchState == "on" && metaLevel > 0 && intent in ["On", "Courtesy", "Night"]) {
+        debug "Recover Simple Home: reapplying active matrix"
+        reassessLighting("Simple Home recovery")
+    } else {
+        debug "Recover Simple Home: applying Off rows"
+        applyOffCondition("Simple Home recovery")
+    }
+}
+
 private Boolean rowAct(String context, String intent, def dev, Boolean override = false) {
     return settingBool(rowName("act", context, intent, dev, override), defaultAct(context, intent))
 }
@@ -397,7 +434,7 @@ private String activeContextKey() {
 
 private String activeIntentBucket(String intent) {
     if (!matrixUsesIntent()) return "Any"
-    return intent in ["On", "Courtesy"] ? intent : "On"
+    return intent in ["On", "Courtesy", "Night"] ? intent : "On"
 }
 
 // -------------------- Matrix UI --------------------
@@ -566,7 +603,8 @@ private Boolean matrixUsesIntent() {
 }
 
 private List matrixIntentBuckets() {
-    return matrixUsesIntent() ? ["On", "Courtesy"] : ["Any"]
+    if (!matrixUsesIntent()) return ["Any"]
+    return bedroomRoomProfile() ? ["On", "Night"] : ["On", "Courtesy"]
 }
 
 private List matrixContexts() {
@@ -659,9 +697,42 @@ private void stopLevelChange() {
     }
 }
 
+private void cycleSceneSwitch() {
+    List scenes = asList(sceneCycleSwitches)
+    if (!scenes) {
+        debug "No scene switches configured for button 3"
+        return
+    }
+
+    Integer nextIndex = ((state.sceneCycleIndex ?: -1) as Integer) + 1
+    if (nextIndex >= scenes.size()) {
+        nextIndex = 0
+    }
+    state.sceneCycleIndex = nextIndex
+
+    def scene = scenes[nextIndex]
+    try {
+        debug "Activating scene ${nextIndex + 1}/${scenes.size()}: ${scene.displayName}"
+        scene.on()
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not activate scene ${scene?.displayName}: ${e.message}"
+    }
+
+    if (roomDevice()?.currentValue("roomState") == "Asleep") {
+        Integer minutes = sceneNightExtensionMinutesForRoom()
+        debug "Extending Night lighting for ${minutes} minutes from button 3 scene"
+        roomDevice()?.activateNightLighting(minutes)
+    }
+}
+
 private void roomOnAndEngageIfUnlocked() {
     def room = roomDevice()
     if (!room) return
+
+    if (room.currentValue("roomState") == "Asleep") {
+        room.activateNightLighting(0)
+        return
+    }
 
     room.on()
 
@@ -750,6 +821,10 @@ private Boolean isDimmer(def dev) {
     return asList(automatedDimmers).any { it?.id == dev?.id }
 }
 
+private Boolean bedroomRoomProfile() {
+    return roomInfo()?.roomProfile == "bedroom"
+}
+
 private List levelChangeDimmers() {
     List selected = asList(picoLevelChangeDimmers)
     return selected ?: asList(automatedDimmers)
@@ -770,6 +845,21 @@ private Map locationModeOptions() {
         log.warn "${app.label}: Could not load Location Modes: ${e.message}"
         return [:]
     }
+}
+
+private Map roomInfo() {
+    if (!roomChildAppId) return [:]
+    try {
+        return parent.roomStateChildInfo(roomChildAppId) ?: [:]
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not load Room info: ${e.message}"
+        return [:]
+    }
+}
+
+private Integer sceneNightExtensionMinutesForRoom() {
+    Integer minutes = (sleepSceneTimeoutMinutes ?: 45) as Integer
+    return Math.max(minutes, 1)
 }
 
 private String currentLocationModeName() {

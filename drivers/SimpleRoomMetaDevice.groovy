@@ -31,26 +31,35 @@ metadata {
         capability 'Lock'
         capability 'Sensor'
 
-        attribute 'roomState', 'enum', ['Off', 'Occupied', 'Engaged', 'Locked']
-        attribute 'lightingIntent', 'enum', ['Off', 'Courtesy', 'On']
+        attribute 'roomState', 'enum', ['Off', 'Occupied', 'Engaged', 'Asleep', 'Locked']
+        attribute 'lightingIntent', 'enum', ['Off', 'Courtesy', 'Night', 'On']
         attribute 'metaLightSwitch', 'enum', ['off', 'on']
         attribute 'metaLightLevel', 'number'
         attribute 'courtesyEnabled', 'enum', ['off', 'on']
         attribute 'engagedEnabled', 'enum', ['off', 'on']
+        attribute 'asleepEnabled', 'enum', ['off', 'on']
+        attribute 'nightLighting', 'enum', ['off', 'on']
+        attribute 'nightLightingTimeoutMinutes', 'number'
         attribute 'lockedEnabled', 'enum', ['off', 'on']
         attribute 'presenceActivity', 'number'
         attribute 'lastPresenceActivity', 'string'
 
-        command 'setRoomState', [[name: 'Room State', type: 'ENUM', constraints: ['Off', 'Occupied', 'Engaged', 'Locked']]]
-        command 'setLightingIntent', [[name: 'Lighting Intent', type: 'ENUM', constraints: ['Off', 'Courtesy', 'On']]]
+        command 'setRoomState', [[name: 'Room State', type: 'ENUM', constraints: ['Off', 'Occupied', 'Engaged', 'Asleep', 'Locked']]]
+        command 'setLightingIntent', [[name: 'Lighting Intent', type: 'ENUM', constraints: ['Off', 'Courtesy', 'Night', 'On']]]
         command 'setSwitchState', [[name: 'Switch State', type: 'ENUM', constraints: ['off', 'on']]]
         command 'setRoomLevel', [[name: 'Room Level', type: 'NUMBER']]
         command 'setMetaLightSwitchState', [[name: 'Switch State', type: 'ENUM', constraints: ['off', 'on']]]
         command 'setMetaLightLevel', [[name: 'MetaLight Level', type: 'NUMBER']]
         command 'setCourtesySwitchState', [[name: 'Courtesy Switch State', type: 'ENUM', constraints: ['off', 'on']]]
         command 'setEngagedSwitchState', [[name: 'Engaged Switch State', type: 'ENUM', constraints: ['off', 'on']]]
+        command 'setAsleepSwitchState', [[name: 'Asleep Switch State', type: 'ENUM', constraints: ['off', 'on']]]
+        command 'setNightLightingState', [[name: 'Night Lighting State', type: 'ENUM', constraints: ['off', 'on']]]
+        command 'setNightLightingTimeoutMinutes', [[name: 'Timeout minutes', type: 'NUMBER']]
+        command 'activateNightLighting', [[name: 'Timeout minutes', type: 'NUMBER']]
+        command 'clearNightLighting'
         command 'setLockedSwitchState', [[name: 'Locked Switch State', type: 'ENUM', constraints: ['off', 'on']]]
         command 'setEngagedSwitchLabel', [[name: 'Engaged Switch Label', type: 'STRING']]
+        command 'setAsleepSwitchLabel', [[name: 'Asleep Switch Label', type: 'STRING']]
         command 'setLockedSwitchLabel', [[name: 'Locked Switch Label', type: 'STRING']]
         command 'recordPresenceActivity', [[name: 'Epoch milliseconds', type: 'STRING']]
     }
@@ -92,6 +101,15 @@ void initialize() {
     if (device.currentValue('engagedEnabled') == null) {
         sendEvent(name: 'engagedEnabled', value: 'off')
     }
+    if (device.currentValue('asleepEnabled') == null) {
+        sendEvent(name: 'asleepEnabled', value: 'off')
+    }
+    if (device.currentValue('nightLighting') == null) {
+        sendEvent(name: 'nightLighting', value: 'off')
+    }
+    if (device.currentValue('nightLightingTimeoutMinutes') == null) {
+        sendEvent(name: 'nightLightingTimeoutMinutes', value: 0)
+    }
     if (device.currentValue('lockedEnabled') == null) {
         sendEvent(name: 'lockedEnabled', value: 'off')
     }
@@ -104,6 +122,7 @@ void initialize() {
     createOrUpdateMetaLightDevice()
     createOrUpdateChildSwitchDevice('Courtesy')
     createOrUpdateChildSwitchDevice('Engaged')
+    createOrUpdateChildSwitchDevice('Asleep')
     createOrUpdateChildSwitchDevice('Locked')
 }
 
@@ -128,6 +147,7 @@ void lock() {
 
 void unlock() {
     setLockedSwitchState('off')
+    setAsleepSwitchState('off')
 }
 
 void setSwitchState(String value) {
@@ -174,6 +194,41 @@ void setEngagedSwitchState(String value) {
     setChildSwitchState('Engaged', value, 'engagedEnabled')
 }
 
+void setAsleepSwitchState(String value) {
+    setChildSwitchState('Asleep', value, 'asleepEnabled')
+}
+
+void setNightLightingState(String value) {
+    String normalized = value == 'on' ? 'on' : 'off'
+    if (device.currentValue('nightLighting') != normalized) {
+        sendEvent(name: 'nightLighting', value: normalized, isStateChange: true)
+    }
+}
+
+void setNightLightingTimeoutMinutes(value) {
+    Integer minutes = normalizeLevel(value)
+    if ((device.currentValue('nightLightingTimeoutMinutes') ?: -1) as Integer != minutes) {
+        sendEvent(name: 'nightLightingTimeoutMinutes', value: minutes)
+    }
+}
+
+void activateNightLighting(value) {
+    Integer minutes = normalizeLevel(value)
+    try {
+        parent?.activateNightLightingFromDevice(minutes)
+    } catch (Exception e) {
+        log.warn "Could not request Night lighting activation: ${e.message}"
+    }
+}
+
+void clearNightLighting() {
+    try {
+        parent?.clearNightLightingFromDevice()
+    } catch (Exception e) {
+        log.warn "Could not request Night lighting clear: ${e.message}"
+    }
+}
+
 void setLockedSwitchState(String value) {
     setChildSwitchState('Locked', value, 'lockedEnabled')
     setLockAttribute(value == 'on' ? 'locked' : 'unlocked')
@@ -181,6 +236,10 @@ void setLockedSwitchState(String value) {
 
 void setEngagedSwitchLabel(String value) {
     updateChildSwitchLabel('Engaged', value)
+}
+
+void setAsleepSwitchLabel(String value) {
+    updateChildSwitchLabel('Asleep', value)
 }
 
 void setLockedSwitchLabel(String value) {
@@ -196,7 +255,7 @@ void componentOff(def childDevice) {
 }
 
 void setRoomState(String value) {
-    List allowed = ['Off', 'Occupied', 'Engaged', 'Locked']
+    List allowed = ['Off', 'Occupied', 'Engaged', 'Asleep', 'Locked']
     String normalized = allowed.contains(value) ? value : 'Off'
     if (device.currentValue('roomState') != normalized) {
         sendEvent(name: 'roomState', value: normalized)
@@ -204,7 +263,7 @@ void setRoomState(String value) {
 }
 
 void setLightingIntent(String value) {
-    List allowed = ['Off', 'Courtesy', 'On']
+    List allowed = ['Off', 'Courtesy', 'Night', 'On']
     String normalized = allowed.contains(value) ? value : 'Off'
     if (device.currentValue('lightingIntent') != normalized) {
         sendEvent(name: 'lightingIntent', value: normalized)
@@ -340,6 +399,7 @@ private String defaultSwitchStateForRole(String role) {
 private String attributeForRole(String role) {
     if (role == 'Courtesy') return 'courtesyEnabled'
     if (role == 'Engaged') return 'engagedEnabled'
+    if (role == 'Asleep') return 'asleepEnabled'
     if (role == 'Locked') return 'lockedEnabled'
     return null
 }

@@ -70,18 +70,32 @@ def updated() {
     initialize()
 }
 
+def reinitializeFromParent() {
+    log.info "Reinitializing ${app.label} from parent"
+    unsubscribe()
+    unschedule()
+    initialize()
+}
+
 def initialize() {
     subscribe(presenceSwitches, "switch", presenceHandler)
     subscribe(vacationSwitch, "switch", presenceHandler)
     subscribe(stillUpSwitches, "switch.on", stillUpHandler)
     subscribe(stillUpButtons, "pushed", stillUpHandler)
     subscribe(nightReadyRooms(), "roomState", nightReadyRoomHandler)
+    subscribe(parent.recoveryDevice(), "switch.on", recoverSimpleHomeHandler)
 
     scheduleDayStart()
     scheduleEveningStart()
     scheduleNightStart()
 
     evaluatePresenceMode("initialize")
+}
+
+def recoverSimpleHomeHandler(evt) {
+    debug "Recover Simple Home requested"
+    evaluatePresenceMode("Simple Home recovery")
+    evaluateNight("Simple Home recovery")
 }
 
 // -------------------- Scheduling --------------------
