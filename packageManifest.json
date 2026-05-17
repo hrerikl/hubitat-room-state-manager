@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-17",
-  "releaseNotes": "Adds bedroom sleep configuration fields and inert Asleep/Night state initialization.",
+  "releaseNotes": "Fixes room profile getter recursion by reading the room profile from settings explicitly.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

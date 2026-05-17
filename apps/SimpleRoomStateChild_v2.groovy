@@ -225,7 +225,7 @@ private void ensureInitialState() {
 }
 
 private void ensureRoomProfileSetting() {
-    if (roomProfile) return
+    if (settings?.roomProfile) return
 
     try {
         app.updateSetting("roomProfile", [type: "enum", value: "standard"])
@@ -269,7 +269,7 @@ private Map roomProfileOptions() {
 }
 
 private Boolean bedroomProfile() {
-    return roomProfile == "bedroom"
+    return getRoomProfile() == "bedroom"
 }
 
 private List locationModeNames() {
@@ -329,13 +329,13 @@ private String labelFor(String deviceName) {
         return "${safeRoomName()} MetaLight"
     }
     if (deviceName == "Engaged") {
-        return engagedLabel?.trim() ? engagedLabel.trim() : "${safeRoomName()} ${roomProfile == 'bedroom' ? 'Awake' : 'Engaged'}"
+        return engagedLabel?.trim() ? engagedLabel.trim() : "${safeRoomName()} ${bedroomProfile() ? 'Awake' : 'Engaged'}"
     }
     if (deviceName == "Asleep") {
         return asleepLabel?.trim() ? asleepLabel.trim() : "${safeRoomName()} Asleep"
     }
     if (deviceName == "Locked") {
-        return lockedLabel?.trim() ? lockedLabel.trim() : "${safeRoomName()} ${roomProfile == 'bedroom' ? 'Do Not Disturb' : 'Locked'}"
+        return lockedLabel?.trim() ? lockedLabel.trim() : "${safeRoomName()} ${bedroomProfile() ? 'Do Not Disturb' : 'Locked'}"
     }
     return "${safeRoomName()} ${deviceName}"
 }
@@ -510,7 +510,7 @@ def getConfiguredRoomName() {
 }
 
 def getRoomProfile() {
-    return roomProfile ?: "standard"
+    return settings?.roomProfile ?: "standard"
 }
 
 def getSelectedNeighborChildAppIds() {
