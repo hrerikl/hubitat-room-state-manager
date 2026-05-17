@@ -1,0 +1,12 @@
+{
+  "author": "Erik Lundby",
+  "gitHubUrl": "https://github.com/hrerikl/hubitat-room-state-manager",
+  "packages": [
+    {
+      "name": "Simple Room State Manager",
+      "category": "Convenience",
+      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/packageManifest.json",
+      "description": "Room state, mode, and lighting helpers for Hubitat."
+    }
+  ]
+}

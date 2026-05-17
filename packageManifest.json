@@ -18,6 +18,7 @@
       "required": true,
       "oauth": false,
       "primary": true,
+      "category": "Convenience",
       "description": "Parent app for lightweight room state, mode, and lighting child apps."
     },
     {
@@ -28,6 +29,7 @@
       "required": true,
       "oauth": false,
       "primary": false,
+      "category": "Convenience",
       "description": "Room state child app that manages occupancy, courtesy, lock, sleep, and room meta-device output."
     },
     {
@@ -38,6 +40,7 @@
       "required": true,
       "oauth": false,
       "primary": false,
+      "category": "Convenience",
       "description": "Simple mode manager for home, away, vacation, day, evening, and night transitions."
     },
     {
@@ -48,6 +51,7 @@
       "required": true,
       "oauth": false,
       "primary": false,
+      "category": "Convenience",
       "description": "Room-centric lighting adapter for MetaLight output, physical lights, scenes, remotes, and mode or intent matrices."
     }
   ],
@@ -59,6 +63,7 @@
       "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/drivers/SimpleRoomMetaDevice.groovy",
       "required": true,
       "oauth": false,
+      "category": "Convenience",
       "description": "Public room device exposing switch, level, lock, room state, lighting intent, and component child controls."
     },
     {
@@ -68,6 +73,7 @@
       "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/drivers/SimpleRoomMetaLightDevice.groovy",
       "required": true,
       "oauth": false,
+      "category": "Convenience",
       "description": "Automation-facing effective room light component device."
     },
     {
@@ -77,6 +83,7 @@
       "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/drivers/SimpleRoomChildSwitchDevice.groovy",
       "required": true,
       "oauth": false,
+      "category": "Convenience",
       "description": "Reusable component switch for Simple Room controls such as Courtesy, Engaged, Asleep, Locked, and recovery."
     }
   ]
