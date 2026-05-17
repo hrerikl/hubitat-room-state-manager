@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-17",
-  "releaseNotes": "Restores bedroom sleep/Night lighting support after Hubitat backup recovery, with the child app import path simplified.",
+  "releaseNotes": "Restores the HPM-facing child app to the stable importable version while bedroom sleep support is isolated.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
