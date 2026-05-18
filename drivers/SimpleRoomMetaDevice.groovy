@@ -127,18 +127,18 @@ void initialize() {
 }
 
 void on() {
-    sendEvent(name: 'switch', value: 'on', type: 'digital')
+    sendEvent(name: 'switch', value: 'on', type: 'digital', isStateChange: true)
 }
 
 void off() {
-    sendEvent(name: 'switch', value: 'off', type: 'digital')
-    sendEvent(name: 'level', value: 0, unit: '%', type: 'digital')
+    sendEvent(name: 'switch', value: 'off', type: 'digital', isStateChange: true)
+    sendEvent(name: 'level', value: 0, unit: '%', type: 'digital', isStateChange: true)
 }
 
 void setLevel(value) {
     Integer normalized = normalizeLevel(value)
-    sendEvent(name: 'level', value: normalized, unit: '%', type: 'digital')
-    sendEvent(name: 'switch', value: normalized > 0 ? 'on' : 'off', type: 'digital')
+    sendEvent(name: 'level', value: normalized, unit: '%', type: 'digital', isStateChange: true)
+    sendEvent(name: 'switch', value: normalized > 0 ? 'on' : 'off', type: 'digital', isStateChange: true)
 }
 
 void lock() {
