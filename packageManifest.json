@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.15",
+  "version": "0.2.16",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-17",
-  "releaseNotes": "Adds optional speech announcements for Room lock, unlock, sleep, and wake state changes.",
+  "releaseNotes": "Ignores stale active motion sensors during room timeouts and lets skip-initial lighting rows reapply on mode changes.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

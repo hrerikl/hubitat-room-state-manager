@@ -86,6 +86,7 @@ preferences {
 
         section("Timeouts") {
             input "occupiedTimeoutMinutes", "number", title: "Occupied timeout after no motion", defaultValue: 5, required: true
+            input "staleActiveMotionMinutes", "number", title: "Ignore active motion sensor after no motion/device activity for this many minutes. Blank or 0 disables.", defaultValue: 60, required: false
             input "engagedTimeoutMinutes", "number", title: "Engaged timeout after no activity", defaultValue: 30, required: true
             input "lockAutoClearMinutes", "number", title: "Auto-clear Locked after X minutes. Blank or 0 disables.", required: false
             input "unlockImpliesActivity", "bool", title: "Treat unlock as occupancy activity", defaultValue: false, required: true
@@ -1174,9 +1175,10 @@ def clearOccupiedIfStillInactive() {
         return
     }
 
-    if (anyMotionActive()) {
+    List activeMotion = activeMotionSensors()
+    if (activeMotion) {
         Integer seconds = occupiedTimeoutSeconds()
-        debug "Occupied timeout blocked: motion still active; rescheduling in ${seconds} seconds"
+        debug "Occupied timeout blocked: motion still active (${activeMotionLabels(activeMotion)}); rescheduling in ${seconds} seconds"
         state.lastInactiveAt = null
         runIn(seconds, clearOccupiedIfStillInactive, [overwrite: true])
         return
@@ -1210,8 +1212,9 @@ def clearEngagedIfStillInactive() {
         return
     }
 
-    if (anyMotionActive()) {
-        debug "Engaged timeout blocked: motion still active; rescheduling"
+    List activeMotion = activeMotionSensors()
+    if (activeMotion) {
+        debug "Engaged timeout blocked: motion still active (${activeMotionLabels(activeMotion)}); rescheduling"
         scheduleEngagedTimeout("motion still active")
         return
     }
@@ -1240,7 +1243,68 @@ def clearEngagedIfStillInactive() {
 }
 
 private Boolean anyMotionActive() {
-    return motionSensors?.any { it.currentMotion == "active" } ?: false
+    return activeMotionSensors() as Boolean
+}
+
+private List activeMotionSensors() {
+    return asList(motionSensors).findAll { dev ->
+        dev?.currentMotion == "active" && !staleActiveMotion(dev)
+    }
+}
+
+private Boolean staleActiveMotion(def dev) {
+    Integer staleMinutes = staleActiveMotionTimeoutMinutes()
+    if (staleMinutes <= 0) return false
+
+    Long lastActivity = motionActivityTimestamp(dev)
+    if (!lastActivity) return false
+
+    Long elapsedMs = now() - lastActivity
+    Long staleMs = staleMinutes * 60L * 1000L
+    if (elapsedMs <= staleMs) return false
+
+    Integer elapsedSeconds = Math.max(Math.ceil(elapsedMs / 1000.0) as Integer, 1)
+    debug "Ignoring stale active motion: ${dev.displayName} active for ${minutesRoundedUp(elapsedSeconds)} minutes"
+    return true
+}
+
+private Long motionActivityTimestamp(def dev) {
+    try {
+        def state = dev.currentState("motion")
+        if (state?.date) return state.date.time as Long
+    } catch (Exception ignored) {
+    }
+
+    try {
+        def last = dev.getLastActivity()
+        if (last) return last.time as Long
+    } catch (Exception ignored) {
+    }
+
+    try {
+        def last = dev.lastActivity
+        if (last instanceof Date) return last.time as Long
+    } catch (Exception ignored) {
+    }
+
+    return null
+}
+
+private Integer staleActiveMotionTimeoutMinutes() {
+    try {
+        return Math.max((staleActiveMotionMinutes ?: 0) as Integer, 0)
+    } catch (Exception ignored) {
+        return 0
+    }
+}
+
+private String activeMotionLabels(List activeMotion) {
+    return activeMotion.collect { it?.displayName ?: it?.name ?: it?.id }.join(", ")
+}
+
+private List asList(def value) {
+    if (!value) return []
+    return value instanceof List ? value : [value]
 }
 
 private Boolean allDoorsClosed() {

@@ -374,10 +374,10 @@ private void reassessLighting(String reason) {
 
     state.lastActiveMatrixContext = context
     state.lastActiveMatrixIntent = intentBucket
-    applyIntentRows(context, intentBucket, metaLevel, levelChangeOnly)
+    applyIntentRows(context, intentBucket, metaLevel, levelChangeOnly, reason)
 }
 
-private void applyIntentRows(String context, String intentBucket, Integer metaLevel, Boolean levelChangeOnly = false) {
+private void applyIntentRows(String context, String intentBucket, Integer metaLevel, Boolean levelChangeOnly = false, String reason = "") {
     Boolean useOverride = overrideActive(context, intentBucket)
     Boolean forceActivation = alwaysActivateRowsEnabled()
     if (useOverride) {
@@ -390,7 +390,7 @@ private void applyIntentRows(String context, String intentBucket, Integer metaLe
         String switchCommand = rowSwitch(context, intentBucket, dev, useOverride)
         String levelMode = isDimmer(dev) ? rowLevelMode(context, intentBucket, dev, useOverride) : "none"
         Boolean skipInitial = isDimmer(dev) && switchCommand == "on" && levelMode == "followSkip"
-        if (skipInitial && !levelChangeOnly) {
+        if (skipInitial && shouldSkipInitialActivation(reason, levelChangeOnly)) {
             debug "Skipping initial activation for ${dev.displayName}"
             return
         }
@@ -408,6 +408,11 @@ private void applyIntentRows(String context, String intentBucket, Integer metaLe
             turnOnDevice(dev, forceActivation)
         }
     }
+}
+
+private Boolean shouldSkipInitialActivation(String reason, Boolean levelChangeOnly) {
+    if (levelChangeOnly) return false
+    return reason in ["initialize", "metaLightSwitch changed", "lightingIntent changed"]
 }
 
 private void applyOffCondition(String reason) {
