@@ -79,6 +79,8 @@ def reinitializeFromParent() {
 }
 
 def initialize() {
+    ensureParentArrivalDevice()
+
     subscribe(presenceSensors, "presence", presenceHandler)
     subscribe(vacationSwitch, "switch", presenceHandler)
     subscribe(stillUpSwitches, "switch.on", stillUpHandler)
@@ -91,6 +93,14 @@ def initialize() {
     scheduleNightStart()
 
     evaluatePresenceMode("initialize")
+}
+
+private void ensureParentArrivalDevice() {
+    try {
+        parent.ensureArrivalDevice()
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not ensure Someone Arrived device exists: ${e.message}"
+    }
 }
 
 def recoverSimpleHomeHandler(evt) {

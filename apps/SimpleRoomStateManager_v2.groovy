@@ -79,8 +79,7 @@ def updated() {
 }
 
 def initialize() {
-    createOrUpdateRecoveryDevice()
-    createOrUpdateArrivalDevice()
+    createOrUpdateSharedDevices()
     subscribe(recoveryDevice(), "switch.on", recoverySwitchOnHandler)
 }
 
@@ -91,6 +90,8 @@ def appButtonHandler(String buttonName) {
 }
 
 def reinitializeChildApps() {
+    createOrUpdateSharedDevices()
+
     Integer attempted = 0
     Integer succeeded = 0
 
@@ -119,6 +120,11 @@ def componentOn(childDevice) {
 
 def componentOff(childDevice) {
     // Parent-owned recovery switch is momentary. No action needed on off.
+}
+
+def ensureArrivalDevice() {
+    createOrUpdateArrivalDevice()
+    return arrivalDevice()
 }
 
 def recoverySwitchOnHandler(evt) {
@@ -187,6 +193,11 @@ private void createOrUpdateRecoveryDevice() {
     } catch (Exception e) {
         log.warn "Simple Room State Manager v2: Could not initialize Recover Simple Home switch: ${e.message}"
     }
+}
+
+private void createOrUpdateSharedDevices() {
+    createOrUpdateRecoveryDevice()
+    createOrUpdateArrivalDevice()
 }
 
 private void createOrUpdateArrivalDevice() {
