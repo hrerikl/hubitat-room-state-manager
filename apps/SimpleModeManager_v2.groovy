@@ -34,6 +34,7 @@ preferences {
         section("Presence") {
             input "presenceSwitches", "capability.switch", title: "Presence switches. On means someone is home.", multiple: true, required: false
             input "vacationSwitch", "capability.switch", title: "Vacation switch. On means no-presence becomes Vacation instead of Away.", multiple: false, required: false
+            input "arrivalPulseSeconds", "number", title: "Someone Arrived pulse seconds", defaultValue: 30, required: true
         }
 
         section("Day and evening") {
@@ -146,6 +147,9 @@ def nightStartHandler() {
 
 def presenceHandler(evt) {
     debug "Presence input ${evt.name}=${evt.value}: ${evt.displayName}"
+    if (evt.name == "switch" && evt.value == "on" && arrivalSourceDevice(evt)) {
+        pulseArrival("presence arrival: ${evt.displayName}")
+    }
     evaluatePresenceMode("presence input")
 }
 
@@ -259,6 +263,29 @@ private Boolean vacationActive() {
     return vacationSwitch?.currentSwitch == "on"
 }
 
+private Boolean arrivalSourceDevice(evt) {
+    return asList(presenceSwitches).any { it?.id?.toString() == evt.deviceId?.toString() }
+}
+
+private void pulseArrival(String reason) {
+    Integer seconds = arrivalPulseDurationSeconds()
+    debug "Pulsing Someone Arrived for ${seconds} seconds: ${reason}"
+
+    try {
+        parent.pulseArrivalDevice(seconds)
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not pulse Someone Arrived: ${e.message}"
+    }
+}
+
+private Integer arrivalPulseDurationSeconds() {
+    try {
+        return Math.max((arrivalPulseSeconds ?: 30) as Integer, 1)
+    } catch (Exception ignored) {
+        return 30
+    }
+}
+
 private Integer nightReadySeconds() {
     return Math.max(((nightReadyMinutes ?: 10) as Integer) * 60, 1)
 }
@@ -326,6 +353,11 @@ private String currentModeName() {
 private String formatTime(Long epochMs) {
     if (!epochMs) return "unknown"
     return new Date(epochMs).format("yyyy-MM-dd HH:mm:ss", location.timeZone)
+}
+
+private List asList(def value) {
+    if (!value) return []
+    return value instanceof List ? value : [value]
 }
 
 private void debug(String msg) {

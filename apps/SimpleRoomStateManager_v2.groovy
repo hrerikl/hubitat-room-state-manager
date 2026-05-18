@@ -55,6 +55,10 @@ preferences {
             paragraph "Creates a Recover Simple Home switch. Turn it on from Rule Machine, dashboards, or voice assistants to ask child apps to reassert their current state."
         }
 
+        section("Shared activators") {
+            paragraph "Creates a Someone Arrived switch. Mode Manager pulses it when a selected presence input changes to present/home."
+        }
+
         section("Maintenance") {
             input "reinitializeChildrenNow", "button", title: "Reinitialize child apps"
             paragraph "Use after code changes to rebuild child app subscriptions and schedules without opening each child app."
@@ -76,6 +80,7 @@ def updated() {
 
 def initialize() {
     createOrUpdateRecoveryDevice()
+    createOrUpdateArrivalDevice()
     subscribe(recoveryDevice(), "switch.on", recoverySwitchOnHandler)
 }
 
@@ -106,6 +111,9 @@ def componentOn(childDevice) {
     if (childDevice?.deviceNetworkId == recoveryDeviceNetworkId()) {
         log.info "Simple Room State Manager v2: Recover Simple Home requested."
         runIn(1, resetRecoverySwitch, [overwrite: true])
+    } else if (childDevice?.deviceNetworkId == arrivalDeviceNetworkId()) {
+        log.info "Simple Room State Manager v2: Someone Arrived activated."
+        runIn(30, resetArrivalSwitch, [overwrite: true])
     }
 }
 
@@ -126,8 +134,31 @@ def resetRecoverySwitch() {
     }
 }
 
+def pulseArrivalDevice(Integer resetSeconds = 30) {
+    try {
+        def dev = arrivalDevice()
+        dev?.setSwitchState("off")
+        dev?.setSwitchState("on")
+        runIn(Math.max(resetSeconds ?: 30, 1), resetArrivalSwitch, [overwrite: true])
+    } catch (Exception e) {
+        log.warn "Simple Room State Manager v2: Could not pulse Someone Arrived switch: ${e.message}"
+    }
+}
+
+def resetArrivalSwitch() {
+    try {
+        arrivalDevice()?.setSwitchState("off")
+    } catch (Exception e) {
+        log.warn "Simple Room State Manager v2: Could not reset Someone Arrived switch: ${e.message}"
+    }
+}
+
 def recoveryDevice() {
     return getChildDevice(recoveryDeviceNetworkId())
+}
+
+def arrivalDevice() {
+    return getChildDevice(arrivalDeviceNetworkId())
 }
 
 private void createOrUpdateRecoveryDevice() {
@@ -158,8 +189,40 @@ private void createOrUpdateRecoveryDevice() {
     }
 }
 
+private void createOrUpdateArrivalDevice() {
+    String dni = arrivalDeviceNetworkId()
+    String label = "Someone Arrived"
+    def child = getChildDevice(dni)
+
+    if (!child) {
+        try {
+            child = addChildDevice("lundby", "Simple Room Child Switch Device", dni, [
+                label      : label,
+                name       : label,
+                isComponent: true
+            ])
+        } catch (Exception e) {
+            log.warn "Simple Room State Manager v2: Could not create Someone Arrived switch: ${e.message}"
+            return
+        }
+    }
+
+    try {
+        if (child.displayName != label) {
+            child.setLabel(label)
+        }
+        child.initialize()
+    } catch (Exception e) {
+        log.warn "Simple Room State Manager v2: Could not initialize Someone Arrived switch: ${e.message}"
+    }
+}
+
 private String recoveryDeviceNetworkId() {
     return "simple-home-recovery-${app.id}"
+}
+
+private String arrivalDeviceNetworkId() {
+    return "simple-home-arrival-${app.id}"
 }
 
 private List allManagedChildren() {
