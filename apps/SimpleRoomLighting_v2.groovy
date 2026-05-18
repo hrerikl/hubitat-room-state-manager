@@ -62,6 +62,17 @@ preferences {
             input "sleepSceneTimeoutMinutes", "number", title: "When asleep, button 3 extends Night lighting minutes", defaultValue: 45, required: true
         }
 
+        section("Announcements") {
+            input "speechDevices", "capability.speechSynthesis", title: "Speech devices for Room state announcements", multiple: true, required: false
+            input "announceRoomControls", "bool", title: "Announce Lock, Unlock, Sleep, and Wake", defaultValue: false, required: true
+            if (announceRoomControls) {
+                input "lockedAnnouncement", "text", title: "Locked message", defaultValue: "Room locked", required: true
+                input "unlockedAnnouncement", "text", title: "Unlocked message", defaultValue: "Room unlocked", required: true
+                input "asleepAnnouncement", "text", title: "Sleep message", defaultValue: "Room asleep", required: true
+                input "awakeAnnouncement", "text", title: "Wake message", defaultValue: "Room awake", required: true
+            }
+        }
+
         section("Debug") {
             input "debugLogging", "bool", title: "Enable debug logging", defaultValue: true, required: true
         }
@@ -106,6 +117,8 @@ def initialize() {
     subscribe(room, "metaLightSwitch", reassessHandler)
     subscribe(room, "metaLightLevel", reassessHandler)
     subscribe(room, "lightingIntent", reassessHandler)
+    subscribe(room, "lockedEnabled", roomControlAnnouncementHandler)
+    subscribe(room, "asleepEnabled", roomControlAnnouncementHandler)
     subscribe(location, "mode", locationModeHandler)
 
     subscribe(controlDimmers, "switch", controlSwitchHandler)
@@ -170,6 +183,19 @@ def overrideSwitchHandler(evt) {
 def recoverSimpleHomeHandler(evt) {
     debug "Recover Simple Home requested"
     recoverSimpleHome()
+}
+
+def roomControlAnnouncementHandler(evt) {
+    if (!announceRoomControlsEnabled()) return
+
+    String message = null
+    if (evt.name == "lockedEnabled") {
+        message = evt.value == "on" ? lockedAnnouncementText() : unlockedAnnouncementText()
+    } else if (evt.name == "asleepEnabled") {
+        message = evt.value == "on" ? asleepAnnouncementText() : awakeAnnouncementText()
+    }
+
+    announceRoomControl(message)
 }
 
 def controlSwitchHandler(evt) {
@@ -758,6 +784,19 @@ private void clearLevelFollowMarkers() {
     state.suppressLevelFollowUntil = null
 }
 
+private void announceRoomControl(String message) {
+    String text = message?.trim()
+    if (!text) return
+
+    asList(speechDevices).findAll { it }.each { speaker ->
+        try {
+            speaker.speak(text)
+        } catch (Exception e) {
+            log.warn "${app.label}: Could not speak '${text}' on ${speaker.displayName}: ${e.message}"
+        }
+    }
+}
+
 private void cycleSceneSwitch() {
     List scenes = asList(sceneCycleSwitches).findAll { it }.unique { it.id }
     if (!scenes) {
@@ -886,6 +925,26 @@ private Boolean isDimmer(def dev) {
 
 private Boolean bedroomRoomProfile() {
     return roomInfo()?.roomProfile == "bedroom"
+}
+
+private Boolean announceRoomControlsEnabled() {
+    return announceRoomControls == true && asList(speechDevices)
+}
+
+private String lockedAnnouncementText() {
+    return (lockedAnnouncement ?: "Room locked").toString()
+}
+
+private String unlockedAnnouncementText() {
+    return (unlockedAnnouncement ?: "Room unlocked").toString()
+}
+
+private String asleepAnnouncementText() {
+    return (asleepAnnouncement ?: "Room asleep").toString()
+}
+
+private String awakeAnnouncementText() {
+    return (awakeAnnouncement ?: "Room awake").toString()
 }
 
 private List levelChangeDimmers() {
