@@ -191,6 +191,7 @@ def controlLevelHandler(evt) {
 
     Integer level = normalizedLevel(evt.value, 0)
     debug "Control level ${level}: ${evt.displayName}"
+    suppressNextLevelFollow()
     roomDevice()?.setLevel(level)
 }
 
@@ -207,10 +208,12 @@ def picoPushedHandler(evt) {
     if (button == 1) {
         roomOnAndEngageIfUnlocked()
     } else if (button == 2) {
+        allowNextLevelFollow()
         room.setLevel(adjustedRoomLevel(step))
     } else if (button == 3) {
         cycleSceneSwitch()
     } else if (button == 4) {
+        allowNextLevelFollow()
         room.setLevel(adjustedRoomLevel(-step))
     } else if (button == 5) {
         room.off()
@@ -269,8 +272,10 @@ def casetaPushedHandler(evt) {
     if (button == 1) {
         roomOnAndEngageIfUnlocked()
     } else if (button == 2) {
+        allowNextLevelFollow()
         room.setLevel(adjustedRoomLevel(step))
     } else if (button == 3) {
+        allowNextLevelFollow()
         room.setLevel(adjustedRoomLevel(-step))
     } else if (button == 4) {
         room.off()
@@ -335,12 +340,18 @@ private void reassessLighting(String reason) {
         return
     }
 
+    Boolean sameActiveMatrix = state.lastActiveMatrixContext == context && state.lastActiveMatrixIntent == intentBucket
+    Boolean levelChangeOnly = reason == "metaLightLevel changed" && sameActiveMatrix && levelFollowAllowed()
+    if (reason == "metaLightLevel changed") {
+        clearLevelFollowMarkers()
+    }
+
     state.lastActiveMatrixContext = context
     state.lastActiveMatrixIntent = intentBucket
-    applyIntentRows(context, intentBucket, metaLevel)
+    applyIntentRows(context, intentBucket, metaLevel, levelChangeOnly)
 }
 
-private void applyIntentRows(String context, String intentBucket, Integer metaLevel) {
+private void applyIntentRows(String context, String intentBucket, Integer metaLevel, Boolean levelChangeOnly = false) {
     Boolean useOverride = overrideActive(context, intentBucket)
     Boolean forceActivation = alwaysActivateRowsEnabled()
     if (useOverride) {
@@ -351,6 +362,16 @@ private void applyIntentRows(String context, String intentBucket, Integer metaLe
         if (!rowAct(context, intentBucket, dev, useOverride)) return
 
         String switchCommand = rowSwitch(context, intentBucket, dev, useOverride)
+        Boolean skipInitial = rowSkipInitial(context, intentBucket, dev, useOverride)
+        if (skipInitial && !levelChangeOnly) {
+            debug "Skipping initial activation for ${dev.displayName}"
+            return
+        }
+        if (skipInitial && levelChangeOnly && (!isDimmer(dev) || switchCommand != "on")) {
+            debug "Skipping level-only activation for ${dev.displayName}"
+            return
+        }
+
         if (switchCommand == "off") {
             turnOffDevice(dev, "activation switch off")
         } else if (isDimmer(dev)) {
@@ -414,6 +435,10 @@ private String rowLevelMode(String context, String intent, def dev, Boolean over
 
 private String rowSwitch(String context, String intent, def dev, Boolean override = false) {
     return (settings[rowName("switch", context, intent, dev, override)] ?: "on").toString()
+}
+
+private Boolean rowSkipInitial(String context, String intent, def dev, Boolean override = false) {
+    return settingBool(rowName("skipInitial", context, intent, dev, override), false)
 }
 
 private Integer rowExplicitLevel(String context, String intent, def dev, Integer fallback, Boolean override = false) {
@@ -507,6 +532,7 @@ private void renderMatrixRows(String title, String context, String intent, Boole
             paragraph "${dev.displayName}"
             String actName = rowName("act", context, intent, dev, override)
             String switchName = rowName("switch", context, intent, dev, override)
+            String skipInitialName = rowName("skipInitial", context, intent, dev, override)
 
             input actName, "bool", title: "Act", defaultValue: defaultAct(context, intent), required: true, submitOnChange: true
             input rowName("off", context, intent, dev, override), "bool", title: "Off", defaultValue: true, required: true
@@ -516,6 +542,7 @@ private void renderMatrixRows(String title, String context, String intent, Boole
             }
 
             if (isDimmer(dev) && settingBool(actName, defaultAct(context, intent)) && (settings[switchName] ?: "on") == "on") {
+                input skipInitialName, "bool", title: "Skip initial activation, follow Room level changes", defaultValue: false, required: true, submitOnChange: true
                 input rowName("levelMode", context, intent, dev, override), "enum", title: "Level", options: levelModeOptions(), defaultValue: "follow", required: true, submitOnChange: true
                 if (settings[rowName("levelMode", context, intent, dev, override)] == "explicit") {
                     input rowName("level", context, intent, dev, override), "number", title: "Explicit level", required: true
@@ -533,6 +560,7 @@ private String matrixSummaryTable(String context, String intent, Boolean overrid
         String act = rowAct(context, intent, dev, override) ? "yes" : "no"
         String off = rowOff(context, intent, dev, override) ? "yes" : "no"
         String switchCommand = rowAct(context, intent, dev, override) ? rowSwitch(context, intent, dev, override) : ""
+        String initial = rowSkipInitial(context, intent, dev, override) ? "skip" : "send"
         String level = ""
 
         if (isDimmer(dev) && rowAct(context, intent, dev, override) && switchCommand == "on") {
@@ -546,6 +574,7 @@ private String matrixSummaryTable(String context, String intent, Boolean overrid
                 <td>${isDimmer(dev) ? "Dimmer" : "Switch"}</td>
                 <td>${act}</td>
                 <td>${off}</td>
+                <td>${rowAct(context, intent, dev, override) && isDimmer(dev) && switchCommand == "on" ? initial : ""}</td>
                 <td>${switchCommand}</td>
                 <td>${level ?: ""}</td>
             </tr>
@@ -560,6 +589,7 @@ private String matrixSummaryTable(String context, String intent, Boolean overrid
                     <th style="text-align:left;border-bottom:1px solid #999;padding:4px;">Type</th>
                     <th style="text-align:left;border-bottom:1px solid #999;padding:4px;">Act</th>
                     <th style="text-align:left;border-bottom:1px solid #999;padding:4px;">Off</th>
+                    <th style="text-align:left;border-bottom:1px solid #999;padding:4px;">Initial</th>
                     <th style="text-align:left;border-bottom:1px solid #999;padding:4px;">Switch</th>
                     <th style="text-align:left;border-bottom:1px solid #999;padding:4px;">Level</th>
                 </tr>
@@ -711,6 +741,27 @@ private void stopLevelChange() {
             log.warn "${app.label}: Could not stop level change on ${dimmer.displayName}: ${e.message}"
         }
     }
+}
+
+private void allowNextLevelFollow() {
+    state.allowLevelFollowUntil = now() + 5000
+    state.suppressLevelFollowUntil = null
+}
+
+private void suppressNextLevelFollow() {
+    state.suppressLevelFollowUntil = now() + 5000
+}
+
+private Boolean levelFollowAllowed() {
+    Long allowedUntil = safeLong(state.allowLevelFollowUntil, 0L)
+    Long suppressedUntil = safeLong(state.suppressLevelFollowUntil, 0L)
+    Long current = now()
+    return allowedUntil >= current && suppressedUntil < current
+}
+
+private void clearLevelFollowMarkers() {
+    state.allowLevelFollowUntil = null
+    state.suppressLevelFollowUntil = null
 }
 
 private void cycleSceneSwitch() {
@@ -883,6 +934,14 @@ private Integer sceneNightExtensionMinutesForRoom() {
 private Integer safeInteger(value, Integer fallback) {
     try {
         return value == null ? fallback : value as Integer
+    } catch (Exception ignored) {
+        return fallback
+    }
+}
+
+private Long safeLong(value, Long fallback) {
+    try {
+        return value == null ? fallback : value as Long
     } catch (Exception ignored) {
         return fallback
     }

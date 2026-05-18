@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.12",
+  "version": "0.2.13",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-17",
-  "releaseNotes": "Preserves Asleep state during child app reinitialization and locked-state refresh.",
+  "releaseNotes": "Adds skipped initial activation rows that can still follow Pico and Caseta Room level step changes.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
