@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.13",
+  "version": "0.2.14",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-17",
-  "releaseNotes": "Adds skipped initial activation rows that can still follow Pico and Caseta Room level step changes.",
+  "releaseNotes": "Moves skipped initial activation into the dimmer Level option as Follow MetaLight (skip initial).",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

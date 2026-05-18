@@ -362,20 +362,16 @@ private void applyIntentRows(String context, String intentBucket, Integer metaLe
         if (!rowAct(context, intentBucket, dev, useOverride)) return
 
         String switchCommand = rowSwitch(context, intentBucket, dev, useOverride)
-        Boolean skipInitial = rowSkipInitial(context, intentBucket, dev, useOverride)
+        String levelMode = isDimmer(dev) ? rowLevelMode(context, intentBucket, dev, useOverride) : "none"
+        Boolean skipInitial = isDimmer(dev) && switchCommand == "on" && levelMode == "followSkip"
         if (skipInitial && !levelChangeOnly) {
             debug "Skipping initial activation for ${dev.displayName}"
-            return
-        }
-        if (skipInitial && levelChangeOnly && (!isDimmer(dev) || switchCommand != "on")) {
-            debug "Skipping level-only activation for ${dev.displayName}"
             return
         }
 
         if (switchCommand == "off") {
             turnOffDevice(dev, "activation switch off")
         } else if (isDimmer(dev)) {
-            String levelMode = rowLevelMode(context, intentBucket, dev, useOverride)
             if (levelMode == "none") {
                 turnOnDevice(dev, forceActivation)
             } else {
@@ -430,14 +426,16 @@ private Boolean rowOff(String context, String intent, def dev, Boolean override 
 }
 
 private String rowLevelMode(String context, String intent, def dev, Boolean override = false) {
-    return (settings[rowName("levelMode", context, intent, dev, override)] ?: "follow").toString()
+    String mode = (settings[rowName("levelMode", context, intent, dev, override)] ?: "follow").toString()
+    if (mode == "follow" && rowLegacySkipInitial(context, intent, dev, override)) return "followSkip"
+    return mode
 }
 
 private String rowSwitch(String context, String intent, def dev, Boolean override = false) {
     return (settings[rowName("switch", context, intent, dev, override)] ?: "on").toString()
 }
 
-private Boolean rowSkipInitial(String context, String intent, def dev, Boolean override = false) {
+private Boolean rowLegacySkipInitial(String context, String intent, def dev, Boolean override = false) {
     return settingBool(rowName("skipInitial", context, intent, dev, override), false)
 }
 
@@ -532,7 +530,6 @@ private void renderMatrixRows(String title, String context, String intent, Boole
             paragraph "${dev.displayName}"
             String actName = rowName("act", context, intent, dev, override)
             String switchName = rowName("switch", context, intent, dev, override)
-            String skipInitialName = rowName("skipInitial", context, intent, dev, override)
 
             input actName, "bool", title: "Act", defaultValue: defaultAct(context, intent), required: true, submitOnChange: true
             input rowName("off", context, intent, dev, override), "bool", title: "Off", defaultValue: true, required: true
@@ -542,7 +539,6 @@ private void renderMatrixRows(String title, String context, String intent, Boole
             }
 
             if (isDimmer(dev) && settingBool(actName, defaultAct(context, intent)) && (settings[switchName] ?: "on") == "on") {
-                input skipInitialName, "bool", title: "Skip initial activation, follow Room level changes", defaultValue: false, required: true, submitOnChange: true
                 input rowName("levelMode", context, intent, dev, override), "enum", title: "Level", options: levelModeOptions(), defaultValue: "follow", required: true, submitOnChange: true
                 if (settings[rowName("levelMode", context, intent, dev, override)] == "explicit") {
                     input rowName("level", context, intent, dev, override), "number", title: "Explicit level", required: true
@@ -560,7 +556,6 @@ private String matrixSummaryTable(String context, String intent, Boolean overrid
         String act = rowAct(context, intent, dev, override) ? "yes" : "no"
         String off = rowOff(context, intent, dev, override) ? "yes" : "no"
         String switchCommand = rowAct(context, intent, dev, override) ? rowSwitch(context, intent, dev, override) : ""
-        String initial = rowSkipInitial(context, intent, dev, override) ? "skip" : "send"
         String level = ""
 
         if (isDimmer(dev) && rowAct(context, intent, dev, override) && switchCommand == "on") {
@@ -574,7 +569,6 @@ private String matrixSummaryTable(String context, String intent, Boolean overrid
                 <td>${isDimmer(dev) ? "Dimmer" : "Switch"}</td>
                 <td>${act}</td>
                 <td>${off}</td>
-                <td>${rowAct(context, intent, dev, override) && isDimmer(dev) && switchCommand == "on" ? initial : ""}</td>
                 <td>${switchCommand}</td>
                 <td>${level ?: ""}</td>
             </tr>
@@ -589,7 +583,6 @@ private String matrixSummaryTable(String context, String intent, Boolean overrid
                     <th style="text-align:left;border-bottom:1px solid #999;padding:4px;">Type</th>
                     <th style="text-align:left;border-bottom:1px solid #999;padding:4px;">Act</th>
                     <th style="text-align:left;border-bottom:1px solid #999;padding:4px;">Off</th>
-                    <th style="text-align:left;border-bottom:1px solid #999;padding:4px;">Initial</th>
                     <th style="text-align:left;border-bottom:1px solid #999;padding:4px;">Switch</th>
                     <th style="text-align:left;border-bottom:1px solid #999;padding:4px;">Level</th>
                 </tr>
@@ -601,9 +594,10 @@ private String matrixSummaryTable(String context, String intent, Boolean overrid
 
 private Map levelModeOptions() {
     return [
-        follow  : "Follow MetaLight",
-        explicit: "Explicit level",
-        none    : "No level command"
+        follow    : "Follow MetaLight",
+        followSkip: "Follow MetaLight (skip initial)",
+        explicit  : "Explicit level",
+        none      : "No level command"
     ]
 }
 
