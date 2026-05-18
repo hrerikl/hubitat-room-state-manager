@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.18",
+  "version": "0.2.19",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-17",
-  "releaseNotes": "Adds a parent-owned Someone Arrived activator pulsed by Mode Manager presence arrivals.",
+  "releaseNotes": "Changes Mode Manager person inputs from switches to PresenceSensor devices for home and arrival detection.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

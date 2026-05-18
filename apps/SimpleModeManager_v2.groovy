@@ -32,7 +32,7 @@ preferences {
         }
 
         section("Presence") {
-            input "presenceSwitches", "capability.switch", title: "Presence switches. On means someone is home.", multiple: true, required: false
+            input "presenceSensors", "capability.presenceSensor", title: "Presence sensors. Present means someone is home.", multiple: true, required: false
             input "vacationSwitch", "capability.switch", title: "Vacation switch. On means no-presence becomes Vacation instead of Away.", multiple: false, required: false
             input "arrivalPulseSeconds", "number", title: "Someone Arrived pulse seconds", defaultValue: 30, required: true
         }
@@ -79,7 +79,7 @@ def reinitializeFromParent() {
 }
 
 def initialize() {
-    subscribe(presenceSwitches, "switch", presenceHandler)
+    subscribe(presenceSensors, "presence", presenceHandler)
     subscribe(vacationSwitch, "switch", presenceHandler)
     subscribe(stillUpSwitches, "switch.on", stillUpHandler)
     subscribe(stillUpButtons, "pushed", stillUpHandler)
@@ -147,7 +147,7 @@ def nightStartHandler() {
 
 def presenceHandler(evt) {
     debug "Presence input ${evt.name}=${evt.value}: ${evt.displayName}"
-    if (evt.name == "switch" && evt.value == "on" && arrivalSourceDevice(evt)) {
+    if (evt.name == "presence" && evt.value == "present" && arrivalSourceDevice(evt)) {
         pulseArrival("presence arrival: ${evt.displayName}")
     }
     evaluatePresenceMode("presence input")
@@ -255,8 +255,8 @@ private Boolean nightExtended() {
 // -------------------- Helpers --------------------
 
 private Boolean someoneHome() {
-    if (!presenceSwitches) return true
-    return presenceSwitches?.any { it.currentSwitch == "on" } ?: false
+    if (!presenceSensors) return true
+    return presenceSensors?.any { it.currentPresence == "present" } ?: false
 }
 
 private Boolean vacationActive() {
@@ -264,7 +264,7 @@ private Boolean vacationActive() {
 }
 
 private Boolean arrivalSourceDevice(evt) {
-    return asList(presenceSwitches).any { it?.id?.toString() == evt.deviceId?.toString() }
+    return asList(presenceSensors).any { it?.id?.toString() == evt.deviceId?.toString() }
 }
 
 private void pulseArrival(String reason) {
