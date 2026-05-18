@@ -713,7 +713,9 @@ def locationModeHandler(evt) {
         return
     }
 
+    state.forceModeLightingLevel = true
     recomputeAndPublish()
+    state.forceModeLightingLevel = false
 }
 
 def motionActiveHandler(evt) {
@@ -1489,6 +1491,11 @@ private Integer computeLightingLevel(String lightingIntent) {
 }
 
 private Integer currentRoomControlLevel() {
+    if (state.forceModeLightingLevel) {
+        Integer configuredLevel = configuredOccupiedLightingLevel()
+        if (configuredLevel != null) return configuredLevel
+    }
+
     Integer currentDeviceLevel = normalizedPercent(roomDevice()?.currentValue("level"), 0)
     if (currentDeviceLevel > 0) return currentDeviceLevel
     return nextRoomControlLevel()
