@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-17",
-  "releaseNotes": "Ensures explicit Room on/off/level commands emit command events even when the public Room switch state is unchanged.",
+  "releaseNotes": "Preserves Asleep state during child app reinitialization and locked-state refresh.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

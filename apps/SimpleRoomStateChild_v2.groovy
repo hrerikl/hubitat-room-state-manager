@@ -981,7 +981,7 @@ private void setAsleep(Boolean asleep, String reason) {
     recomputeAndPublish()
 }
 
-private void setLocked(Boolean locked, String reason) {
+private void setLocked(Boolean locked, String reason, Boolean clearAsleepOnUnlock = true) {
     debug "Locked ${locked}: ${reason}"
 
     state.locked = locked
@@ -1004,7 +1004,7 @@ private void setLocked(Boolean locked, String reason) {
             recordLatentActivity("unlock implies activity")
         }
 
-        if (state.asleep) {
+        if (clearAsleepOnUnlock && state.asleep) {
             state.asleep = false
             state.nightActive = false
             componentSwitchOff("Asleep")
@@ -1013,18 +1013,20 @@ private void setLocked(Boolean locked, String reason) {
 
         refreshCourtesyState()
 
-        if (hasRecentActivityWithinOccupiedTimeout()) {
-            state.occupied = true
-            if (!state.engaged) {
-                scheduleOccupiedTimeout("locked cleared with recent activity")
+        if (!state.asleep) {
+            if (hasRecentActivityWithinOccupiedTimeout()) {
+                state.occupied = true
+                if (!state.engaged) {
+                    scheduleOccupiedTimeout("locked cleared with recent activity")
+                }
+            } else {
+                state.occupied = false
+                state.engaged = false
+                componentSwitchOff("Engaged")
+                state.lastInactiveAt = null
+                state.lastActivityAt = null
+                state.lastEngagedInactiveAt = null
             }
-        } else {
-            state.occupied = false
-            state.engaged = false
-            componentSwitchOff("Engaged")
-            state.lastInactiveAt = null
-            state.lastActivityAt = null
-            state.lastEngagedInactiveAt = null
         }
     }
 
@@ -1253,6 +1255,7 @@ private Boolean allDoorsClosed() {
 // -------------------- Derived States --------------------
 
 private void refreshDerivedStates() {
+    refreshAsleepState()
     refreshLockedState()
     refreshCourtesyState()
 }
@@ -1290,8 +1293,24 @@ private void refreshLockedState() {
         componentSwitchOn("Locked")
         setLocked(true, "refresh locked state from external lock")
     } else {
-        setLocked(lockedEnabled(), "refresh locked state")
+        setLocked(lockedEnabled(), "refresh locked state", false)
     }
+}
+
+private void refreshAsleepState() {
+    Boolean asleep = asleepEnabled()
+    if (!asleep || state.asleep == asleep) return
+
+    debug "Refreshing Asleep state to true"
+    state.asleep = true
+    unschedule(clearOccupiedIfStillInactive)
+    unschedule(clearEngagedIfStillInactive)
+    state.occupied = false
+    state.engaged = false
+    state.nightActive = false
+    componentSwitchOff("Engaged")
+    componentSwitchOn("Asleep")
+    publishNightLighting(false, 0)
 }
 
 private void refreshCourtesyState() {
