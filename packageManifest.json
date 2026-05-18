@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-17",
-  "releaseNotes": "Improves button 3 scene cycling diagnostics and index handling.",
+  "releaseNotes": "Adds an option to always send activation commands for active lighting matrix rows, defaulting on.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

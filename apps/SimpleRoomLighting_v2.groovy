@@ -42,6 +42,7 @@ preferences {
             input "offCondition", "enum", title: "Off condition", options: offConditionOptions(), defaultValue: "metaLightOff", required: true
             input "transitionSeconds", "number", title: "Dimmer transition seconds", defaultValue: 1, required: true
             input "reapplyOnModeChange", "bool", title: "Reassess matrix on Location Mode change when MetaLight is on", defaultValue: true, required: true
+            input "alwaysActivateRows", "bool", title: "Always send activation commands for active rows", defaultValue: true, required: true
         }
 
         renderMatrixSections()
@@ -341,6 +342,7 @@ private void reassessLighting(String reason) {
 
 private void applyIntentRows(String context, String intentBucket, Integer metaLevel) {
     Boolean useOverride = overrideActive(context, intentBucket)
+    Boolean forceActivation = alwaysActivateRowsEnabled()
     if (useOverride) {
         debug "Using override matrix for context=${context} intent=${intentBucket}"
     }
@@ -354,13 +356,13 @@ private void applyIntentRows(String context, String intentBucket, Integer metaLe
         } else if (isDimmer(dev)) {
             String levelMode = rowLevelMode(context, intentBucket, dev, useOverride)
             if (levelMode == "none") {
-                turnOnDevice(dev)
+                turnOnDevice(dev, forceActivation)
             } else {
                 Integer level = levelMode == "explicit" ? rowExplicitLevel(context, intentBucket, dev, metaLevel, useOverride) : metaLevel
-                setDimmer(dev, level)
+                setDimmer(dev, level, forceActivation)
             }
         } else {
-            turnOnDevice(dev)
+            turnOnDevice(dev, forceActivation)
         }
     }
 }
@@ -421,6 +423,10 @@ private Integer rowExplicitLevel(String context, String intent, def dev, Integer
 private Boolean defaultAct(String context, String intent) {
     if (context != "all") return false
     return intent in ["Any", "On"]
+}
+
+private Boolean alwaysActivateRowsEnabled() {
+    return settings?.alwaysActivateRows != false
 }
 
 private String activeContextKey() {
@@ -649,7 +655,12 @@ private List overrideSwitches() {
 
 // -------------------- Device Commands --------------------
 
-private void setDimmer(def dimmer, Integer level) {
+private void setDimmer(def dimmer, Integer level, Boolean forceCommand = true) {
+    if (!forceCommand && dimmer.currentValue("switch") == "on" && normalizedLevel(dimmer.currentValue("level"), -1) == level) {
+        debug "Skipping ${dimmer.displayName}; already on at level ${level}"
+        return
+    }
+
     try {
         if (((transitionSeconds ?: 0) as Integer) > 0) {
             dimmer.setLevel(level, transitionSeconds as Integer)
@@ -661,7 +672,12 @@ private void setDimmer(def dimmer, Integer level) {
     }
 }
 
-private void turnOnDevice(def dev) {
+private void turnOnDevice(def dev, Boolean forceCommand = true) {
+    if (!forceCommand && dev.currentValue("switch") == "on") {
+        debug "Skipping ${dev.displayName}; already on"
+        return
+    }
+
     try {
         dev.on()
     } catch (Exception e) {
