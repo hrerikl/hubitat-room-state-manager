@@ -698,13 +698,14 @@ private void stopLevelChange() {
 }
 
 private void cycleSceneSwitch() {
-    List scenes = asList(sceneCycleSwitches)
+    List scenes = asList(sceneCycleSwitches).findAll { it }.unique { it.id }
     if (!scenes) {
         debug "No scene switches configured for button 3"
         return
     }
 
-    Integer nextIndex = ((state.sceneCycleIndex ?: -1) as Integer) + 1
+    Integer previousIndex = safeInteger(state.sceneCycleIndex, -1)
+    Integer nextIndex = previousIndex + 1
     if (nextIndex >= scenes.size()) {
         nextIndex = 0
     }
@@ -712,7 +713,8 @@ private void cycleSceneSwitch() {
 
     def scene = scenes[nextIndex]
     try {
-        debug "Activating scene ${nextIndex + 1}/${scenes.size()}: ${scene.displayName}"
+        String sceneIds = scenes.collect { "${it.id}:${it.displayName}" }.join(", ")
+        debug "Activating scene ${nextIndex + 1}/${scenes.size()} after index ${previousIndex}: ${scene.displayName}; scenes=${sceneIds}"
         scene.on()
     } catch (Exception e) {
         log.warn "${app.label}: Could not activate scene ${scene?.displayName}: ${e.message}"
@@ -860,6 +862,14 @@ private Map roomInfo() {
 private Integer sceneNightExtensionMinutesForRoom() {
     Integer minutes = (sleepSceneTimeoutMinutes ?: 45) as Integer
     return Math.max(minutes, 1)
+}
+
+private Integer safeInteger(value, Integer fallback) {
+    try {
+        return value == null ? fallback : value as Integer
+    } catch (Exception ignored) {
+        return fallback
+    }
 }
 
 private String currentLocationModeName() {

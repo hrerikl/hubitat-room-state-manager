@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-17",
-  "releaseNotes": "Adds Asleep state handling and Night lighting behavior using safe room profile settings access.",
+  "releaseNotes": "Improves button 3 scene cycling diagnostics and index handling.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
