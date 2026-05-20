@@ -258,7 +258,7 @@ private Boolean nightReadyRoomsReady() {
 
     return rooms.every { room ->
         String roomState = room.currentValue("roomState")?.toString()
-        roomState in ["Off", "Locked"]
+        !(roomState in ["Occupied", "Engaged"])
     }
 }
 
@@ -273,7 +273,7 @@ private Boolean nightWindowActive() {
 private String nightBlockingRoomLabels() {
     return nightReadyRooms().findAll { room ->
         String roomState = room.currentValue("roomState")?.toString()
-        !(roomState in ["Off", "Locked"])
+        roomState in ["Occupied", "Engaged"]
     }.collect { room ->
         "${room.displayName}=${room.currentValue('roomState')}"
     }.join(", ")
