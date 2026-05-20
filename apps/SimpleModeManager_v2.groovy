@@ -159,6 +159,7 @@ def presenceHandler(evt) {
     debug "Presence input ${evt.name}=${evt.value}: ${evt.displayName}"
     if (evt.name == "presence" && evt.value == "present" && arrivalSourceDevice(evt)) {
         pulseArrival("presence arrival: ${evt.displayName}")
+        returnHomeFromAway("presence arrival: ${evt.displayName}")
     }
     evaluatePresenceMode("presence input")
 }
@@ -196,6 +197,15 @@ private void evaluatePresenceMode(String reason) {
     } else {
         setModeIfNeeded(awayModeName, "no presence: ${reason}")
     }
+}
+
+private void returnHomeFromAway(String reason) {
+    if (!(currentModeName() in [awayModeName, vacationModeName])) {
+        debug "Arrival did not change mode because current mode is already home-like: ${reason}"
+        return
+    }
+
+    setModeIfNeeded(currentHomeModeName(), "return home: ${reason}")
 }
 
 private void evaluateNight(String reason) {
@@ -260,6 +270,29 @@ private Boolean nightWindowActive() {
 private Boolean nightExtended() {
     Long until = state.nightExtendedUntil as Long
     return until && now() < until
+}
+
+private String currentHomeModeName() {
+    if (nightWindowActive()) return eveningModeName
+    if (eveningWindowActive()) return eveningModeName
+    return dayModeName
+}
+
+private Boolean eveningWindowActive() {
+    Date start = eveningStartToday()
+    if (!start) return false
+
+    Date nightStart = timeToday(nightStartTime ?: "23:00", location.timeZone)
+    Long current = now()
+    return current >= start.time && current < nightStart.time
+}
+
+private Date eveningStartToday() {
+    Integer offset = Math.max((eveningOffsetMinutes ?: 10) as Integer, 0)
+    def sunsetTime = getSunriseAndSunset()?.sunset
+    if (!sunsetTime) return null
+
+    return new Date(sunsetTime.time - (offset * 60L * 1000L))
 }
 
 // -------------------- Helpers --------------------
