@@ -30,8 +30,12 @@ preferences {
         }
 
         section('Reference limits') {
-            input 'minReferenceLevel', 'number', title: 'Minimum reference level', defaultValue: 5, required: true
-            input 'maxReferenceLevel', 'number', title: 'Maximum reference level', defaultValue: 100, required: true
+            input 'dayModeName', 'enum', title: 'Day mode', options: locationModeOptions(), defaultValue: 'Day', required: true
+            input 'eveningModeName', 'enum', title: 'Evening mode', options: locationModeOptions(), defaultValue: 'Evening', required: true
+            input 'nightModeName', 'enum', title: 'Night mode', options: locationModeOptions(), defaultValue: 'Night', required: true
+            input 'dayMinimumLevel', 'number', title: 'Day minimum level', defaultValue: 35, required: true
+            input 'eveningMinimumLevel', 'number', title: 'Evening minimum level', defaultValue: 20, required: true
+            input 'nightReferenceLevel', 'number', title: 'Night level', defaultValue: 5, required: true
             input 'outdoorLuxForMaxLevel', 'number', title: 'Outdoor lux for maximum level', defaultValue: 40000, required: true
             input 'minReferenceCT', 'number', title: 'Minimum reference color temperature', defaultValue: 2200, required: true
             input 'maxReferenceCT', 'number', title: 'Maximum reference color temperature', defaultValue: 6500, required: true
@@ -119,8 +123,12 @@ private void publishToReferenceBulb(Integer ct, Integer level) {
 }
 
 private Integer referenceLevel(Integer outdoorLux) {
-    BigDecimal minLevel = minLevel()
-    BigDecimal maxLevel = maxLevel()
+    if (currentModeName() == (nightModeName ?: 'Night').toString()) {
+        return clampInteger(settingInteger(nightReferenceLevel, 5), 1, 100)
+    }
+
+    BigDecimal minLevel = modeMinimumLevel()
+    BigDecimal maxLevel = 100G
     BigDecimal lux = clampDecimal((outdoorLux ?: 0) as BigDecimal, 0G, 120000G)
     BigDecimal fullLux = clampDecimal((outdoorLuxForMaxLevel ?: 40000) as BigDecimal, 1G, 120000G)
     BigDecimal ratio = clampDecimal(lux / fullLux, 0G, 1G)
@@ -171,12 +179,27 @@ private Integer maxCt() {
     return clampInteger(settingInteger(maxReferenceCT, 6500), minCt(), 10000)
 }
 
-private Integer minLevel() {
-    return clampInteger(settingInteger(minReferenceLevel, 5), 1, 100)
+private Integer modeMinimumLevel() {
+    if (currentModeName() == (eveningModeName ?: 'Evening').toString()) {
+        return clampInteger(settingInteger(eveningMinimumLevel, 20), 1, 100)
+    }
+    return clampInteger(settingInteger(dayMinimumLevel, 35), 1, 100)
 }
 
-private Integer maxLevel() {
-    return clampInteger(settingInteger(maxReferenceLevel, 100), minLevel(), 100)
+private String currentModeName() {
+    return location?.mode?.toString()
+}
+
+private Map locationModeOptions() {
+    try {
+        return location?.modes?.collectEntries { mode ->
+            String name = mode?.name?.toString() ?: mode?.toString()
+            [(name): name]
+        } ?: [:]
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not load Location Modes: ${e.message}"
+        return [:]
+    }
 }
 
 private Integer settingInteger(value, Integer fallback) {

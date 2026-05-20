@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.26",
+  "version": "0.2.27",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-20",
-  "releaseNotes": "Adds Open-Meteo outdoor light sensing and a circadian reference lighting child app.",
+  "releaseNotes": "Adds mode-aware Day, Evening, and Night reference levels for circadian lighting.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
