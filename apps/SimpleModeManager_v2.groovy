@@ -230,7 +230,7 @@ private void evaluateNight(String reason) {
         runIn(seconds, activateNightIfStillReady, [overwrite: true])
     } else {
         unschedule(activateNightIfStillReady)
-        debug "Night blocked because selected rooms are not ready"
+        debug "Night blocked because selected rooms are not ready: ${nightBlockingRoomLabels() ?: 'none'}"
     }
 }
 
@@ -264,7 +264,19 @@ private Boolean nightReadyRoomsReady() {
 
 private Boolean nightWindowActive() {
     Date start = timeToday(nightStartTime ?: "23:00", location.timeZone)
-    return now() >= start.time
+    Date end = timeToday(dayStartTime ?: "06:30", location.timeZone)
+    Long current = now()
+
+    return current >= start.time || current < end.time
+}
+
+private String nightBlockingRoomLabels() {
+    return nightReadyRooms().findAll { room ->
+        String roomState = room.currentValue("roomState")?.toString()
+        !(roomState in ["Off", "Locked"])
+    }.collect { room ->
+        "${room.displayName}=${room.currentValue('roomState')}"
+    }.join(", ")
 }
 
 private Boolean nightExtended() {

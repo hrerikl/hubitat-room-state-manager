@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.21",
+  "version": "0.2.22",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-17",
-  "releaseNotes": "Returns from Away or Vacation to the current home mode when a selected presence sensor arrives.",
+  "releaseNotes": "Fixes Night window evaluation after midnight and logs rooms blocking Night mode.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
