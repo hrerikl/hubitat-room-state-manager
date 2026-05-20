@@ -66,10 +66,10 @@ preferences {
             input "speechDevices", "capability.speechSynthesis", title: "Speech devices for Room state announcements", multiple: true, required: false
             input "announceRoomControls", "bool", title: "Announce Lock, Unlock, Sleep, and Wake", defaultValue: false, required: true
             if (announceRoomControls) {
-                input "lockedAnnouncement", "text", title: "Locked message", defaultValue: "Room locked", required: true
-                input "unlockedAnnouncement", "text", title: "Unlocked message", defaultValue: "Room unlocked", required: true
-                input "asleepAnnouncement", "text", title: "Sleep message", defaultValue: "Room asleep", required: true
-                input "awakeAnnouncement", "text", title: "Wake message", defaultValue: "Room awake", required: true
+                input "lockedAnnouncement", "text", title: "Locked message", defaultValue: defaultRoomControlAnnouncement("Locked"), required: true
+                input "unlockedAnnouncement", "text", title: "Unlocked message", defaultValue: defaultRoomControlAnnouncement("Unlocked"), required: true
+                input "asleepAnnouncement", "text", title: "Sleep message", defaultValue: defaultRoomControlAnnouncement("Asleep"), required: true
+                input "awakeAnnouncement", "text", title: "Wake message", defaultValue: defaultRoomControlAnnouncement("Awake"), required: true
             }
         }
 
@@ -946,19 +946,45 @@ private Boolean announceRoomControlsEnabled() {
 }
 
 private String lockedAnnouncementText() {
-    return (lockedAnnouncement ?: "Room locked").toString()
+    return roomControlAnnouncementText(lockedAnnouncement, "Locked", "Room locked")
 }
 
 private String unlockedAnnouncementText() {
-    return (unlockedAnnouncement ?: "Room unlocked").toString()
+    return roomControlAnnouncementText(unlockedAnnouncement, "Unlocked", "Room unlocked")
 }
 
 private String asleepAnnouncementText() {
-    return (asleepAnnouncement ?: "Room asleep").toString()
+    return roomControlAnnouncementText(asleepAnnouncement, "Asleep", "Room asleep")
 }
 
 private String awakeAnnouncementText() {
-    return (awakeAnnouncement ?: "Room awake").toString()
+    return roomControlAnnouncementText(awakeAnnouncement, "Awake", "Room awake")
+}
+
+private String roomControlAnnouncementText(value, String stateName, String oldDefault) {
+    String text = value?.toString()?.trim()
+    if (!text || text == oldDefault) return defaultRoomControlAnnouncement(stateName)
+    return text
+}
+
+private String defaultRoomControlAnnouncement(String stateName) {
+    return "${announcementRoomName()} ${stateName}"
+}
+
+private String announcementRoomName() {
+    Map info = roomInfo()
+    String name = info?.roomName?.toString()?.trim()
+    if (name) return stripRoomPrefix(name)
+
+    String label = info?.label?.toString()?.trim()
+    if (label) return stripRoomPrefix(label)
+
+    String deviceLabel = roomDevice()?.displayName?.toString()?.trim()
+    return deviceLabel ? stripRoomPrefix(deviceLabel) : "Room"
+}
+
+private String stripRoomPrefix(String value) {
+    return value?.startsWith("Room ") ? value.substring(5) : value
 }
 
 private List levelChangeDimmers() {
