@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.23",
+  "version": "0.2.24",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-17",
-  "releaseNotes": "Treats Night-ready rooms as blocking only when Occupied or Engaged, allowing Off, Locked, and Asleep.",
+  "releaseNotes": "Limits default remote sleep gestures to Bedroom-profile rooms.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

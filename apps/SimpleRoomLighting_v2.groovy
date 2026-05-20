@@ -257,7 +257,7 @@ def picoHeldHandler(evt) {
     } else if (button == 4) {
         startLevelChange("down")
     } else if (button == 5) {
-        roomDevice()?.setAsleepSwitchState("on")
+        setRoomAsleepFromRemote("Pico held 5")
     } else {
         debug "No default Pico held action for button ${button}"
     }
@@ -319,7 +319,7 @@ def casetaHeldHandler(evt) {
     } else if (button == 3) {
         startLevelChange("down")
     } else if (button == 4) {
-        roomDevice()?.setAsleepSwitchState("on")
+        setRoomAsleepFromRemote("Caseta held 4")
     } else {
         debug "No default Caseta held action for button ${button}"
     }
@@ -853,6 +853,15 @@ private void roomOnAndEngageIfUnlocked() {
     } catch (Exception e) {
         log.warn "${app.label}: Could not engage Room from remote button 1: ${e.message}"
     }
+}
+
+private void setRoomAsleepFromRemote(String reason) {
+    if (!bedroomRoomProfile()) {
+        debug "Ignoring ${reason} because room profile is not Bedroom"
+        return
+    }
+
+    roomDevice()?.setAsleepSwitchState("on")
 }
 
 // -------------------- Control Filtering --------------------
