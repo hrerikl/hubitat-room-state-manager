@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.25",
+  "version": "0.2.26",
   "minimumHEVersion": "2.3.0",
-  "dateReleased": "2026-05-17",
-  "releaseNotes": "Includes the room name in default room control speech announcements.",
+  "dateReleased": "2026-05-20",
+  "releaseNotes": "Adds Open-Meteo outdoor light sensing and a circadian reference lighting child app.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
@@ -53,6 +53,17 @@
       "primary": false,
       "category": "Convenience",
       "description": "Room-centric lighting adapter for MetaLight output, physical lights, scenes, remotes, and mode or intent matrices."
+    },
+    {
+      "id": "e8a46264-a0f2-4d7f-9b3f-a6b05b2fe2a0",
+      "name": "Simple Circadian Lighting v2",
+      "namespace": "lundby",
+      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleCircadianLighting_v2.groovy",
+      "required": true,
+      "oauth": false,
+      "primary": false,
+      "category": "Convenience",
+      "description": "Publishes a circadian reference level and color temperature from an outdoor light sensor."
     }
   ],
   "drivers": [
@@ -85,6 +96,16 @@
       "oauth": false,
       "category": "Convenience",
       "description": "Reusable component switch for Simple Room controls such as Courtesy, Engaged, Asleep, Locked, and recovery."
+    },
+    {
+      "id": "9cd84d59-77cc-4ff6-8b7d-0865ebf90345",
+      "name": "Simple Open-Meteo Outdoor Light Device",
+      "namespace": "lundby",
+      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/drivers/SimpleOpenMeteoOutdoorLightDevice.groovy",
+      "required": true,
+      "oauth": false,
+      "category": "Convenience",
+      "description": "Outdoor light context driver that publishes lux, color temperature, cloud cover, and sky condition from Open-Meteo."
     }
   ]
 }

@@ -51,6 +51,16 @@ preferences {
             )
         }
 
+        section("Circadian lighting") {
+            app(
+                name: "circadianApps",
+                appName: "Simple Circadian Lighting v2",
+                namespace: "lundby",
+                title: "Add circadian reference lighting",
+                multiple: true
+            )
+        }
+
         section("Recovery") {
             paragraph "Creates a Recover Simple Home switch. Turn it on from Rule Machine, dashboards, or voice assistants to ask child apps to reassert their current state."
         }
@@ -237,7 +247,7 @@ private String arrivalDeviceNetworkId() {
 }
 
 private List allManagedChildren() {
-    return ((childApps ?: []) + (modeApps ?: []) + (lightingApps ?: [])).findAll { it }
+    return ((childApps ?: []) + (modeApps ?: []) + (lightingApps ?: []) + (circadianApps ?: [])).findAll { it }
 }
 
 /**
