@@ -403,6 +403,7 @@ private void applyIntentRows(String context, String intentBucket, Integer metaLe
     Boolean useOverride = overrideActive(context, intentBucket)
     Boolean forceActivation = alwaysActivateRowsEnabled()
     Integer transition = transitionSecondsFor(reason, "activation")
+    List levelCtAfterSwitchDevices = []
     if (useOverride) {
         debug "Using override matrix for context=${context} intent=${intentBucket}"
     }
@@ -416,6 +417,10 @@ private void applyIntentRows(String context, String intentBucket, Integer metaLe
         Boolean skipInitial = isDimmer(dev) && switchCommand == "on" && levelMode == "followSkip"
         if (skipInitial && shouldSkipInitialActivation(reason, levelChangeOnly)) {
             debug "Skipping initial activation for ${dev.displayName}"
+            return
+        }
+        if (isDimmer(dev) && switchCommand == "on" && levelMode == "followAfterSwitches") {
+            levelCtAfterSwitchDevices << dev
             return
         }
 
@@ -438,6 +443,25 @@ private void applyIntentRows(String context, String intentBucket, Integer metaLe
         } else {
             turnOnDevice(dev, forceActivation)
         }
+    }
+
+    levelCtAfterSwitchDevices.each { dev ->
+        applyLevelCtAfterSwitchesRow(context, intentBucket, dev, useOverride, metaLevel, metaCt, levelChangeOnly, colorTemperatureOnly, transition, forceActivation)
+    }
+}
+
+private void applyLevelCtAfterSwitchesRow(String context, String intentBucket, def dev, Boolean useOverride, Integer metaLevel, Integer metaCt, Boolean levelChangeOnly, Boolean colorTemperatureOnly, Integer transition, Boolean forceActivation) {
+    String ctMode = isColorTemperatureDevice(dev) ? rowCtMode(context, intentBucket, dev, useOverride) : "none"
+
+    if (!colorTemperatureOnly) {
+        Integer level = rowFollowLevel(context, intentBucket, dev, metaLevel, useOverride)
+        suppressControlFeedback(dev)
+        setDimmer(dev, level, transition, forceActivation)
+    }
+
+    if (!levelChangeOnly && ctMode == "follow") {
+        suppressControlFeedback(dev)
+        setColorTemperature(dev, metaCt, forceActivation)
     }
 }
 
@@ -614,7 +638,7 @@ private void renderMatrixRows(String title, String context, String intent, Boole
             if (isDimmer(dev) && settingBool(actName, defaultAct(context, intent)) && (settings[switchName] ?: "on") == "on") {
                 String levelModeName = rowName("levelMode", context, intent, dev, override)
                 input levelModeName, "enum", title: "Level", options: levelModeOptions(), defaultValue: "follow", required: true, submitOnChange: true
-                if ((settings[levelModeName] ?: "follow") in ["follow", "followSkip"]) {
+                if ((settings[levelModeName] ?: "follow") in ["follow", "followSkip", "followAfterSwitches"]) {
                     input rowName("levelPercent", context, intent, dev, override), "number", title: "Level multiplier percent", defaultValue: 100, required: true
                     input rowName("levelOffset", context, intent, dev, override), "number", title: "Level offset. Example: +10 or -10", defaultValue: 0, required: true
                 }
@@ -682,10 +706,11 @@ private String matrixSummaryTable(String context, String intent, Boolean overrid
 
 private Map levelModeOptions() {
     return [
-        follow    : "Follow MetaLight",
-        followSkip: "Follow MetaLight (skip initial)",
-        explicit  : "Explicit level",
-        none      : "No level command"
+        follow             : "Follow MetaLight",
+        followSkip         : "Follow MetaLight (skip initial)",
+        followAfterSwitches: "Follow MetaLight level/CT after switches",
+        explicit           : "Explicit level",
+        none               : "No level command"
     ]
 }
 
@@ -1024,6 +1049,11 @@ private void setRoomAsleepFromRemote(String reason) {
 // -------------------- Control Filtering --------------------
 
 private Boolean shouldAcceptControlEvent(evt) {
+    if (controlFeedbackSuppressed(evt)) {
+        debug "Ignoring app-issued control feedback ${evt.name}=${evt.value}: ${evt.displayName}"
+        return false
+    }
+
     if (!physicalControlEventsOnly) return true
 
     if (eventType(evt) == "physical") return true
@@ -1035,6 +1065,39 @@ private Boolean shouldAcceptControlEvent(evt) {
 private String eventType(evt) {
     try {
         return evt.type?.toString()
+    } catch (Throwable ignored) {
+        return ""
+    }
+}
+
+private void suppressControlFeedback(def dev) {
+    String deviceId = dev?.id?.toString()
+    if (!deviceId) return
+
+    Map suppressions = state.suppressControlFeedbackUntil instanceof Map ? state.suppressControlFeedbackUntil : [:]
+    Long current = now()
+    suppressions = suppressions.findAll { key, value -> safeLong(value, 0L) >= current }
+    suppressions[deviceId] = current + 5000
+    state.suppressControlFeedbackUntil = suppressions
+}
+
+private Boolean controlFeedbackSuppressed(evt) {
+    String deviceId = eventDeviceId(evt)
+    if (!deviceId) return false
+
+    Map suppressions = state.suppressControlFeedbackUntil instanceof Map ? state.suppressControlFeedbackUntil : [:]
+    return safeLong(suppressions[deviceId], 0L) >= now()
+}
+
+private String eventDeviceId(evt) {
+    try {
+        if (evt.deviceId != null) return evt.deviceId.toString()
+    } catch (Throwable ignored) {
+        // Try alternate event shape below.
+    }
+
+    try {
+        return evt.device?.id?.toString()
     } catch (Throwable ignored) {
         return ""
     }
