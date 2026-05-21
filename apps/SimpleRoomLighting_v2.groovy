@@ -116,6 +116,7 @@ def initialize() {
     subscribe(room, "switch.off", roomSwitchOffHandler)
     subscribe(room, "metaLightSwitch", reassessHandler)
     subscribe(room, "metaLightLevel", reassessHandler)
+    subscribe(room, "metaLightColorTemperature", reassessHandler)
     subscribe(room, "lightingIntent", reassessHandler)
     subscribe(room, "lockedEnabled", roomControlAnnouncementHandler)
     subscribe(room, "asleepEnabled", roomControlAnnouncementHandler)
@@ -356,10 +357,11 @@ private void reassessLighting(String reason) {
     String switchState = room.currentValue("metaLightSwitch") ?: "off"
     String intent = room.currentValue("lightingIntent") ?: "Off"
     Integer metaLevel = normalizedLevel(room.currentValue("metaLightLevel"), 0)
+    Integer metaCt = normalizedColorTemperature(room.currentValue("metaLightColorTemperature"), 2700)
     String context = activeContextKey()
     String intentBucket = activeIntentBucket(intent)
 
-    debug "Reassessing context=${context} intent=${intentBucket} roomIntent=${intent} meta=${switchState}/${metaLevel}: ${reason}"
+    debug "Reassessing context=${context} intent=${intentBucket} roomIntent=${intent} meta=${switchState}/${metaLevel}/${metaCt}: ${reason}"
 
     if (switchState != "on" || metaLevel <= 0 || !(intent in ["On", "Courtesy", "Night"])) {
         debug "Skipping activation because MetaLight is off or intent is not active"
@@ -368,16 +370,17 @@ private void reassessLighting(String reason) {
 
     Boolean sameActiveMatrix = state.lastActiveMatrixContext == context && state.lastActiveMatrixIntent == intentBucket
     Boolean levelChangeOnly = reason == "metaLightLevel changed" && sameActiveMatrix && levelFollowAllowed()
+    Boolean colorTemperatureOnly = reason == "metaLightColorTemperature changed" && sameActiveMatrix
     if (reason == "metaLightLevel changed") {
         clearLevelFollowMarkers()
     }
 
     state.lastActiveMatrixContext = context
     state.lastActiveMatrixIntent = intentBucket
-    applyIntentRows(context, intentBucket, metaLevel, levelChangeOnly, reason)
+    applyIntentRows(context, intentBucket, metaLevel, metaCt, levelChangeOnly, colorTemperatureOnly, reason)
 }
 
-private void applyIntentRows(String context, String intentBucket, Integer metaLevel, Boolean levelChangeOnly = false, String reason = "") {
+private void applyIntentRows(String context, String intentBucket, Integer metaLevel, Integer metaCt, Boolean levelChangeOnly = false, Boolean colorTemperatureOnly = false, String reason = "") {
     Boolean useOverride = overrideActive(context, intentBucket)
     Boolean forceActivation = alwaysActivateRowsEnabled()
     if (useOverride) {
@@ -389,20 +392,28 @@ private void applyIntentRows(String context, String intentBucket, Integer metaLe
 
         String switchCommand = rowSwitch(context, intentBucket, dev, useOverride)
         String levelMode = isDimmer(dev) ? rowLevelMode(context, intentBucket, dev, useOverride) : "none"
+        String ctMode = isColorTemperatureDevice(dev) ? rowCtMode(context, intentBucket, dev, useOverride) : "none"
         Boolean skipInitial = isDimmer(dev) && switchCommand == "on" && levelMode == "followSkip"
         if (skipInitial && shouldSkipInitialActivation(reason, levelChangeOnly)) {
             debug "Skipping initial activation for ${dev.displayName}"
             return
         }
 
-        if (switchCommand == "off") {
+        if (colorTemperatureOnly) {
+            if (switchCommand == "on" && ctMode == "follow") {
+                setColorTemperature(dev, metaCt, forceActivation)
+            }
+        } else if (switchCommand == "off") {
             turnOffDevice(dev, "activation switch off")
         } else if (isDimmer(dev)) {
             if (levelMode == "none") {
                 turnOnDevice(dev, forceActivation)
             } else {
-                Integer level = levelMode == "explicit" ? rowExplicitLevel(context, intentBucket, dev, metaLevel, useOverride) : metaLevel
+                Integer level = levelMode == "explicit" ? rowExplicitLevel(context, intentBucket, dev, metaLevel, useOverride) : rowFollowLevel(context, intentBucket, dev, metaLevel, useOverride)
                 setDimmer(dev, level, forceActivation)
+            }
+            if (ctMode == "follow") {
+                setColorTemperature(dev, metaCt, forceActivation)
             }
         } else {
             turnOnDevice(dev, forceActivation)
@@ -462,6 +473,10 @@ private String rowLevelMode(String context, String intent, def dev, Boolean over
     return mode
 }
 
+private String rowCtMode(String context, String intent, def dev, Boolean override = false) {
+    return (settings[rowName("ctMode", context, intent, dev, override)] ?: "follow").toString()
+}
+
 private String rowSwitch(String context, String intent, def dev, Boolean override = false) {
     return (settings[rowName("switch", context, intent, dev, override)] ?: "on").toString()
 }
@@ -472,6 +487,13 @@ private Boolean rowLegacySkipInitial(String context, String intent, def dev, Boo
 
 private Integer rowExplicitLevel(String context, String intent, def dev, Integer fallback, Boolean override = false) {
     return normalizedLevel(settings[rowName("level", context, intent, dev, override)], fallback)
+}
+
+private Integer rowFollowLevel(String context, String intent, def dev, Integer metaLevel, Boolean override = false) {
+    Integer percent = normalizedPercent(settings[rowName("levelPercent", context, intent, dev, override)], 100)
+    Integer offset = normalizedOffset(settings[rowName("levelOffset", context, intent, dev, override)], 0)
+    BigDecimal adjusted = ((metaLevel as BigDecimal) * (percent as BigDecimal) / 100G) + (offset as BigDecimal)
+    return normalizedLevel(adjusted.setScale(0, BigDecimal.ROUND_HALF_UP) as Integer, metaLevel)
 }
 
 private Boolean defaultAct(String context, String intent) {
@@ -570,10 +592,19 @@ private void renderMatrixRows(String title, String context, String intent, Boole
             }
 
             if (isDimmer(dev) && settingBool(actName, defaultAct(context, intent)) && (settings[switchName] ?: "on") == "on") {
-                input rowName("levelMode", context, intent, dev, override), "enum", title: "Level", options: levelModeOptions(), defaultValue: "follow", required: true, submitOnChange: true
-                if (settings[rowName("levelMode", context, intent, dev, override)] == "explicit") {
+                String levelModeName = rowName("levelMode", context, intent, dev, override)
+                input levelModeName, "enum", title: "Level", options: levelModeOptions(), defaultValue: "follow", required: true, submitOnChange: true
+                if ((settings[levelModeName] ?: "follow") in ["follow", "followSkip"]) {
+                    input rowName("levelPercent", context, intent, dev, override), "number", title: "Level multiplier percent", defaultValue: 100, required: true
+                    input rowName("levelOffset", context, intent, dev, override), "number", title: "Level offset. Example: +10 or -10", defaultValue: 0, required: true
+                }
+                if (settings[levelModeName] == "explicit") {
                     input rowName("level", context, intent, dev, override), "number", title: "Explicit level", required: true
                 }
+            }
+
+            if (isColorTemperatureDevice(dev) && settingBool(actName, defaultAct(context, intent)) && (settings[switchName] ?: "on") == "on") {
+                input rowName("ctMode", context, intent, dev, override), "enum", title: "Color temperature", options: colorTemperatureModeOptions(), defaultValue: "follow", required: true
             }
         }
     }
@@ -588,10 +619,14 @@ private String matrixSummaryTable(String context, String intent, Boolean overrid
         String off = rowOff(context, intent, dev, override) ? "yes" : "no"
         String switchCommand = rowAct(context, intent, dev, override) ? rowSwitch(context, intent, dev, override) : ""
         String level = ""
+        String ct = ""
 
         if (isDimmer(dev) && rowAct(context, intent, dev, override) && switchCommand == "on") {
             String mode = rowLevelMode(context, intent, dev, override)
-            level = mode == "explicit" ? "${rowExplicitLevel(context, intent, dev, 100, override)}" : levelModeOptions()[mode]
+            level = mode == "explicit" ? "${rowExplicitLevel(context, intent, dev, 100, override)}" : adjustedLevelSummary(context, intent, dev, override)
+        }
+        if (isColorTemperatureDevice(dev) && rowAct(context, intent, dev, override) && switchCommand == "on") {
+            ct = colorTemperatureModeOptions()[rowCtMode(context, intent, dev, override)] ?: ""
         }
 
         return """
@@ -602,6 +637,7 @@ private String matrixSummaryTable(String context, String intent, Boolean overrid
                 <td>${off}</td>
                 <td>${switchCommand}</td>
                 <td>${level ?: ""}</td>
+                <td>${ct ?: ""}</td>
             </tr>
         """
     }.join("")
@@ -616,6 +652,7 @@ private String matrixSummaryTable(String context, String intent, Boolean overrid
                     <th style="text-align:left;border-bottom:1px solid #999;padding:4px;">Off</th>
                     <th style="text-align:left;border-bottom:1px solid #999;padding:4px;">Switch</th>
                     <th style="text-align:left;border-bottom:1px solid #999;padding:4px;">Level</th>
+                    <th style="text-align:left;border-bottom:1px solid #999;padding:4px;">CT</th>
                 </tr>
             </thead>
             <tbody>${rows}</tbody>
@@ -630,6 +667,23 @@ private Map levelModeOptions() {
         explicit  : "Explicit level",
         none      : "No level command"
     ]
+}
+
+private Map colorTemperatureModeOptions() {
+    return [
+        follow: "Follow MetaLight",
+        none  : "No CT command"
+    ]
+}
+
+private String adjustedLevelSummary(String context, String intent, def dev, Boolean override) {
+    String mode = rowLevelMode(context, intent, dev, override)
+    if (mode == "none") return levelModeOptions()[mode]
+
+    Integer percent = normalizedPercent(settings[rowName("levelPercent", context, intent, dev, override)], 100)
+    Integer offset = normalizedOffset(settings[rowName("levelOffset", context, intent, dev, override)], 0)
+    String offsetText = offset == 0 ? "" : (offset > 0 ? " +${offset}" : " ${offset}")
+    return "${levelModeOptions()[mode]} (${percent}%${offsetText})"
 }
 
 private Map switchCommandOptions() {
@@ -724,6 +778,21 @@ private void setDimmer(def dimmer, Integer level, Boolean forceCommand = true) {
         }
     } catch (Exception e) {
         log.warn "${app.label}: Could not set ${dimmer.displayName} to ${level}: ${e.message}"
+    }
+}
+
+private void setColorTemperature(def dev, Integer colorTemperature, Boolean forceCommand = true) {
+    if (!isColorTemperatureDevice(dev)) return
+
+    if (!forceCommand && normalizedColorTemperature(dev.currentValue("colorTemperature"), -1) == colorTemperature) {
+        debug "Skipping ${dev.displayName}; already at CT ${colorTemperature}"
+        return
+    }
+
+    try {
+        dev.setColorTemperature(colorTemperature)
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not set ${dev.displayName} color temperature to ${colorTemperature}: ${e.message}"
     }
 }
 
@@ -937,6 +1006,15 @@ private Boolean isDimmer(def dev) {
     return asList(automatedDimmers).any { it?.id == dev?.id }
 }
 
+private Boolean isColorTemperatureDevice(def dev) {
+    try {
+        if (dev?.hasCapability("ColorTemperature")) return true
+    } catch (Throwable ignored) {
+        // Fall through to attribute-based check.
+    }
+    return dev?.currentValue("colorTemperature") != null
+}
+
 private Boolean bedroomRoomProfile() {
     return roomInfo()?.roomProfile == "bedroom"
 }
@@ -1079,6 +1157,30 @@ private Integer normalizedLevel(value, Integer fallback) {
         level = fallback == null ? 0 : fallback
     }
     return Math.max(Math.min(level, 100), 0)
+}
+
+private Integer normalizedPercent(value, Integer fallback) {
+    return normalizedLevel(value, fallback)
+}
+
+private Integer normalizedOffset(value, Integer fallback) {
+    Integer offset = fallback == null ? 0 : fallback
+    try {
+        offset = value == null ? offset : value as Integer
+    } catch (Exception ignored) {
+        offset = fallback == null ? 0 : fallback
+    }
+    return Math.max(Math.min(offset, 100), -100)
+}
+
+private Integer normalizedColorTemperature(value, Integer fallback) {
+    Integer ct = fallback == null ? 2700 : fallback
+    try {
+        ct = value == null ? ct : value as Integer
+    } catch (Exception ignored) {
+        ct = fallback == null ? 2700 : fallback
+    }
+    return Math.max(Math.min(ct, 10000), 1500)
 }
 
 private Integer adjustedRoomLevel(Integer delta) {
