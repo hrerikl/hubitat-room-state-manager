@@ -38,6 +38,7 @@ preferences {
 
 void installed() {
     initialize()
+    refresh()
 }
 
 void updated() {
@@ -48,7 +49,6 @@ void updated() {
 void initialize() {
     ensureInitialState()
     schedulePolling()
-    refresh()
 }
 
 void refresh() {
@@ -263,7 +263,9 @@ private Integer ctStep() {
 
 private Integer roundToStep(Integer value, Integer step) {
     Integer safeStep = Math.max(step ?: 1, 1)
-    return (((value ?: 0) + (safeStep / 2G)) / safeStep).setScale(0, BigDecimal.ROUND_FLOOR) as Integer * safeStep
+    Integer safeValue = value ?: 0
+    Integer rounded = Math.round(safeValue / safeStep) as Integer
+    return rounded * safeStep
 }
 
 private Integer clampInteger(Integer value, Integer min, Integer max) {

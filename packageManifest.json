@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.31",
+  "version": "0.2.32",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-20",
-  "releaseNotes": "Changes valley handling to low-sun lux attenuation while keeping color temperature anchored to real sunrise and sunset.",
+  "releaseNotes": "Makes Open-Meteo driver upgrades avoid immediate network refresh and simplifies CT rounding.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
