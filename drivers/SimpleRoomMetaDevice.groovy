@@ -35,6 +35,7 @@ metadata {
         attribute 'lightingIntent', 'enum', ['Off', 'Courtesy', 'Night', 'On']
         attribute 'metaLightSwitch', 'enum', ['off', 'on']
         attribute 'metaLightLevel', 'number'
+        attribute 'metaLightColorTemperature', 'number'
         attribute 'courtesyEnabled', 'enum', ['off', 'on']
         attribute 'engagedEnabled', 'enum', ['off', 'on']
         attribute 'asleepEnabled', 'enum', ['off', 'on']
@@ -50,6 +51,7 @@ metadata {
         command 'setRoomLevel', [[name: 'Room Level', type: 'NUMBER']]
         command 'setMetaLightSwitchState', [[name: 'Switch State', type: 'ENUM', constraints: ['off', 'on']]]
         command 'setMetaLightLevel', [[name: 'MetaLight Level', type: 'NUMBER']]
+        command 'setMetaLightColorTemperature', [[name: 'MetaLight Color Temperature', type: 'NUMBER']]
         command 'setCourtesySwitchState', [[name: 'Courtesy Switch State', type: 'ENUM', constraints: ['off', 'on']]]
         command 'setEngagedSwitchState', [[name: 'Engaged Switch State', type: 'ENUM', constraints: ['off', 'on']]]
         command 'setAsleepSwitchState', [[name: 'Asleep Switch State', type: 'ENUM', constraints: ['off', 'on']]]
@@ -94,6 +96,9 @@ void initialize() {
     }
     if (device.currentValue('metaLightLevel') == null) {
         sendEvent(name: 'metaLightLevel', value: 0, unit: '%')
+    }
+    if (device.currentValue('metaLightColorTemperature') == null) {
+        sendEvent(name: 'metaLightColorTemperature', value: 2700, unit: 'K')
     }
     if (device.currentValue('courtesyEnabled') == null) {
         sendEvent(name: 'courtesyEnabled', value: 'on')
@@ -184,6 +189,17 @@ void setMetaLightLevel(value) {
     def child = metaLightDevice()
     if (!child) return
     child.setRoomLevel(normalized)
+}
+
+void setMetaLightColorTemperature(value) {
+    Integer normalized = normalizeColorTemperature(value)
+    if ((device.currentValue('metaLightColorTemperature') ?: -1) as Integer != normalized) {
+        sendEvent(name: 'metaLightColorTemperature', value: normalized, unit: 'K')
+    }
+
+    def child = metaLightDevice()
+    if (!child) return
+    child.setRoomColorTemperature(normalized)
 }
 
 void setCourtesySwitchState(String value) {
@@ -291,6 +307,16 @@ private Integer normalizeLevel(value) {
         level = 0
     }
     return Math.max(Math.min(level, 100), 0)
+}
+
+private Integer normalizeColorTemperature(value) {
+    Integer ct = 2700
+    try {
+        ct = value as Integer
+    } catch (Exception ignored) {
+        ct = 2700
+    }
+    return Math.max(Math.min(ct, 10000), 1500)
 }
 
 private void createOrUpdateMetaLightDevice() {

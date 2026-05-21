@@ -6,8 +6,8 @@
  *   Namespace: lundby
  *
  * This device is the automation-facing effective room light:
- *   switch/level are published by the Room State child app
- *   manual on/off/setLevel commands are intentionally ignored
+ *   switch/level/colorTemperature are published by the Room State child app
+ *   manual on/off/setLevel/setColorTemperature commands are intentionally ignored
  *****************************************************************************************/
 
 metadata {
@@ -19,10 +19,12 @@ metadata {
         capability 'Actuator'
         capability 'Switch'
         capability 'SwitchLevel'
+        capability 'ColorTemperature'
         capability 'Sensor'
 
         command 'setSwitchState', [[name: 'Switch State', type: 'ENUM', constraints: ['off', 'on']]]
         command 'setRoomLevel', [[name: 'Room Level', type: 'NUMBER']]
+        command 'setRoomColorTemperature', [[name: 'Room Color Temperature', type: 'NUMBER']]
     }
 }
 
@@ -41,6 +43,9 @@ void initialize() {
     if (device.currentValue('level') == null) {
         sendEvent(name: 'level', value: 0, unit: '%')
     }
+    if (device.currentValue('colorTemperature') == null) {
+        sendEvent(name: 'colorTemperature', value: 2700, unit: 'K')
+    }
 }
 
 void on() {
@@ -53,6 +58,10 @@ void off() {
 
 void setLevel(value) {
     log.debug 'Ignoring manual setLevel; this device is driven by the Room State app'
+}
+
+void setColorTemperature(value) {
+    log.debug 'Ignoring manual setColorTemperature; this device is driven by the Room State app'
 }
 
 void setSwitchState(String value) {
@@ -69,6 +78,13 @@ void setRoomLevel(value) {
     }
 }
 
+void setRoomColorTemperature(value) {
+    Integer normalized = normalizeColorTemperature(value)
+    if ((device.currentValue('colorTemperature') ?: -1) as Integer != normalized) {
+        sendEvent(name: 'colorTemperature', value: normalized, unit: 'K')
+    }
+}
+
 private Integer normalizeLevel(value) {
     Integer level = 0
     try {
@@ -77,4 +93,14 @@ private Integer normalizeLevel(value) {
         level = 0
     }
     return Math.max(Math.min(level, 100), 0)
+}
+
+private Integer normalizeColorTemperature(value) {
+    Integer ct = 2700
+    try {
+        ct = value as Integer
+    } catch (Exception ignored) {
+        ct = 2700
+    }
+    return Math.max(Math.min(ct, 10000), 1500)
 }

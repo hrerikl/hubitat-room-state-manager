@@ -52,6 +52,7 @@ preferences {
         }
 
         section("Circadian lighting") {
+            input "defaultCircadianReferenceBulb", "capability.colorTemperature", title: "Default circadian reference bulb", multiple: false, required: false
             app(
                 name: "circadianApps",
                 appName: "Simple Circadian Lighting v2",
@@ -175,6 +176,10 @@ def recoveryDevice() {
 
 def arrivalDevice() {
     return getChildDevice(arrivalDeviceNetworkId())
+}
+
+def circadianReferenceBulb() {
+    return defaultCircadianReferenceBulb
 }
 
 private void createOrUpdateRecoveryDevice() {

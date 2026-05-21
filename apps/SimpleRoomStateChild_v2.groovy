@@ -103,6 +103,14 @@ preferences {
         section("Room lighting levels") {
             input "occupiedLightingLevel", "number", title: "Default occupied lighting level. Blank uses the last on level.", required: false
             input "courtesyLightingLevel", "number", title: "Courtesy/convenience lighting level", defaultValue: 20, required: true
+            input "followCircadianReference", "bool", title: "Follow circadian reference for MetaLight level and CT", defaultValue: false, required: true, submitOnChange: true
+
+            if (followCircadianReference) {
+                input "circadianReferenceBulb", "capability.colorTemperature", title: "Override circadian reference bulb. Blank uses parent default.", multiple: false, required: false
+                input "occupiedReferencePercent", "number", title: "Occupied level as percent of reference", defaultValue: 100, required: true
+                input "courtesyReferencePercent", "number", title: "Courtesy level as percent of reference", defaultValue: 30, required: true
+            }
+
             input "useModeBasedLightingLevels", "bool", title: "Use Location Mode based lighting levels", defaultValue: false, required: true, submitOnChange: true
 
             if (useModeBasedLightingLevels) {
@@ -191,6 +199,8 @@ def initializeChild() {
     subscribe(roomDevice(), "asleepEnabled", asleepEnabledHandler)
     subscribe(roomDevice(), "lockedEnabled", lockedEnabledHandler)
     subscribe(location, "mode", locationModeHandler)
+    subscribe(circadianReferenceDevice(), "level", circadianReferenceHandler)
+    subscribe(circadianReferenceDevice(), "colorTemperature", circadianReferenceHandler)
 
     subscribe(motionSensors, "motion.active", motionActiveHandler)
     subscribe(motionSensors, "motion.inactive", motionInactiveHandler)
@@ -241,6 +251,7 @@ private void ensureInitialState() {
     if (state.roomState == null) state.roomState = "Off"
     if (state.lightingIntent == null) state.lightingIntent = "Off"
     if (state.roomLevel == null) state.roomLevel = configuredOccupiedLightingLevel() ?: 100
+    if (state.metaLightColorTemperature == null) state.metaLightColorTemperature = currentReferenceColorTemperature()
     if (state.lastActivityAt == null) state.lastActivityAt = null
 }
 
@@ -606,7 +617,7 @@ def roomSwitchOnHandler(evt) {
 
     if (state.locked) {
         debug "Room is locked; routing room switch on to MetaLight only"
-        publishMetaLightDevice(true, nextRoomControlLevel())
+        publishMetaLightDevice(true, lockedMetaLightOnLevel(), effectiveMetaLightColorTemperature())
         return
     }
 
@@ -629,7 +640,7 @@ def roomSwitchOffHandler(evt) {
 
     if (state.locked) {
         debug "Room is locked; routing room switch off to MetaLight only"
-        publishMetaLightDevice(false, 0)
+        publishMetaLightDevice(false, 0, effectiveMetaLightColorTemperature())
         return
     }
 
@@ -658,7 +669,7 @@ def roomLevelHandler(evt) {
     debug "Room level set to ${level}"
     if (state.locked) {
         debug "Room is locked; routing room level to MetaLight only"
-        publishMetaLightDevice(level > 0, level)
+        publishMetaLightDevice(level > 0, level, effectiveMetaLightColorTemperature())
         return
     }
 
@@ -716,6 +727,19 @@ def locationModeHandler(evt) {
     state.forceModeLightingLevel = true
     recomputeAndPublish()
     state.forceModeLightingLevel = false
+}
+
+def circadianReferenceHandler(evt) {
+    if (!followCircadianReferenceEnabled()) return
+    if (!metaLightIntentActive()) {
+        debug "Ignoring circadian reference ${evt.name} change because MetaLight is inactive"
+        return
+    }
+
+    debug "Circadian reference ${evt.name} changed to ${evt.value}"
+    state.forceCircadianReferenceUpdate = true
+    recomputeAndPublish()
+    state.forceCircadianReferenceUpdate = false
 }
 
 def motionActiveHandler(evt) {
@@ -1484,10 +1508,55 @@ private String computeLightingIntent(String roomState) {
 }
 
 private Integer computeLightingLevel(String lightingIntent) {
+    if (followCircadianReferenceEnabled() && lightingIntent == "On") return adjustedReferenceLevel(occupiedReferencePercent, 100)
+    if (followCircadianReferenceEnabled() && lightingIntent == "Courtesy") return adjustedReferenceLevel(courtesyReferencePercent, 30)
     if (lightingIntent == "On") return currentRoomControlLevel()
     if (lightingIntent == "Courtesy") return configuredCourtesyLightingLevel()
     if (lightingIntent == "Night") return configuredNightLightingLevel()
     return 0
+}
+
+private Integer lockedMetaLightOnLevel() {
+    return followCircadianReferenceEnabled() ? adjustedReferenceLevel(occupiedReferencePercent, 100) : nextRoomControlLevel()
+}
+
+private Integer effectiveMetaLightColorTemperature() {
+    if (followCircadianReferenceEnabled()) return currentReferenceColorTemperature()
+    return normalizedColorTemperature(state.metaLightColorTemperature, 2700)
+}
+
+private Integer adjustedReferenceLevel(value, Integer fallbackPercent) {
+    Integer referenceLevel = currentReferenceLevel()
+    Integer percent = normalizedPercent(value, fallbackPercent)
+    BigDecimal adjusted = (referenceLevel as BigDecimal) * (percent as BigDecimal) / 100G
+    return normalizedPercent(adjusted.setScale(0, BigDecimal.ROUND_HALF_UP) as Integer, fallbackPercent)
+}
+
+private Integer currentReferenceLevel() {
+    return normalizedPercent(circadianReferenceDevice()?.currentValue("level"), 100)
+}
+
+private Integer currentReferenceColorTemperature() {
+    return normalizedColorTemperature(circadianReferenceDevice()?.currentValue("colorTemperature"), normalizedColorTemperature(state.metaLightColorTemperature, 2700))
+}
+
+private Boolean followCircadianReferenceEnabled() {
+    return followCircadianReference == true && circadianReferenceDevice()
+}
+
+private def circadianReferenceDevice() {
+    if (circadianReferenceBulb) return circadianReferenceBulb
+
+    try {
+        return parent.circadianReferenceBulb()
+    } catch (Exception ignored) {
+        return null
+    }
+}
+
+private Boolean metaLightIntentActive() {
+    if (state.locked) return state.metaLightSwitch == "on"
+    return (state.lightingIntent ?: "Off") in ["On", "Courtesy", "Night"]
 }
 
 private Integer currentRoomControlLevel() {
@@ -1554,6 +1623,16 @@ private Integer normalizedPercent(value, Integer fallback) {
     return Math.max(Math.min(percent, 100), 0)
 }
 
+private Integer normalizedColorTemperature(value, Integer fallback) {
+    Integer ct = fallback
+    try {
+        ct = (value == null ? fallback : value) as Integer
+    } catch (Exception ignored) {
+        ct = fallback
+    }
+    return Math.max(Math.min(ct, 10000), 1500)
+}
+
 private void recomputeAndPublish() {
     ensureInitialState()
 
@@ -1561,17 +1640,23 @@ private void recomputeAndPublish() {
     Boolean previousSwitchOn = roomDevice()?.currentSwitch == "on"
     Integer previousRoomLevel = normalizedPercent(roomDevice()?.currentValue("level"), 0)
     Integer previousMetaLightLevel = normalizedPercent(state.metaLightLevel, 0)
+    Integer previousMetaLightColorTemperature = normalizedColorTemperature(state.metaLightColorTemperature, 2700)
 
     String newRoomState = computeRoomState()
     String newLightingIntent = state.locked ? previousLightingIntent : computeLightingIntent(newRoomState)
-    Integer effectiveLightingLevel = state.locked ? previousMetaLightLevel : computeLightingLevel(newLightingIntent)
+    Boolean lockedReferenceUpdate = state.locked && state.forceCircadianReferenceUpdate && state.metaLightSwitch == "on"
+    Integer effectiveLightingLevel = state.locked && !lockedReferenceUpdate ? previousMetaLightLevel : computeLightingLevel(newLightingIntent)
+    if (lockedReferenceUpdate && effectiveLightingLevel == 0) {
+        effectiveLightingLevel = lockedMetaLightOnLevel()
+    }
+    Integer effectiveColorTemperature = state.locked && !lockedReferenceUpdate ? previousMetaLightColorTemperature : effectiveMetaLightColorTemperature()
     Integer roomControlLevel = state.locked ? previousRoomLevel : (newRoomState in ["Occupied", "Engaged"] ? currentRoomControlLevel() : 0)
 
     // Locking should not change the public switch. It is a freeze/hold state, not an on/off request.
     Boolean roomSwitchShouldBeOn = state.locked ? previousSwitchOn : (newRoomState in ["Occupied", "Engaged"])
     Boolean metaLightShouldBeOn = state.locked ? (state.metaLightSwitch == "on") : (newLightingIntent in ["On", "Courtesy", "Night"])
 
-    publishMetaLightDevice(metaLightShouldBeOn, effectiveLightingLevel)
+    publishMetaLightDevice(metaLightShouldBeOn, effectiveLightingLevel, effectiveColorTemperature)
     publishRoomDevice(roomSwitchShouldBeOn, newRoomState, newLightingIntent, roomControlLevel)
 
     if (state.roomState != newRoomState || state.lightingIntent != newLightingIntent) {
@@ -1611,7 +1696,7 @@ private void publishRoomDevice(Boolean switchOn, String roomState, String lighti
     }
 }
 
-private void publishMetaLightDevice(Boolean switchOn, Integer lightingLevel) {
+private void publishMetaLightDevice(Boolean switchOn, Integer lightingLevel, Integer colorTemperature) {
     def dev = roomDevice()
     if (!dev) return
 
@@ -1623,6 +1708,14 @@ private void publishMetaLightDevice(Boolean switchOn, Integer lightingLevel) {
         }
     } catch (Exception e) {
         log.warn "${roomDeviceLabel()}: Could not set level on meta-light device: ${e.message}"
+    }
+
+    try {
+        Integer ct = colorTemperature
+        dev.setMetaLightColorTemperature(ct)
+        state.metaLightColorTemperature = ct
+    } catch (Exception e) {
+        log.warn "${roomDeviceLabel()}: Could not set color temperature on meta-light device: ${e.message}"
     }
 
     try {
