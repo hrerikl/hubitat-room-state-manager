@@ -2,7 +2,8 @@
  * Simple Circadian Lighting v2 - Child App
  *
  * Consumes an outdoor light sensor and publishes a house reference level/CT
- * to a selected color-temperature bulb.
+ * to a selected color-temperature bulb. Optionally publishes a house-wide
+ * Outdoor Lighting Enabled switch using lux hysteresis.
  */
 
 definition(
@@ -22,6 +23,7 @@ preferences {
         section('Devices') {
             input 'outdoorLightSensor', 'capability.illuminanceMeasurement', title: 'Outdoor light sensor', multiple: false, required: true
             input 'referenceBulb', 'capability.colorTemperature', title: 'Reference color temperature bulb', multiple: false, required: true
+            input 'outdoorLightingEnabledSwitch', 'capability.switch', title: 'Outdoor lighting enabled switch, optional', multiple: false, required: false
         }
 
         section('Schedule') {
@@ -39,6 +41,11 @@ preferences {
             input 'outdoorLuxForMaxLevel', 'number', title: 'Outdoor lux for maximum level', defaultValue: 40000, required: true
             input 'minReferenceCT', 'number', title: 'Minimum reference color temperature', defaultValue: 2200, required: true
             input 'maxReferenceCT', 'number', title: 'Maximum reference color temperature', defaultValue: 6500, required: true
+        }
+
+        section('Outdoor lighting enable') {
+            input 'outdoorLightingEnableLux', 'number', title: 'Turn outdoor lighting switch on below this lux', defaultValue: 250, required: true
+            input 'outdoorLightingDisableLux', 'number', title: 'Turn outdoor lighting switch off above this lux', defaultValue: 700, required: true
         }
 
         section('Debug') {
@@ -99,6 +106,7 @@ def publishReference(String reason = 'schedule') {
 
     debug "Publishing reference for ${reason}: outdoorLux=${outdoorLux}, outdoorCT=${outdoorCT}, level=${targetLevel}, ct=${targetCT}"
     publishToReferenceBulb(targetCT, targetLevel)
+    publishOutdoorLightingEnabled(outdoorLux)
 }
 
 private void publishToReferenceBulb(Integer ct, Integer level) {
@@ -119,6 +127,40 @@ private void publishToReferenceBulb(Integer ct, Integer level) {
         } catch (Exception e) {
             log.warn "${app.label}: Could not publish reference bulb level/CT: ${e.message}"
         }
+    }
+}
+
+private void publishOutdoorLightingEnabled(Integer outdoorLux) {
+    if (!outdoorLightingEnabledSwitch) return
+
+    Integer enableLux = outdoorEnableLux()
+    Integer disableLux = outdoorDisableLux(enableLux)
+    String currentSwitch = outdoorLightingEnabledSwitch.currentValue('switch')?.toString() ?: 'off'
+
+    if ((outdoorLux ?: 0) <= enableLux) {
+        setOutdoorLightingSwitch('on', currentSwitch, outdoorLux, enableLux, disableLux)
+    } else if ((outdoorLux ?: 0) >= disableLux) {
+        setOutdoorLightingSwitch('off', currentSwitch, outdoorLux, enableLux, disableLux)
+    } else {
+        debug "Outdoor lighting switch unchanged at ${currentSwitch}; outdoorLux=${outdoorLux}, enable<=${enableLux}, disable>=${disableLux}"
+    }
+}
+
+private void setOutdoorLightingSwitch(String target, String currentSwitch, Integer outdoorLux, Integer enableLux, Integer disableLux) {
+    if (currentSwitch == target) {
+        debug "Outdoor lighting switch already ${target}; outdoorLux=${outdoorLux}, enable<=${enableLux}, disable>=${disableLux}"
+        return
+    }
+
+    try {
+        if (target == 'on') {
+            outdoorLightingEnabledSwitch.on()
+        } else {
+            outdoorLightingEnabledSwitch.off()
+        }
+        debug "Set outdoor lighting switch ${target}; outdoorLux=${outdoorLux}, enable<=${enableLux}, disable>=${disableLux}"
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not set outdoor lighting enabled switch ${target}: ${e.message}"
     }
 }
 
@@ -177,6 +219,15 @@ private Integer minCt() {
 
 private Integer maxCt() {
     return clampInteger(settingInteger(maxReferenceCT, 6500), minCt(), 10000)
+}
+
+private Integer outdoorEnableLux() {
+    return clampInteger(settingInteger(outdoorLightingEnableLux, 250), 0, 120000)
+}
+
+private Integer outdoorDisableLux(Integer enableLux) {
+    Integer disableLux = clampInteger(settingInteger(outdoorLightingDisableLux, 700), 0, 120000)
+    return Math.max(disableLux, enableLux)
 }
 
 private Integer modeMinimumLevel() {

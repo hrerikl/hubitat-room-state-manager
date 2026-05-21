@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.39",
+  "version": "0.2.40",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-21",
-  "releaseNotes": "Limits after-switch Room Lighting feedback suppression to full switch or scene activation passes.",
+  "releaseNotes": "Adds an optional Outdoor Lighting Enabled switch output to Simple Circadian Lighting with lux hysteresis thresholds.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
