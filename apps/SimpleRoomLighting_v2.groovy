@@ -40,7 +40,9 @@ preferences {
                 input "matrixModes", "enum", title: "Modes with custom matrix settings", options: locationModeOptions(), multiple: true, required: false, submitOnChange: true
             }
             input "offCondition", "enum", title: "Off condition", options: offConditionOptions(), defaultValue: "metaLightOff", required: true
-            input "transitionSeconds", "number", title: "Dimmer transition seconds", defaultValue: 1, required: true
+            input "activationTransitionSeconds", "number", title: "Activation transition seconds", defaultValue: 2, required: true
+            input "deactivationTransitionSeconds", "number", title: "Deactivation transition seconds", defaultValue: 30, required: true
+            input "referenceTransitionSeconds", "number", title: "Reference change transition seconds", defaultValue: 10, required: true
             input "reapplyOnModeChange", "bool", title: "Reassess matrix on Location Mode change when MetaLight is on", defaultValue: true, required: true
             input "alwaysActivateRows", "bool", title: "Always send activation commands for active rows", defaultValue: true, required: true
         }
@@ -385,6 +387,7 @@ private void reassessLighting(String reason) {
 private void applyIntentRows(String context, String intentBucket, Integer metaLevel, Integer metaCt, Boolean levelChangeOnly = false, Boolean colorTemperatureOnly = false, String reason = "") {
     Boolean useOverride = overrideActive(context, intentBucket)
     Boolean forceActivation = alwaysActivateRowsEnabled()
+    Integer transition = transitionSecondsFor(reason, "activation")
     if (useOverride) {
         debug "Using override matrix for context=${context} intent=${intentBucket}"
     }
@@ -406,13 +409,13 @@ private void applyIntentRows(String context, String intentBucket, Integer metaLe
                 setColorTemperature(dev, metaCt, forceActivation)
             }
         } else if (switchCommand == "off") {
-            turnOffDevice(dev, "activation switch off")
+            turnOffDevice(dev, "activation switch off", transitionSecondsFor(reason, "deactivation"))
         } else if (isDimmer(dev)) {
             if (levelMode == "none") {
                 turnOnDevice(dev, forceActivation)
             } else {
                 Integer level = levelMode == "explicit" ? rowExplicitLevel(context, intentBucket, dev, metaLevel, useOverride) : rowFollowLevel(context, intentBucket, dev, metaLevel, useOverride)
-                setDimmer(dev, level, forceActivation)
+                setDimmer(dev, level, transition, forceActivation)
             }
             if (ctMode == "follow") {
                 setColorTemperature(dev, metaCt, forceActivation)
@@ -439,7 +442,7 @@ private void applyOffRows(String context, String intentBucket, String reason) {
     Boolean useOverride = overrideActive(context, intentBucket)
     allAutomatedDevices().each { dev ->
         if (rowOff(context, intentBucket, dev, useOverride)) {
-            turnOffDevice(dev, reason)
+            turnOffDevice(dev, reason, transitionSecondsFor(reason, "deactivation"))
         }
     }
 }
@@ -766,15 +769,15 @@ private List overrideSwitches() {
 
 // -------------------- Device Commands --------------------
 
-private void setDimmer(def dimmer, Integer level, Boolean forceCommand = true) {
+private void setDimmer(def dimmer, Integer level, Integer transitionSecondsForCommand, Boolean forceCommand = true) {
     if (!forceCommand && dimmer.currentValue("switch") == "on" && normalizedLevel(dimmer.currentValue("level"), -1) == level) {
         debug "Skipping ${dimmer.displayName}; already on at level ${level}"
         return
     }
 
     try {
-        if (((transitionSeconds ?: 0) as Integer) > 0) {
-            dimmer.setLevel(level, transitionSeconds as Integer)
+        if ((transitionSecondsForCommand ?: 0) > 0) {
+            dimmer.setLevel(level, transitionSecondsForCommand)
         } else {
             dimmer.setLevel(level)
         }
@@ -811,12 +814,43 @@ private void turnOnDevice(def dev, Boolean forceCommand = true) {
     }
 }
 
-private void turnOffDevice(def dev, String reason) {
+private void turnOffDevice(def dev, String reason, Integer transitionSecondsForCommand = 0) {
+    if (isDimmer(dev)) {
+        try {
+            if ((transitionSecondsForCommand ?: 0) > 0) {
+                dev.setLevel(0, transitionSecondsForCommand)
+            } else {
+                dev.setLevel(0)
+            }
+            return
+        } catch (Exception e) {
+            log.warn "${app.label}: Could not fade ${dev.displayName} off (${reason}); trying off(): ${e.message}"
+        }
+    }
+
     try {
         dev.off()
     } catch (Exception e) {
         log.warn "${app.label}: Could not turn off ${dev.displayName} (${reason}): ${e.message}"
     }
+}
+
+private Integer transitionSecondsFor(String reason, String actionType) {
+    if (actionType == "deactivation") return safeTransitionSeconds(deactivationTransitionSeconds, 30)
+    if (reason in ["metaLightLevel changed", "metaLightColorTemperature changed", "Location Mode changed", "override switch changed"]) {
+        return safeTransitionSeconds(referenceTransitionSeconds, 10)
+    }
+    return safeTransitionSeconds(activationTransitionSeconds ?: transitionSeconds, 2)
+}
+
+private Integer safeTransitionSeconds(value, Integer fallback) {
+    Integer seconds = fallback
+    try {
+        seconds = value == null ? fallback : value as Integer
+    } catch (Exception ignored) {
+        seconds = fallback
+    }
+    return Math.max(seconds, 0)
 }
 
 private void startLevelChange(String direction) {
