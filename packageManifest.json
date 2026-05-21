@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.29",
+  "version": "0.2.30",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-20",
-  "releaseNotes": "Adds responsive circadian room settings, reference offsets, and manual tracking pause behavior.",
+  "releaseNotes": "Refines outdoor color-temperature calculation with sunrise/sunset, rounding, cloud boost, and effective daylight offsets.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

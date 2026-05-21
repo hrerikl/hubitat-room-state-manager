@@ -28,6 +28,10 @@ preferences {
     input 'latitude', 'text', title: 'Latitude', defaultValue: "${location?.latitude ?: ''}", required: true
     input 'longitude', 'text', title: 'Longitude', defaultValue: "${location?.longitude ?: ''}", required: true
     input 'pollIntervalMinutes', 'enum', title: 'Poll interval', options: ['5', '10', '15', '30', '60'], defaultValue: '10', required: true
+    input 'effectiveSunriseOffsetMinutes', 'number', title: 'Effective sunrise offset minutes. Positive is later.', defaultValue: 0, required: true
+    input 'effectiveSunsetOffsetMinutes', 'number', title: 'Effective sunset offset minutes. Negative is earlier.', defaultValue: 0, required: true
+    input 'maxCloudCtBoost', 'number', title: 'Maximum cloud color-temperature boost', defaultValue: 200, required: true
+    input 'ctRoundingStep', 'enum', title: 'Round color temperature to nearest', options: ['1', '50', '100', '200'], defaultValue: '100', required: true
     input 'debugLogging', 'bool', title: 'Enable debug logging', defaultValue: true, required: true
 }
 
@@ -61,6 +65,7 @@ void refresh() {
             latitude     : lat,
             longitude    : lon,
             current      : 'cloud_cover,weather_code,shortwave_radiation',
+            daily        : 'sunrise,sunset',
             timezone     : 'auto',
             forecast_days: 1
         ],
@@ -73,8 +78,10 @@ void refresh() {
             BigDecimal cloud = decimalValue(current.cloud_cover, 0G)
             BigDecimal radiation = decimalValue(current.shortwave_radiation, 0G)
             Integer code = integerValue(current.weather_code, 0)
+            Date sunrise = localDateTime(resp?.data?.daily?.sunrise?.getAt(0))
+            Date sunset = localDateTime(resp?.data?.daily?.sunset?.getAt(0))
             Integer lux = calculateOutdoorLux(radiation)
-            Integer ct = calculateOutdoorCT(lux, cloud)
+            Integer ct = calculateOutdoorCT(lux, cloud, sunrise, sunset)
             String condition = skyCondition(code, cloud)
             String updated = new Date().format('yyyy-MM-dd HH:mm:ss', location.timeZone)
 
@@ -87,7 +94,7 @@ void refresh() {
             publishValue('skyCondition', condition, null)
             publishValue('lastUpdated', updated, null)
 
-            debug "Open-Meteo updated: lux=${lux}, ct=${ct}, cloud=${cloud}%, radiation=${radiation}, condition=${condition}"
+            debug "Open-Meteo updated: lux=${lux}, ct=${ct}, cloud=${cloud}%, radiation=${radiation}, condition=${condition}, sunrise=${sunrise}, sunset=${sunset}"
         }
     } catch (Exception e) {
         log.warn "Simple Open-Meteo Outdoor Light Device: refresh failed: ${e.message}"
@@ -131,17 +138,14 @@ private Integer calculateOutdoorLux(BigDecimal radiation) {
     return clampInteger(lux.setScale(0, BigDecimal.ROUND_HALF_UP) as Integer, 0, 120000)
 }
 
-private Integer calculateOutdoorCT(Integer lux, BigDecimal cloud) {
+private Integer calculateOutdoorCT(Integer lux, BigDecimal cloud, Date sunrise, Date sunset) {
     if ((lux ?: 0) < 50) return 2200
 
-    Calendar cal = Calendar.getInstance(location.timeZone)
-    BigDecimal hour = (cal.get(Calendar.HOUR_OF_DAY) as BigDecimal) + ((cal.get(Calendar.MINUTE) as BigDecimal) / 60G)
-    BigDecimal dayProgress = clampDecimal((hour - 6G) / 12G, 0G, 1G)
-    BigDecimal daylight = Math.sin(Math.PI * (dayProgress as Double)) as BigDecimal
-    BigDecimal cloudBoost = clampDecimal(cloud ?: 0G, 0G, 100G) * 4G
+    BigDecimal daylight = daylightCurve(now(), adjustedTime(sunrise, effectiveSunriseOffsetMinutes), adjustedTime(sunset, effectiveSunsetOffsetMinutes))
+    BigDecimal cloudBoost = clampDecimal(cloud ?: 0G, 0G, 100G) * (maxCloudBoost() as BigDecimal) / 100G
     BigDecimal ct = 2200G + (4300G * daylight) + cloudBoost
 
-    return clampInteger(ct.setScale(0, BigDecimal.ROUND_HALF_UP) as Integer, 2200, 7000)
+    return roundToStep(clampInteger(ct.setScale(0, BigDecimal.ROUND_HALF_UP) as Integer, 2200, 7000), ctStep())
 }
 
 private String skyCondition(Integer code, BigDecimal cloud) {
@@ -185,6 +189,54 @@ private Integer integerValue(value, Integer fallback) {
     } catch (Exception ignored) {
         return fallback
     }
+}
+
+private Date localDateTime(value) {
+    if (value == null) return null
+
+    try {
+        java.text.SimpleDateFormat format = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm")
+        format.setTimeZone(location.timeZone)
+        return format.parse(value.toString())
+    } catch (Exception ignored) {
+        return null
+    }
+}
+
+private Long adjustedTime(Date date, value) {
+    if (!date) return null
+    Integer minutes = integerValue(value, 0)
+    return date.time + (minutes * 60000L)
+}
+
+private BigDecimal daylightCurve(Long currentMs, Long sunriseMs, Long sunsetMs) {
+    if (!currentMs || !sunriseMs || !sunsetMs || sunsetMs <= sunriseMs) {
+        return fallbackDaylightCurve()
+    }
+    if (currentMs <= sunriseMs || currentMs >= sunsetMs) return 0G
+
+    BigDecimal progress = ((currentMs - sunriseMs) as BigDecimal) / ((sunsetMs - sunriseMs) as BigDecimal)
+    return Math.sin(Math.PI * (progress as Double)) as BigDecimal
+}
+
+private BigDecimal fallbackDaylightCurve() {
+    Calendar cal = Calendar.getInstance(location.timeZone)
+    BigDecimal hour = (cal.get(Calendar.HOUR_OF_DAY) as BigDecimal) + ((cal.get(Calendar.MINUTE) as BigDecimal) / 60G)
+    BigDecimal dayProgress = clampDecimal((hour - 6G) / 12G, 0G, 1G)
+    return Math.sin(Math.PI * (dayProgress as Double)) as BigDecimal
+}
+
+private Integer maxCloudBoost() {
+    return clampInteger(integerValue(maxCloudCtBoost, 200), 0, 1000)
+}
+
+private Integer ctStep() {
+    return clampInteger(integerValue(ctRoundingStep, 100), 1, 500)
+}
+
+private Integer roundToStep(Integer value, Integer step) {
+    Integer safeStep = Math.max(step ?: 1, 1)
+    return (((value ?: 0) + (safeStep / 2G)) / safeStep).setScale(0, BigDecimal.ROUND_FLOOR) as Integer * safeStep
 }
 
 private Integer clampInteger(Integer value, Integer min, Integer max) {
