@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.36",
+  "version": "0.2.37",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-20",
-  "releaseNotes": "Adds default activation, deactivation, and reference-change transition timings to Room Lighting.",
+  "releaseNotes": "Adds Basic/Advanced setup sections and keeps Room Lighting voice devices in the basic setup flow.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

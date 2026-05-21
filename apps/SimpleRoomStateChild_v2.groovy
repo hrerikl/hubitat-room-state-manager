@@ -48,103 +48,117 @@ preferences {
     page(name: "childMainPage", title: "Room State", install: true, uninstall: true) {
         section("Room") {
             input "hubitatRoomId", "enum", title: "Hubitat Room", options: hubitatRoomOptions(), required: false, submitOnChange: true
-            input "roomName", "text", title: "Room name override, optional", required: false, submitOnChange: true
             input "roomProfile", "enum", title: "Room profile", options: roomProfileOptions(), defaultValue: "standard", required: true, submitOnChange: true
             paragraph "Select the Hubitat Room explicitly. If the room name override is blank, the selected Hubitat Room name is used. Creates: Room <name>, plus MetaLight, Courtesy, Engaged, Asleep, and Locked component devices."
         }
 
-        section("Optional custom labels") {
-            input "engagedLabel", "text", title: "Engaged device label, optional. Example: Focus Mode", required: false
-            input "asleepLabel", "text", title: "Asleep device label, optional. Example: Sleeping", required: false
-            input "lockedLabel", "text", title: "Locked device label, optional. Example: Recording", required: false
-        }
-
-        section("Inputs: direct activity") {
+        section("Activity") {
             input "motionSensors", "capability.motionSensor", title: "Motion sensors", multiple: true, required: false
             input "doorContactSensors", "capability.contactSensor", title: "Door contact sensors. Opening a door counts as occupancy evidence.", multiple: true, required: false
-            input "activitySwitches", "capability.switch", title: "Switches that imply room activity when turned on", multiple: true, required: false
-            input "activitySwitchesPhysicalOnly", "bool", title: "Only physical activity switch events imply room activity", defaultValue: false, required: true
-            input "activityButtons", "capability.pushableButton", title: "Buttons that imply room activity when pushed", multiple: true, required: false
-            input "activityButtonNumbers", "text", title: "Activity button numbers, comma separated. Blank means any pushed button.", required: false
-            input "lockHeldButtonNumber", "number", title: "Held button number that locks this room. Blank disables.", required: false
-            input "unlockHeldButtonNumber", "number", title: "Held button number that unlocks this room. Blank disables.", required: false
-            input "engagementSwitches", "capability.switch", title: "Switches that imply engaged state when turned on", multiple: true, required: false
-            input "engageOnMotionWithDoorsClosed", "bool", title: "Engage on motion with doors closed", defaultValue: false, required: true
-            paragraph "When enabled, motion marks the room Engaged if every configured door contact is closed. Opening any configured door clears Engaged and still counts as occupancy evidence."
         }
 
-        section("Inputs: neighbor/courtesy") {
+        section("Neighbor courtesy") {
             input "neighborChildAppIds", "enum", title: "Neighbor rooms that should trigger courtesy lighting", options: safeNeighborRoomOptions(), multiple: true, required: false
             paragraph "Select other Simple Room State rooms. Neighbor rooms trigger Courtesy only when their roomState is Occupied or Engaged. Locked rooms do not propagate Courtesy."
-            input "syncReciprocalNeighborsOnSave", "bool", title: "Add this room back to selected neighbors on save", defaultValue: false, required: true
-            paragraph "When enabled, saving this room attempts to add it to each selected neighbor's courtesy list. Each child app still owns its own neighbor list."
-        }
-
-        section("Inputs: external lock") {
-            input "externalLockedSwitches", "capability.switch", title: "External switches that should lock this room", multiple: true, required: false
         }
 
         section("Timeouts") {
             input "occupiedTimeoutMinutes", "number", title: "Occupied timeout after no motion", defaultValue: 5, required: true
-            input "staleActiveMotionMinutes", "number", title: "Ignore active motion sensor after no motion/device activity for this many minutes. Blank or 0 disables.", defaultValue: 60, required: false
             input "engagedTimeoutMinutes", "number", title: "Engaged timeout after no activity", defaultValue: 30, required: true
-            input "lockAutoClearMinutes", "number", title: "Auto-clear Locked after X minutes. Blank or 0 disables.", required: false
-            input "unlockImpliesActivity", "bool", title: "Treat unlock as occupancy activity", defaultValue: false, required: true
         }
 
-        if (bedroomProfile()) {
-            section("Bedroom sleep") {
-                input "nightMotionSensors", "capability.motionSensor", title: "Motion sensors that trigger Night lighting while Asleep", multiple: true, required: false
-                input "nightLightingTimeoutMinutes", "number", title: "Night lighting timeout minutes", defaultValue: 5, required: true
-                input "nightLightingLevel", "number", title: "Night lighting level", defaultValue: 10, required: true
-            }
+        section("Advanced") {
+            input "showAdvancedSettings", "bool", title: "Show advanced settings", defaultValue: false, required: true, submitOnChange: true
         }
 
-        section("Room lighting levels") {
-            input "followCircadianReference", "bool", title: "Follow circadian reference for MetaLight level and CT", defaultValue: false, required: true, submitOnChange: true
-
-            if (followCircadianReference) {
-                input "circadianReferenceBulb", "capability.colorTemperature", title: "Override circadian reference bulb. Blank uses parent default.", multiple: false, required: false
-                input "occupiedReferencePercent", "number", title: "Occupied reference multiplier percent", defaultValue: 100, required: true
-                input "occupiedReferenceOffset", "number", title: "Occupied reference offset. Example: +10 or -10", defaultValue: 0, required: true
-                input "courtesyReferencePercent", "number", title: "Courtesy reference multiplier percent", defaultValue: 30, required: true
-                input "courtesyReferenceOffset", "number", title: "Courtesy reference offset. Example: +10 or -10", defaultValue: 0, required: true
-            } else {
-                input "occupiedLightingLevel", "number", title: "Default occupied lighting level. Blank uses the last on level.", required: false
-                input "courtesyLightingLevel", "number", title: "Courtesy/convenience lighting level", defaultValue: 20, required: true
+        if (showAdvancedSettings) {
+            section("Advanced room") {
+                input "roomName", "text", title: "Room name override, optional", required: false, submitOnChange: true
+                input "engagedLabel", "text", title: "Engaged device label, optional. Example: Focus Mode", required: false
+                input "asleepLabel", "text", title: "Asleep device label, optional. Example: Sleeping", required: false
+                input "lockedLabel", "text", title: "Locked device label, optional. Example: Recording", required: false
             }
 
-            input "useModeBasedLightingLevels", "bool", title: "Use Location Mode based lighting settings", defaultValue: false, required: true, submitOnChange: true
+            section("Advanced activity") {
+                input "activitySwitches", "capability.switch", title: "Switches that imply room activity when turned on", multiple: true, required: false
+                input "activitySwitchesPhysicalOnly", "bool", title: "Only physical activity switch events imply room activity", defaultValue: false, required: true
+                input "activityButtons", "capability.pushableButton", title: "Buttons that imply room activity when pushed", multiple: true, required: false
+                input "activityButtonNumbers", "text", title: "Activity button numbers, comma separated. Blank means any pushed button.", required: false
+                input "lockHeldButtonNumber", "number", title: "Held button number that locks this room. Blank disables.", required: false
+                input "unlockHeldButtonNumber", "number", title: "Held button number that unlocks this room. Blank disables.", required: false
+                input "staleActiveMotionMinutes", "number", title: "Ignore active motion sensor after no motion/device activity for this many minutes. Blank or 0 disables.", defaultValue: 60, required: false
+            }
 
-            if (useModeBasedLightingLevels) {
-                input "changeLightingLevelOnModeChange", "bool", title: "Change level on Location Mode change", defaultValue: false, required: true
+            section("Advanced engagement") {
+                input "engagementSwitches", "capability.switch", title: "Switches that imply engaged state when turned on", multiple: true, required: false
+                input "engageOnMotionWithDoorsClosed", "bool", title: "Engage on motion with doors closed", defaultValue: false, required: true
+                paragraph "When enabled, motion marks the room Engaged if every configured door contact is closed. Opening any configured door clears Engaged and still counts as occupancy evidence."
+            }
 
-                locationModeNames().each { modeName ->
-                    if (followCircadianReference) {
-                        input modeLevelSettingName("occupiedReferencePercent", modeName), "number", title: "Occupied reference multiplier percent - ${modeName}. Blank uses default.", required: false
-                        input modeLevelSettingName("occupiedReferenceOffset", modeName), "number", title: "Occupied reference offset - ${modeName}. Blank uses default.", required: false
-                        input modeLevelSettingName("courtesyReferencePercent", modeName), "number", title: "Courtesy reference multiplier percent - ${modeName}. Blank uses default.", required: false
-                        input modeLevelSettingName("courtesyReferenceOffset", modeName), "number", title: "Courtesy reference offset - ${modeName}. Blank uses default.", required: false
-                    } else {
-                        input modeLevelSettingName("occupiedLightingLevel", modeName), "number", title: "Occupied level - ${modeName}. Blank uses default.", required: false
-                        input modeLevelSettingName("courtesyLightingLevel", modeName), "number", title: "Courtesy level - ${modeName}. Blank uses default.", required: false
+            section("Advanced courtesy") {
+                input "syncReciprocalNeighborsOnSave", "bool", title: "Add this room back to selected neighbors on save", defaultValue: false, required: true
+                paragraph "When enabled, saving this room attempts to add it to each selected neighbor's courtesy list. Each child app still owns its own neighbor list."
+            }
+
+            section("Advanced lock") {
+                input "externalLockedSwitches", "capability.switch", title: "External switches that should lock this room", multiple: true, required: false
+                input "lockAutoClearMinutes", "number", title: "Auto-clear Locked after X minutes. Blank or 0 disables.", required: false
+                input "unlockImpliesActivity", "bool", title: "Treat unlock as occupancy activity", defaultValue: false, required: true
+            }
+
+            if (bedroomProfile()) {
+                section("Bedroom sleep") {
+                    input "nightMotionSensors", "capability.motionSensor", title: "Motion sensors that trigger Night lighting while Asleep", multiple: true, required: false
+                    input "nightLightingTimeoutMinutes", "number", title: "Night lighting timeout minutes", defaultValue: 5, required: true
+                    input "nightLightingLevel", "number", title: "Night lighting level", defaultValue: 10, required: true
+                }
+            }
+
+            section("Room lighting levels") {
+                input "followCircadianReference", "bool", title: "Follow circadian reference for MetaLight level and CT", defaultValue: false, required: true, submitOnChange: true
+
+                if (followCircadianReference) {
+                    input "circadianReferenceBulb", "capability.colorTemperature", title: "Override circadian reference bulb. Blank uses parent default.", multiple: false, required: false
+                    input "occupiedReferencePercent", "number", title: "Occupied reference multiplier percent", defaultValue: 100, required: true
+                    input "occupiedReferenceOffset", "number", title: "Occupied reference offset. Example: +10 or -10", defaultValue: 0, required: true
+                    input "courtesyReferencePercent", "number", title: "Courtesy reference multiplier percent", defaultValue: 30, required: true
+                    input "courtesyReferenceOffset", "number", title: "Courtesy reference offset. Example: +10 or -10", defaultValue: 0, required: true
+                } else {
+                    input "occupiedLightingLevel", "number", title: "Default occupied lighting level. Blank uses the last on level.", required: false
+                    input "courtesyLightingLevel", "number", title: "Courtesy/convenience lighting level", defaultValue: 20, required: true
+                }
+
+                input "useModeBasedLightingLevels", "bool", title: "Use Location Mode based lighting settings", defaultValue: false, required: true, submitOnChange: true
+
+                if (useModeBasedLightingLevels) {
+                    input "changeLightingLevelOnModeChange", "bool", title: "Change level on Location Mode change", defaultValue: false, required: true
+
+                    locationModeNames().each { modeName ->
+                        if (followCircadianReference) {
+                            input modeLevelSettingName("occupiedReferencePercent", modeName), "number", title: "Occupied reference multiplier percent - ${modeName}. Blank uses default.", required: false
+                            input modeLevelSettingName("occupiedReferenceOffset", modeName), "number", title: "Occupied reference offset - ${modeName}. Blank uses default.", required: false
+                            input modeLevelSettingName("courtesyReferencePercent", modeName), "number", title: "Courtesy reference multiplier percent - ${modeName}. Blank uses default.", required: false
+                            input modeLevelSettingName("courtesyReferenceOffset", modeName), "number", title: "Courtesy reference offset - ${modeName}. Blank uses default.", required: false
+                        } else {
+                            input modeLevelSettingName("occupiedLightingLevel", modeName), "number", title: "Occupied level - ${modeName}. Blank uses default.", required: false
+                            input modeLevelSettingName("courtesyLightingLevel", modeName), "number", title: "Courtesy level - ${modeName}. Blank uses default.", required: false
+                        }
                     }
                 }
             }
-        }
 
+            section("Child devices") {
+                input "createDevicesNow", "bool", title: "Create/update child devices on save", defaultValue: true, required: true
+            }
 
-        section("Child devices") {
-            input "createDevicesNow", "bool", title: "Create/update child devices on save", defaultValue: true, required: true
-        }
+            section("Hubitat Room assignment") {
+                paragraph "Optional helper. When enabled, saving this room attempts to assign app-created devices to the selected Hubitat Room, then clears this option."
+                input "assignToHubitatRoomOnSave", "bool", title: "Assign app devices to Hubitat Room on save", defaultValue: false, required: true
+            }
 
-        section("Hubitat Room assignment") {
-            paragraph "Optional helper. When enabled, saving this room attempts to assign app-created devices to the selected Hubitat Room, then clears this option."
-            input "assignToHubitatRoomOnSave", "bool", title: "Assign app devices to Hubitat Room on save", defaultValue: false, required: true
-        }
-
-        section("Debug") {
-            input "debugLogging", "bool", title: "Enable debug logging", defaultValue: true, required: true
+            section("Debug") {
+                input "debugLogging", "bool", title: "Enable debug logging", defaultValue: true, required: true
+            }
         }
     }
 }

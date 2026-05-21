@@ -26,7 +26,6 @@ preferences {
     page(name: "mainPage", title: "Simple Room Lighting", install: true, uninstall: true) {
         section("Room") {
             input "roomChildAppId", "enum", title: "Room", options: roomOptions(), required: true, submitOnChange: true
-            input "lightingName", "text", title: "Lighting app name override, optional", required: false
         }
 
         section("Devices to automate") {
@@ -34,51 +33,67 @@ preferences {
             input "automatedSwitches", "capability.switch", title: "Switch-only devices to automate", multiple: true, required: false, submitOnChange: true
         }
 
-        section("Matrix options") {
-            input "matrixVariation", "enum", title: "Matrix variation", options: matrixVariationOptions(), defaultValue: "all", required: true, submitOnChange: true
-            if (matrixUsesMode()) {
-                input "matrixModes", "enum", title: "Modes with custom matrix settings", options: locationModeOptions(), multiple: true, required: false, submitOnChange: true
-            }
-            input "offCondition", "enum", title: "Off condition", options: offConditionOptions(), defaultValue: "metaLightOff", required: true
-            input "activationTransitionSeconds", "number", title: "Activation transition seconds", defaultValue: 2, required: true
-            input "deactivationTransitionSeconds", "number", title: "Deactivation transition seconds", defaultValue: 30, required: true
-            input "referenceTransitionSeconds", "number", title: "Reference change transition seconds", defaultValue: 10, required: true
-            input "reapplyOnModeChange", "bool", title: "Reassess matrix on Location Mode change when MetaLight is on", defaultValue: true, required: true
-            input "alwaysActivateRows", "bool", title: "Always send activation commands for active rows", defaultValue: true, required: true
-        }
-
-        renderMatrixSections()
-
-        section("Physical controls") {
-            input "controlDimmers", "capability.switchLevel", title: "Physical dimmers that send on/off/level to Room", multiple: true, required: false
-            input "controlSwitches", "capability.switch", title: "Physical switches that send on/off to Room", multiple: true, required: false
-            input "physicalControlEventsOnly", "bool", title: "Only physical control events update Room", defaultValue: true, required: true
-        }
-
-        section("Room remote defaults") {
+        section("Room controls") {
             input "picoRemotes", "capability.pushableButton", title: "5-button Pico remotes", multiple: true, required: false
-            input "casetaDimmers", "capability.switchLevel", title: "4-button Caseta dimmers/switches", multiple: true, required: false
-            input "picoLevelChangeDimmers", "capability.switchLevel", title: "Dimmers for held level-change buttons", multiple: true, required: false
             input "sceneCycleSwitches", "capability.switch", title: "Button 3 scene switches/activators", multiple: true, required: false
-            input "asleepSceneCycleSwitches", "capability.switch", title: "Button 3 asleep scene switches/activators", multiple: true, required: false
-            input "picoStepSize", "number", title: "Push level step", defaultValue: 10, required: true
-            input "sleepSceneTimeoutMinutes", "number", title: "When asleep and no asleep scenes are selected, button 3 extends Night lighting minutes", defaultValue: 45, required: true
-            input "asleepFallbackLevelBoost", "number", title: "When asleep and no asleep scenes are selected, button 3 adds this much light", defaultValue: 20, required: true
         }
 
-        section("Announcements") {
+        section("Voice") {
             input "speechDevices", "capability.speechSynthesis", title: "Speech devices for Room state announcements", multiple: true, required: false
             input "announceRoomControls", "bool", title: "Announce Lock, Unlock, Sleep, and Wake", defaultValue: false, required: true
-            if (announceRoomControls) {
-                input "lockedAnnouncement", "text", title: "Locked message", defaultValue: defaultRoomControlAnnouncement("Locked"), required: true
-                input "unlockedAnnouncement", "text", title: "Unlocked message", defaultValue: defaultRoomControlAnnouncement("Unlocked"), required: true
-                input "asleepAnnouncement", "text", title: "Sleep message", defaultValue: defaultRoomControlAnnouncement("Asleep"), required: true
-                input "awakeAnnouncement", "text", title: "Wake message", defaultValue: defaultRoomControlAnnouncement("Awake"), required: true
-            }
         }
 
-        section("Debug") {
-            input "debugLogging", "bool", title: "Enable debug logging", defaultValue: true, required: true
+        section("Advanced") {
+            input "showAdvancedSettings", "bool", title: "Show advanced settings", defaultValue: false, required: true, submitOnChange: true
+        }
+
+        if (showAdvancedSettings) {
+            section("Advanced room") {
+                input "lightingName", "text", title: "Lighting app name override, optional", required: false
+            }
+
+            section("Matrix options") {
+                input "matrixVariation", "enum", title: "Matrix variation", options: matrixVariationOptions(), defaultValue: "all", required: true, submitOnChange: true
+                if (matrixUsesMode()) {
+                    input "matrixModes", "enum", title: "Modes with custom matrix settings", options: locationModeOptions(), multiple: true, required: false, submitOnChange: true
+                }
+                input "offCondition", "enum", title: "Off condition", options: offConditionOptions(), defaultValue: "metaLightOff", required: true
+                input "activationTransitionSeconds", "number", title: "Activation transition seconds", defaultValue: 2, required: true
+                input "deactivationTransitionSeconds", "number", title: "Deactivation transition seconds", defaultValue: 30, required: true
+                input "referenceTransitionSeconds", "number", title: "Reference change transition seconds", defaultValue: 10, required: true
+                input "reapplyOnModeChange", "bool", title: "Reassess matrix on Location Mode change when MetaLight is on", defaultValue: true, required: true
+                input "alwaysActivateRows", "bool", title: "Always send activation commands for active rows", defaultValue: true, required: true
+            }
+
+            renderMatrixSections()
+
+            section("Physical controls") {
+                input "controlDimmers", "capability.switchLevel", title: "Physical dimmers that send on/off/level to Room", multiple: true, required: false
+                input "controlSwitches", "capability.switch", title: "Physical switches that send on/off to Room", multiple: true, required: false
+                input "physicalControlEventsOnly", "bool", title: "Only physical control events update Room", defaultValue: true, required: true
+            }
+
+            section("Advanced room controls") {
+                input "casetaDimmers", "capability.switchLevel", title: "4-button Caseta dimmers/switches", multiple: true, required: false
+                input "picoLevelChangeDimmers", "capability.switchLevel", title: "Dimmers for held level-change buttons", multiple: true, required: false
+                input "asleepSceneCycleSwitches", "capability.switch", title: "Button 3 asleep scene switches/activators", multiple: true, required: false
+                input "picoStepSize", "number", title: "Push level step", defaultValue: 10, required: true
+                input "sleepSceneTimeoutMinutes", "number", title: "When asleep and no asleep scenes are selected, button 3 extends Night lighting minutes", defaultValue: 45, required: true
+                input "asleepFallbackLevelBoost", "number", title: "When asleep and no asleep scenes are selected, button 3 adds this much light", defaultValue: 20, required: true
+            }
+
+            if (announceRoomControls) {
+                section("Announcement messages") {
+                    input "lockedAnnouncement", "text", title: "Locked message", defaultValue: defaultRoomControlAnnouncement("Locked"), required: true
+                    input "unlockedAnnouncement", "text", title: "Unlocked message", defaultValue: defaultRoomControlAnnouncement("Unlocked"), required: true
+                    input "asleepAnnouncement", "text", title: "Sleep message", defaultValue: defaultRoomControlAnnouncement("Asleep"), required: true
+                    input "awakeAnnouncement", "text", title: "Wake message", defaultValue: defaultRoomControlAnnouncement("Awake"), required: true
+                }
+            }
+
+            section("Debug") {
+                input "debugLogging", "bool", title: "Enable debug logging", defaultValue: true, required: true
+            }
         }
     }
     page(name: "matrixPage")
