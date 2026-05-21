@@ -58,8 +58,9 @@ preferences {
             input "casetaDimmers", "capability.switchLevel", title: "4-button Caseta dimmers/switches", multiple: true, required: false
             input "picoLevelChangeDimmers", "capability.switchLevel", title: "Dimmers for held level-change buttons", multiple: true, required: false
             input "sceneCycleSwitches", "capability.switch", title: "Button 3 scene switches/activators", multiple: true, required: false
+            input "asleepSceneCycleSwitches", "capability.switch", title: "Button 3 asleep scene switches/activators", multiple: true, required: false
             input "picoStepSize", "number", title: "Push level step", defaultValue: 10, required: true
-            input "sleepSceneTimeoutMinutes", "number", title: "When asleep, button 3 extends Night lighting minutes", defaultValue: 45, required: true
+            input "sleepSceneTimeoutMinutes", "number", title: "When asleep and no asleep scenes are selected, button 3 extends Night lighting minutes", defaultValue: 45, required: true
         }
 
         section("Announcements") {
@@ -872,33 +873,50 @@ private void announceRoomControl(String message) {
 }
 
 private void cycleSceneSwitch() {
-    List scenes = asList(sceneCycleSwitches).findAll { it }.unique { it.id }
+    Boolean asleep = roomDevice()?.currentValue("roomState") == "Asleep"
+    List scenes = asleep ? asleepSceneSwitches() : sceneSwitches()
     if (!scenes) {
-        debug "No scene switches configured for button 3"
+        if (asleep) {
+            Integer minutes = sceneNightExtensionMinutesForRoom()
+            debug "No asleep scenes configured for button 3; extending Night lighting for ${minutes} minutes"
+            roomDevice()?.activateNightLighting(minutes)
+        } else {
+            debug "No scene switches configured for button 3"
+        }
         return
     }
 
-    Integer previousIndex = safeInteger(state.sceneCycleIndex, -1)
+    String indexName = asleep ? "asleepSceneCycleIndex" : "sceneCycleIndex"
+    Integer previousIndex = safeInteger(state[indexName], -1)
     Integer nextIndex = previousIndex + 1
     if (nextIndex >= scenes.size()) {
         nextIndex = 0
     }
-    state.sceneCycleIndex = nextIndex
+    state[indexName] = nextIndex
 
     def scene = scenes[nextIndex]
     try {
         String sceneIds = scenes.collect { "${it.id}:${it.displayName}" }.join(", ")
-        debug "Activating scene ${nextIndex + 1}/${scenes.size()} after index ${previousIndex}: ${scene.displayName}; scenes=${sceneIds}"
+        String sceneType = asleep ? "asleep scene" : "scene"
+        debug "Activating ${sceneType} ${nextIndex + 1}/${scenes.size()} after index ${previousIndex}: ${scene.displayName}; scenes=${sceneIds}"
         scene.on()
     } catch (Exception e) {
         log.warn "${app.label}: Could not activate scene ${scene?.displayName}: ${e.message}"
     }
 
-    if (roomDevice()?.currentValue("roomState") == "Asleep") {
+    if (asleep) {
         Integer minutes = sceneNightExtensionMinutesForRoom()
-        debug "Extending Night lighting for ${minutes} minutes from button 3 scene"
+        debug "Extending Night lighting for ${minutes} minutes from button 3 asleep scene"
         roomDevice()?.activateNightLighting(minutes)
     }
+}
+
+private List sceneSwitches() {
+    return asList(sceneCycleSwitches).findAll { it }.unique { it.id }
+}
+
+private List asleepSceneSwitches() {
+    return asList(asleepSceneCycleSwitches).findAll { it }.unique { it.id }
 }
 
 private void roomOnAndEngageIfUnlocked() {

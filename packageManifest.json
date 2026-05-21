@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.33",
+  "version": "0.2.34",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-20",
-  "releaseNotes": "Adds MetaLight color-temperature following and per-device level adjustments to Simple Room Lighting.",
+  "releaseNotes": "Adds separate Button 3 asleep scene cycling for bedroom night behavior.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
