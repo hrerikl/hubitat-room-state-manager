@@ -61,6 +61,7 @@ preferences {
             input "asleepSceneCycleSwitches", "capability.switch", title: "Button 3 asleep scene switches/activators", multiple: true, required: false
             input "picoStepSize", "number", title: "Push level step", defaultValue: 10, required: true
             input "sleepSceneTimeoutMinutes", "number", title: "When asleep and no asleep scenes are selected, button 3 extends Night lighting minutes", defaultValue: 45, required: true
+            input "asleepFallbackLevelBoost", "number", title: "When asleep and no asleep scenes are selected, button 3 adds this much light", defaultValue: 20, required: true
         }
 
         section("Announcements") {
@@ -878,8 +879,10 @@ private void cycleSceneSwitch() {
     if (!scenes) {
         if (asleep) {
             Integer minutes = sceneNightExtensionMinutesForRoom()
-            debug "No asleep scenes configured for button 3; extending Night lighting for ${minutes} minutes"
+            Integer boostedLevel = boostedAsleepFallbackLevel()
+            debug "No asleep scenes configured for button 3; extending Night lighting for ${minutes} minutes and boosting MetaLight to ${boostedLevel}"
             roomDevice()?.activateNightLighting(minutes)
+            boostAsleepMetaLight(boostedLevel)
         } else {
             debug "No scene switches configured for button 3"
         }
@@ -917,6 +920,24 @@ private List sceneSwitches() {
 
 private List asleepSceneSwitches() {
     return asList(asleepSceneCycleSwitches).findAll { it }.unique { it.id }
+}
+
+private Integer boostedAsleepFallbackLevel() {
+    Integer current = normalizedLevel(roomDevice()?.currentValue("metaLightLevel"), 0)
+    Integer boost = normalizedLevel(asleepFallbackLevelBoost, 20)
+    return normalizedLevel(current + boost, 20)
+}
+
+private void boostAsleepMetaLight(Integer level) {
+    def room = roomDevice()
+    if (!room) return
+
+    try {
+        room.setMetaLightSwitchState("on")
+        room.setMetaLightLevel(level)
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not boost asleep MetaLight to ${level}: ${e.message}"
+    }
 }
 
 private void roomOnAndEngageIfUnlocked() {
