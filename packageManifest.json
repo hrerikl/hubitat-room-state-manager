@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.28",
+  "version": "0.2.29",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-20",
-  "releaseNotes": "Adds color temperature to MetaLight and optional room following of the circadian reference.",
+  "releaseNotes": "Adds responsive circadian room settings, reference offsets, and manual tracking pause behavior.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

@@ -101,24 +101,34 @@ preferences {
         }
 
         section("Room lighting levels") {
-            input "occupiedLightingLevel", "number", title: "Default occupied lighting level. Blank uses the last on level.", required: false
-            input "courtesyLightingLevel", "number", title: "Courtesy/convenience lighting level", defaultValue: 20, required: true
             input "followCircadianReference", "bool", title: "Follow circadian reference for MetaLight level and CT", defaultValue: false, required: true, submitOnChange: true
 
             if (followCircadianReference) {
                 input "circadianReferenceBulb", "capability.colorTemperature", title: "Override circadian reference bulb. Blank uses parent default.", multiple: false, required: false
-                input "occupiedReferencePercent", "number", title: "Occupied level as percent of reference", defaultValue: 100, required: true
-                input "courtesyReferencePercent", "number", title: "Courtesy level as percent of reference", defaultValue: 30, required: true
+                input "occupiedReferencePercent", "number", title: "Occupied reference multiplier percent", defaultValue: 100, required: true
+                input "occupiedReferenceOffset", "number", title: "Occupied reference offset. Example: +10 or -10", defaultValue: 0, required: true
+                input "courtesyReferencePercent", "number", title: "Courtesy reference multiplier percent", defaultValue: 30, required: true
+                input "courtesyReferenceOffset", "number", title: "Courtesy reference offset. Example: +10 or -10", defaultValue: 0, required: true
+            } else {
+                input "occupiedLightingLevel", "number", title: "Default occupied lighting level. Blank uses the last on level.", required: false
+                input "courtesyLightingLevel", "number", title: "Courtesy/convenience lighting level", defaultValue: 20, required: true
             }
 
-            input "useModeBasedLightingLevels", "bool", title: "Use Location Mode based lighting levels", defaultValue: false, required: true, submitOnChange: true
+            input "useModeBasedLightingLevels", "bool", title: "Use Location Mode based lighting settings", defaultValue: false, required: true, submitOnChange: true
 
             if (useModeBasedLightingLevels) {
                 input "changeLightingLevelOnModeChange", "bool", title: "Change level on Location Mode change", defaultValue: false, required: true
 
                 locationModeNames().each { modeName ->
-                    input modeLevelSettingName("occupiedLightingLevel", modeName), "number", title: "Occupied level - ${modeName}. Blank uses default.", required: false
-                    input modeLevelSettingName("courtesyLightingLevel", modeName), "number", title: "Courtesy level - ${modeName}. Blank uses default.", required: false
+                    if (followCircadianReference) {
+                        input modeLevelSettingName("occupiedReferencePercent", modeName), "number", title: "Occupied reference multiplier percent - ${modeName}. Blank uses default.", required: false
+                        input modeLevelSettingName("occupiedReferenceOffset", modeName), "number", title: "Occupied reference offset - ${modeName}. Blank uses default.", required: false
+                        input modeLevelSettingName("courtesyReferencePercent", modeName), "number", title: "Courtesy reference multiplier percent - ${modeName}. Blank uses default.", required: false
+                        input modeLevelSettingName("courtesyReferenceOffset", modeName), "number", title: "Courtesy reference offset - ${modeName}. Blank uses default.", required: false
+                    } else {
+                        input modeLevelSettingName("occupiedLightingLevel", modeName), "number", title: "Occupied level - ${modeName}. Blank uses default.", required: false
+                        input modeLevelSettingName("courtesyLightingLevel", modeName), "number", title: "Courtesy level - ${modeName}. Blank uses default.", required: false
+                    }
                 }
             }
         }
@@ -252,6 +262,7 @@ private void ensureInitialState() {
     if (state.lightingIntent == null) state.lightingIntent = "Off"
     if (state.roomLevel == null) state.roomLevel = configuredOccupiedLightingLevel() ?: 100
     if (state.metaLightColorTemperature == null) state.metaLightColorTemperature = currentReferenceColorTemperature()
+    if (state.circadianReferencePaused == null) state.circadianReferencePaused = false
     if (state.lastActivityAt == null) state.lastActivityAt = null
 }
 
@@ -667,6 +678,8 @@ def roomLevelHandler(evt) {
     }
 
     debug "Room level set to ${level}"
+    pauseCircadianReference("manual room level change")
+
     if (state.locked) {
         debug "Room is locked; routing room level to MetaLight only"
         publishMetaLightDevice(level > 0, level, effectiveMetaLightColorTemperature())
@@ -730,7 +743,12 @@ def locationModeHandler(evt) {
 }
 
 def circadianReferenceHandler(evt) {
-    if (!followCircadianReferenceEnabled()) return
+    if (!circadianReferenceTrackingActive()) {
+        if (followCircadianReferenceEnabled()) {
+            debug "Ignoring circadian reference ${evt.name} change because tracking is paused"
+        }
+        return
+    }
     if (!metaLightIntentActive()) {
         debug "Ignoring circadian reference ${evt.name} change because MetaLight is inactive"
         return
@@ -1014,6 +1032,7 @@ private void setLocked(Boolean locked, String reason, Boolean clearAsleepOnUnloc
     state.locked = locked
 
     if (locked) {
+        pauseCircadianReference("room locked")
         // Locked means: preserve the room as-is and stop automation from changing it.
         // Keep recording latent activity, but do not expose that as roomState/lightingIntent until unlock.
         unschedule(clearOccupiedIfStillInactive)
@@ -1508,8 +1527,8 @@ private String computeLightingIntent(String roomState) {
 }
 
 private Integer computeLightingLevel(String lightingIntent) {
-    if (followCircadianReferenceEnabled() && lightingIntent == "On") return adjustedReferenceLevel(occupiedReferencePercent, 100)
-    if (followCircadianReferenceEnabled() && lightingIntent == "Courtesy") return adjustedReferenceLevel(courtesyReferencePercent, 30)
+    if (circadianReferenceTrackingActive() && lightingIntent == "On") return adjustedReferenceLevel("occupied", 100, 0)
+    if (circadianReferenceTrackingActive() && lightingIntent == "Courtesy") return adjustedReferenceLevel("courtesy", 30, 0)
     if (lightingIntent == "On") return currentRoomControlLevel()
     if (lightingIntent == "Courtesy") return configuredCourtesyLightingLevel()
     if (lightingIntent == "Night") return configuredNightLightingLevel()
@@ -1517,19 +1536,47 @@ private Integer computeLightingLevel(String lightingIntent) {
 }
 
 private Integer lockedMetaLightOnLevel() {
-    return followCircadianReferenceEnabled() ? adjustedReferenceLevel(occupiedReferencePercent, 100) : nextRoomControlLevel()
+    return circadianReferenceTrackingActive() ? adjustedReferenceLevel("occupied", 100, 0) : nextRoomControlLevel()
 }
 
 private Integer effectiveMetaLightColorTemperature() {
-    if (followCircadianReferenceEnabled()) return currentReferenceColorTemperature()
+    if (circadianReferenceTrackingActive()) return currentReferenceColorTemperature()
     return normalizedColorTemperature(state.metaLightColorTemperature, 2700)
 }
 
-private Integer adjustedReferenceLevel(value, Integer fallbackPercent) {
+private Integer adjustedReferenceLevel(String prefix, Integer fallbackPercent, Integer fallbackOffset) {
     Integer referenceLevel = currentReferenceLevel()
-    Integer percent = normalizedPercent(value, fallbackPercent)
-    BigDecimal adjusted = (referenceLevel as BigDecimal) * (percent as BigDecimal) / 100G
+    Integer percent = referencePercent(prefix, fallbackPercent)
+    Integer offset = referenceOffset(prefix, fallbackOffset)
+    BigDecimal adjusted = ((referenceLevel as BigDecimal) * (percent as BigDecimal) / 100G) + (offset as BigDecimal)
     return normalizedPercent(adjusted.setScale(0, BigDecimal.ROUND_HALF_UP) as Integer, fallbackPercent)
+}
+
+private Integer referencePercent(String prefix, Integer fallback) {
+    Integer modeValue = modeBasedReferenceInteger("${prefix}ReferencePercent")
+    if (modeValue != null) return normalizedPercent(modeValue, fallback)
+
+    def value = prefix == "occupied" ? occupiedReferencePercent : courtesyReferencePercent
+    return normalizedPercent(value, fallback)
+}
+
+private Integer referenceOffset(String prefix, Integer fallback) {
+    Integer modeValue = modeBasedReferenceInteger("${prefix}ReferenceOffset")
+    if (modeValue != null) return normalizedOffset(modeValue, fallback)
+
+    def value = prefix == "occupied" ? occupiedReferenceOffset : courtesyReferenceOffset
+    return normalizedOffset(value, fallback)
+}
+
+private Integer modeBasedReferenceInteger(String prefix) {
+    if (!useModeBasedLightingLevels) return null
+
+    String modeName = currentLocationModeName()
+    if (!modeName) return null
+
+    def value = settings[modeLevelSettingName(prefix, modeName)]
+    if (value == null || "${value}".trim() == "") return null
+    return safeInteger(value, null)
 }
 
 private Integer currentReferenceLevel() {
@@ -1542,6 +1589,25 @@ private Integer currentReferenceColorTemperature() {
 
 private Boolean followCircadianReferenceEnabled() {
     return followCircadianReference == true && circadianReferenceDevice()
+}
+
+private Boolean circadianReferenceTrackingActive() {
+    return followCircadianReferenceEnabled() && state.circadianReferencePaused != true
+}
+
+private void pauseCircadianReference(String reason) {
+    if (!followCircadianReferenceEnabled()) return
+    if (state.circadianReferencePaused == true) return
+    debug "Pausing circadian reference tracking: ${reason}"
+    state.circadianReferencePaused = true
+    state.keepCircadianReferencePausedForIntentChange = true
+}
+
+private void resumeCircadianReference(String reason) {
+    if (!followCircadianReferenceEnabled()) return
+    if (state.circadianReferencePaused != true) return
+    debug "Resuming circadian reference tracking: ${reason}"
+    state.circadianReferencePaused = false
 }
 
 private def circadianReferenceDevice() {
@@ -1623,6 +1689,16 @@ private Integer normalizedPercent(value, Integer fallback) {
     return Math.max(Math.min(percent, 100), 0)
 }
 
+private Integer normalizedOffset(value, Integer fallback) {
+    Integer offset = fallback
+    try {
+        offset = (value == null ? fallback : value) as Integer
+    } catch (Exception ignored) {
+        offset = fallback
+    }
+    return Math.max(Math.min(offset, 100), -100)
+}
+
 private Integer normalizedColorTemperature(value, Integer fallback) {
     Integer ct = fallback
     try {
@@ -1631,6 +1707,14 @@ private Integer normalizedColorTemperature(value, Integer fallback) {
         ct = fallback
     }
     return Math.max(Math.min(ct, 10000), 1500)
+}
+
+private Integer safeInteger(value, Integer fallback) {
+    try {
+        return value == null ? fallback : value as Integer
+    } catch (Exception ignored) {
+        return fallback
+    }
 }
 
 private void recomputeAndPublish() {
@@ -1644,13 +1728,23 @@ private void recomputeAndPublish() {
 
     String newRoomState = computeRoomState()
     String newLightingIntent = state.locked ? previousLightingIntent : computeLightingIntent(newRoomState)
+
+    if (previousLightingIntent != newLightingIntent && state.circadianReferencePaused == true) {
+        if (state.keepCircadianReferencePausedForIntentChange == true) {
+            debug "Keeping circadian reference tracking paused for current lighting intent change"
+        } else {
+            resumeCircadianReference("lighting intent changed from ${previousLightingIntent} to ${newLightingIntent}")
+        }
+    }
+    state.keepCircadianReferencePausedForIntentChange = false
+
     Boolean lockedReferenceUpdate = state.locked && state.forceCircadianReferenceUpdate && state.metaLightSwitch == "on"
     Integer effectiveLightingLevel = state.locked && !lockedReferenceUpdate ? previousMetaLightLevel : computeLightingLevel(newLightingIntent)
     if (lockedReferenceUpdate && effectiveLightingLevel == 0) {
         effectiveLightingLevel = lockedMetaLightOnLevel()
     }
     Integer effectiveColorTemperature = state.locked && !lockedReferenceUpdate ? previousMetaLightColorTemperature : effectiveMetaLightColorTemperature()
-    Integer roomControlLevel = state.locked ? previousRoomLevel : (newRoomState in ["Occupied", "Engaged"] ? currentRoomControlLevel() : 0)
+    Integer roomControlLevel = state.locked ? previousRoomLevel : (newRoomState in ["Occupied", "Engaged"] ? effectiveLightingLevel : 0)
 
     // Locking should not change the public switch. It is a freeze/hold state, not an on/off request.
     Boolean roomSwitchShouldBeOn = state.locked ? previousSwitchOn : (newRoomState in ["Occupied", "Engaged"])
