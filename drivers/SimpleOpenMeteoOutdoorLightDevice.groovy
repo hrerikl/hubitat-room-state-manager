@@ -28,8 +28,9 @@ preferences {
     input 'latitude', 'text', title: 'Latitude', defaultValue: "${location?.latitude ?: ''}", required: true
     input 'longitude', 'text', title: 'Longitude', defaultValue: "${location?.longitude ?: ''}", required: true
     input 'pollIntervalMinutes', 'enum', title: 'Poll interval', options: ['5', '10', '15', '30', '60'], defaultValue: '10', required: true
-    input 'effectiveSunriseOffsetMinutes', 'number', title: 'Effective sunrise offset minutes. Positive is later.', defaultValue: 0, required: true
-    input 'effectiveSunsetOffsetMinutes', 'number', title: 'Effective sunset offset minutes. Negative is earlier.', defaultValue: 0, required: true
+    input 'valleyFilterStrength', 'number', title: 'Valley/shade low-sun filter strength percent', defaultValue: 0, required: true
+    input 'cloudFilterStrength', 'number', title: 'Additional cloudy low-sun filter strength percent', defaultValue: 40, required: true
+    input 'lowSunWindowMinutes', 'number', title: 'Low-sun filter window minutes after sunrise and before sunset', defaultValue: 120, required: true
     input 'maxCloudCtBoost', 'number', title: 'Maximum cloud color-temperature boost', defaultValue: 200, required: true
     input 'ctRoundingStep', 'enum', title: 'Round color temperature to nearest', options: ['1', '50', '100', '200'], defaultValue: '100', required: true
     input 'debugLogging', 'bool', title: 'Enable debug logging', defaultValue: true, required: true
@@ -80,7 +81,7 @@ void refresh() {
             Integer code = integerValue(current.weather_code, 0)
             Date sunrise = localDateTime(resp?.data?.daily?.sunrise?.getAt(0))
             Date sunset = localDateTime(resp?.data?.daily?.sunset?.getAt(0))
-            Integer lux = calculateOutdoorLux(radiation)
+            Integer lux = calculateOutdoorLux(radiation, cloud, sunrise, sunset)
             Integer ct = calculateOutdoorCT(lux, cloud, sunrise, sunset)
             String condition = skyCondition(code, cloud)
             String updated = new Date().format('yyyy-MM-dd HH:mm:ss', location.timeZone)
@@ -132,16 +133,16 @@ private void schedulePolling() {
     }
 }
 
-private Integer calculateOutdoorLux(BigDecimal radiation) {
+private Integer calculateOutdoorLux(BigDecimal radiation, BigDecimal cloud, Date sunrise, Date sunset) {
     BigDecimal safeRadiation = (radiation ?: 0G) < 0G ? 0G : (radiation ?: 0G)
-    BigDecimal lux = safeRadiation * 120G
+    BigDecimal lux = safeRadiation * 120G * valleyLuxMultiplier(now(), cloud, adjustedTime(sunrise, 0), adjustedTime(sunset, 0))
     return clampInteger(lux.setScale(0, BigDecimal.ROUND_HALF_UP) as Integer, 0, 120000)
 }
 
 private Integer calculateOutdoorCT(Integer lux, BigDecimal cloud, Date sunrise, Date sunset) {
     if ((lux ?: 0) < 50) return 2200
 
-    BigDecimal daylight = daylightCurve(now(), adjustedTime(sunrise, effectiveSunriseOffsetMinutes), adjustedTime(sunset, effectiveSunsetOffsetMinutes))
+    BigDecimal daylight = daylightCurve(now(), adjustedTime(sunrise, 0), adjustedTime(sunset, 0))
     BigDecimal cloudBoost = clampDecimal(cloud ?: 0G, 0G, 100G) * (maxCloudBoost() as BigDecimal) / 100G
     BigDecimal ct = 2200G + (4300G * daylight) + cloudBoost
 
@@ -217,6 +218,32 @@ private BigDecimal daylightCurve(Long currentMs, Long sunriseMs, Long sunsetMs) 
 
     BigDecimal progress = ((currentMs - sunriseMs) as BigDecimal) / ((sunsetMs - sunriseMs) as BigDecimal)
     return Math.sin(Math.PI * (progress as Double)) as BigDecimal
+}
+
+private BigDecimal valleyLuxMultiplier(Long currentMs, BigDecimal cloud, Long sunriseMs, Long sunsetMs) {
+    BigDecimal lowSun = lowSunWeight(currentMs, sunriseMs, sunsetMs)
+    if (lowSun <= 0G) return 1G
+
+    BigDecimal cloudRatio = clampDecimal(cloud ?: 0G, 0G, 100G) / 100G
+    BigDecimal valleyStrength = clampDecimal(integerValue(valleyFilterStrength, 0) as BigDecimal, 0G, 100G)
+    BigDecimal cloudStrength = clampDecimal(integerValue(cloudFilterStrength, 40) as BigDecimal, 0G, 100G)
+    BigDecimal attenuation = lowSun * (valleyStrength + (cloudStrength * cloudRatio)) / 100G
+    return clampDecimal(1G - attenuation, 0.1G, 1G)
+}
+
+private BigDecimal lowSunWeight(Long currentMs, Long sunriseMs, Long sunsetMs) {
+    Integer windowMinutes = clampInteger(integerValue(lowSunWindowMinutes, 120), 1, 360)
+    Long windowMs = windowMinutes * 60000L
+
+    if (!currentMs || !sunriseMs || !sunsetMs || sunsetMs <= sunriseMs) return 0G
+
+    if (currentMs >= sunriseMs && currentMs <= sunriseMs + windowMs) {
+        return 1G - (((currentMs - sunriseMs) as BigDecimal) / (windowMs as BigDecimal))
+    }
+    if (currentMs <= sunsetMs && currentMs >= sunsetMs - windowMs) {
+        return 1G - (((sunsetMs - currentMs) as BigDecimal) / (windowMs as BigDecimal))
+    }
+    return 0G
 }
 
 private BigDecimal fallbackDaylightCurve() {
