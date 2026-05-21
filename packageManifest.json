@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.38",
+  "version": "0.2.39",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-21",
-  "releaseNotes": "Adds a Room Lighting level mode that applies MetaLight level and CT after switch or scene activation without sending an extra on command.",
+  "releaseNotes": "Limits after-switch Room Lighting feedback suppression to full switch or scene activation passes.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

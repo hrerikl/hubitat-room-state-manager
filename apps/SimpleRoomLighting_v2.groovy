@@ -445,22 +445,27 @@ private void applyIntentRows(String context, String intentBucket, Integer metaLe
         }
     }
 
+    Boolean suppressInitialFeedback = !levelChangeOnly && !colorTemperatureOnly
     levelCtAfterSwitchDevices.each { dev ->
-        applyLevelCtAfterSwitchesRow(context, intentBucket, dev, useOverride, metaLevel, metaCt, levelChangeOnly, colorTemperatureOnly, transition, forceActivation)
+        applyLevelCtAfterSwitchesRow(context, intentBucket, dev, useOverride, metaLevel, metaCt, levelChangeOnly, colorTemperatureOnly, suppressInitialFeedback, transition, forceActivation)
     }
 }
 
-private void applyLevelCtAfterSwitchesRow(String context, String intentBucket, def dev, Boolean useOverride, Integer metaLevel, Integer metaCt, Boolean levelChangeOnly, Boolean colorTemperatureOnly, Integer transition, Boolean forceActivation) {
+private void applyLevelCtAfterSwitchesRow(String context, String intentBucket, def dev, Boolean useOverride, Integer metaLevel, Integer metaCt, Boolean levelChangeOnly, Boolean colorTemperatureOnly, Boolean suppressInitialFeedback, Integer transition, Boolean forceActivation) {
     String ctMode = isColorTemperatureDevice(dev) ? rowCtMode(context, intentBucket, dev, useOverride) : "none"
 
     if (!colorTemperatureOnly) {
         Integer level = rowFollowLevel(context, intentBucket, dev, metaLevel, useOverride)
-        suppressControlFeedback(dev)
+        if (suppressInitialFeedback) {
+            suppressControlFeedback(dev)
+        }
         setDimmer(dev, level, transition, forceActivation)
     }
 
     if (!levelChangeOnly && ctMode == "follow") {
-        suppressControlFeedback(dev)
+        if (suppressInitialFeedback) {
+            suppressControlFeedback(dev)
+        }
         setColorTemperature(dev, metaCt, forceActivation)
     }
 }
