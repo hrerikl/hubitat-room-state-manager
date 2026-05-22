@@ -77,6 +77,8 @@ preferences {
                 input "engagedLabel", "text", title: "Engaged device label, optional. Example: Focus Mode", required: false
                 input "asleepLabel", "text", title: "Asleep device label, optional. Example: Sleeping", required: false
                 input "lockedLabel", "text", title: "Locked device label, optional. Example: Recording", required: false
+                input "customLightingOnText", "text", title: "Custom lighting on text override, optional", required: false
+                input "customLightingOffText", "text", title: "Custom lighting off text override, optional", required: false
             }
 
             section("Advanced activity") {
@@ -222,6 +224,7 @@ def initializeChild() {
     subscribe(roomDevice(), "engagedEnabled", engagedEnabledHandler)
     subscribe(roomDevice(), "asleepEnabled", asleepEnabledHandler)
     subscribe(roomDevice(), "lockedEnabled", lockedEnabledHandler)
+    subscribe(roomDevice(), "customLighting", customLightingHandler)
     subscribe(location, "mode", locationModeHandler)
     subscribe(circadianReferenceDevice(), "level", circadianReferenceHandler)
     subscribe(circadianReferenceDevice(), "colorTemperature", circadianReferenceHandler)
@@ -569,6 +572,14 @@ def getRoomProfile() {
     return settings?.roomProfile ?: "standard"
 }
 
+def getCustomLightingOnText() {
+    return customLightingOnText?.toString()?.trim()
+}
+
+def getCustomLightingOffText() {
+    return customLightingOffText?.toString()?.trim()
+}
+
 def getSelectedNeighborChildAppIds() {
     if (!neighborChildAppIds) return []
     return neighborChildAppIds instanceof List ? neighborChildAppIds.collect { "${it}" } : ["${neighborChildAppIds}"]
@@ -715,6 +726,21 @@ def roomLevelHandler(evt) {
     } else {
         clearRoomStateFromRoomSwitch()
     }
+}
+
+def customLightingHandler(evt) {
+    if (evt.value == "on") {
+        pauseCircadianReference("custom lighting")
+        return
+    }
+
+    if (state.locked) {
+        debug "Ignoring custom lighting off because room is locked"
+        return
+    }
+
+    resumeCircadianReference("custom lighting cleared")
+    recomputeAndPublish()
 }
 
 def courtesyEnabledHandler(evt) {

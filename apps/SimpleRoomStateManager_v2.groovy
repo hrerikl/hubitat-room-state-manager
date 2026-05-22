@@ -70,6 +70,11 @@ preferences {
             paragraph "Creates a Someone Arrived switch. Mode Manager pulses it when a selected presence input changes to present/home."
         }
 
+        section("Announcement defaults") {
+            input "defaultCustomLightingOnText", "text", title: "Custom lighting on text", defaultValue: '<audio src="soundbank://soundlibrary/alarms/beeps_and_bloops/bell_01"/>', required: true
+            input "defaultCustomLightingOffText", "text", title: "Custom lighting off text", defaultValue: '<audio src="soundbank://soundlibrary/alarms/beeps_and_bloops/boing_01"/>', required: true
+        }
+
         section("Maintenance") {
             input "reinitializeChildrenNow", "button", title: "Reinitialize child apps"
             paragraph "Use after code changes to rebuild child app subscriptions and schedules without opening each child app."
@@ -180,6 +185,19 @@ def arrivalDevice() {
 
 def circadianReferenceBulb() {
     return defaultCircadianReferenceBulb
+}
+
+String customLightingOnText() {
+    return customLightingText(defaultCustomLightingOnText, '<audio src="soundbank://soundlibrary/alarms/beeps_and_bloops/bell_01"/>')
+}
+
+String customLightingOffText() {
+    return customLightingText(defaultCustomLightingOffText, '<audio src="soundbank://soundlibrary/alarms/beeps_and_bloops/boing_01"/>')
+}
+
+private String customLightingText(value, String fallback) {
+    String text = value?.toString()?.trim()
+    return text ?: fallback
 }
 
 private void createOrUpdateRecoveryDevice() {
@@ -353,7 +371,9 @@ Map roomStateChildInfo(def childAppId) {
             hubitatRoomId: child.getHubitatRoomId(),
             hubitatRoom  : child.getHubitatRoomName(),
             roomName     : child.getConfiguredRoomName(),
-            roomProfile  : child.getRoomProfile()
+            roomProfile  : child.getRoomProfile(),
+            customLightingOnText : child.getCustomLightingOnText(),
+            customLightingOffText: child.getCustomLightingOffText()
         ]
     } catch (Throwable ignored) {
         return [:]

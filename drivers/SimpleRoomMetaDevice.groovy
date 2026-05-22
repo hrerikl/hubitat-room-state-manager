@@ -36,6 +36,7 @@ metadata {
         attribute 'metaLightSwitch', 'enum', ['off', 'on']
         attribute 'metaLightLevel', 'number'
         attribute 'metaLightColorTemperature', 'number'
+        attribute 'customLighting', 'enum', ['off', 'on']
         attribute 'courtesyEnabled', 'enum', ['off', 'on']
         attribute 'engagedEnabled', 'enum', ['off', 'on']
         attribute 'asleepEnabled', 'enum', ['off', 'on']
@@ -52,6 +53,7 @@ metadata {
         command 'setMetaLightSwitchState', [[name: 'Switch State', type: 'ENUM', constraints: ['off', 'on']]]
         command 'setMetaLightLevel', [[name: 'MetaLight Level', type: 'NUMBER']]
         command 'setMetaLightColorTemperature', [[name: 'MetaLight Color Temperature', type: 'NUMBER']]
+        command 'setCustomLightingState', [[name: 'Custom Lighting State', type: 'ENUM', constraints: ['off', 'on']]]
         command 'setCourtesySwitchState', [[name: 'Courtesy Switch State', type: 'ENUM', constraints: ['off', 'on']]]
         command 'setEngagedSwitchState', [[name: 'Engaged Switch State', type: 'ENUM', constraints: ['off', 'on']]]
         command 'setAsleepSwitchState', [[name: 'Asleep Switch State', type: 'ENUM', constraints: ['off', 'on']]]
@@ -99,6 +101,9 @@ void initialize() {
     }
     if (device.currentValue('metaLightColorTemperature') == null) {
         sendEvent(name: 'metaLightColorTemperature', value: 2700, unit: 'K')
+    }
+    if (device.currentValue('customLighting') == null) {
+        sendEvent(name: 'customLighting', value: 'off')
     }
     if (device.currentValue('courtesyEnabled') == null) {
         sendEvent(name: 'courtesyEnabled', value: 'on')
@@ -200,6 +205,13 @@ void setMetaLightColorTemperature(value) {
     def child = metaLightDevice()
     if (!child) return
     child.setRoomColorTemperature(normalized)
+}
+
+void setCustomLightingState(String value) {
+    String normalized = value == 'on' ? 'on' : 'off'
+    if (device.currentValue('customLighting') != normalized) {
+        sendEvent(name: 'customLighting', value: normalized, isStateChange: true)
+    }
 }
 
 void setCourtesySwitchState(String value) {

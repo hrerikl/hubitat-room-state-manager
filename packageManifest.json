@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.40",
+  "version": "0.2.41",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-21",
-  "releaseNotes": "Adds an optional Outdoor Lighting Enabled switch output to Simple Circadian Lighting with lux hysteresis thresholds.",
+  "releaseNotes": "Adds explicit Room custom lighting state with parent default Echo Speaks SSML tones for custom lighting on and off.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

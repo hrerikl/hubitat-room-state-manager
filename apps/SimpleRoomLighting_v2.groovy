@@ -139,6 +139,7 @@ def initialize() {
     subscribe(room, "lightingIntent", reassessHandler)
     subscribe(room, "lockedEnabled", roomControlAnnouncementHandler)
     subscribe(room, "asleepEnabled", roomControlAnnouncementHandler)
+    subscribe(room, "customLighting", roomControlAnnouncementHandler)
     subscribe(location, "mode", locationModeHandler)
 
     subscribe(controlDimmers, "switch", controlSwitchHandler)
@@ -213,6 +214,8 @@ def roomControlAnnouncementHandler(evt) {
         message = evt.value == "on" ? lockedAnnouncementText() : unlockedAnnouncementText()
     } else if (evt.name == "asleepEnabled") {
         message = evt.value == "on" ? asleepAnnouncementText() : awakeAnnouncementText()
+    } else if (evt.name == "customLighting") {
+        message = evt.value == "on" ? customLightingOnText() : customLightingOffText()
     }
 
     announceRoomControl(message)
@@ -945,15 +948,24 @@ private void announceRoomControl(String message) {
 
     asList(speechDevices).findAll { it }.each { speaker ->
         try {
-            speaker.speak(text)
-        } catch (Exception e) {
-            log.warn "${app.label}: Could not speak '${text}' on ${speaker.displayName}: ${e.message}"
+            speaker.playTextAndResume(text)
+        } catch (Throwable firstError) {
+            try {
+                speaker.playTextAndRestore(text)
+            } catch (Throwable secondError) {
+                try {
+                    speaker.speak(text)
+                } catch (Exception e) {
+                    log.warn "${app.label}: Could not announce '${text}' on ${speaker.displayName}: ${e.message}"
+                }
+            }
         }
     }
 }
 
 private void cycleSceneSwitch() {
     Boolean asleep = roomDevice()?.currentValue("roomState") == "Asleep"
+    Boolean locked = roomDevice()?.currentValue("lock") == "locked" || roomDevice()?.currentValue("lockedEnabled") == "on"
     List scenes = asleep ? asleepSceneSwitches() : sceneSwitches()
     if (!scenes) {
         if (asleep) {
@@ -972,6 +984,12 @@ private void cycleSceneSwitch() {
     Integer previousIndex = safeInteger(state[indexName], -1)
     Integer nextIndex = previousIndex + 1
     if (nextIndex >= scenes.size()) {
+        if (!locked) {
+            state[indexName] = -1
+            setCustomLighting(false)
+            debug "Returned to following house lighting after ${asleep ? 'asleep scene' : 'scene'} cycle"
+            return
+        }
         nextIndex = 0
     }
     state[indexName] = nextIndex
@@ -981,6 +999,7 @@ private void cycleSceneSwitch() {
         String sceneIds = scenes.collect { "${it.id}:${it.displayName}" }.join(", ")
         String sceneType = asleep ? "asleep scene" : "scene"
         debug "Activating ${sceneType} ${nextIndex + 1}/${scenes.size()} after index ${previousIndex}: ${scene.displayName}; scenes=${sceneIds}"
+        setCustomLighting(true)
         scene.on()
     } catch (Exception e) {
         log.warn "${app.label}: Could not activate scene ${scene?.displayName}: ${e.message}"
@@ -990,6 +1009,20 @@ private void cycleSceneSwitch() {
         Integer minutes = sceneNightExtensionMinutesForRoom()
         debug "Extending Night lighting for ${minutes} minutes from button 3 asleep scene"
         roomDevice()?.activateNightLighting(minutes)
+    }
+}
+
+private void setCustomLighting(Boolean enabled) {
+    def room = roomDevice()
+    if (!room) return
+
+    String desired = enabled ? "on" : "off"
+    if (room.currentValue("customLighting") == desired) return
+
+    try {
+        room.setCustomLightingState(desired)
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not set custom lighting ${desired}: ${e.message}"
     }
 }
 
@@ -1193,6 +1226,35 @@ private String asleepAnnouncementText() {
 
 private String awakeAnnouncementText() {
     return roomControlAnnouncementText(awakeAnnouncement, "Awake", "Room awake")
+}
+
+private String customLightingOnText() {
+    return customLightingText(roomInfo()?.customLightingOnText, parentCustomLightingOnText())
+}
+
+private String customLightingOffText() {
+    return customLightingText(roomInfo()?.customLightingOffText, parentCustomLightingOffText())
+}
+
+private String customLightingText(value, String fallback) {
+    String text = value?.toString()?.trim()
+    return text ?: fallback
+}
+
+private String parentCustomLightingOnText() {
+    try {
+        return parent.customLightingOnText()
+    } catch (Throwable ignored) {
+        return '<audio src="soundbank://soundlibrary/alarms/beeps_and_bloops/bell_01"/>'
+    }
+}
+
+private String parentCustomLightingOffText() {
+    try {
+        return parent.customLightingOffText()
+    } catch (Throwable ignored) {
+        return '<audio src="soundbank://soundlibrary/alarms/beeps_and_bloops/boing_01"/>'
+    }
 }
 
 private String roomControlAnnouncementText(value, String stateName, String oldDefault) {
