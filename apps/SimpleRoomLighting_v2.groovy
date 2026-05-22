@@ -213,6 +213,7 @@ def roomControlAnnouncementHandler(evt) {
     if (evt.name == "lockedEnabled") {
         message = evt.value == "on" ? lockedAnnouncementText() : unlockedAnnouncementText()
     } else if (evt.name == "asleepEnabled") {
+        if (announceEchoSpeaksSleepRoutine(evt.value == "on")) return
         message = evt.value == "on" ? asleepAnnouncementText() : awakeAnnouncementText()
     } else if (evt.name == "customLighting") {
         message = evt.value == "on" ? customLightingOnText() : customLightingOffText()
@@ -961,6 +962,25 @@ private void announceRoomControl(String message) {
             }
         }
     }
+}
+
+private Boolean announceEchoSpeaksSleepRoutine(Boolean asleep) {
+    Boolean announced = false
+
+    asList(speechDevices).findAll { it }.each { speaker ->
+        try {
+            if (asleep) {
+                speaker.sayGoodNight()
+            } else {
+                speaker.sayGoodMorning()
+            }
+            announced = true
+        } catch (Throwable ignored) {
+            // Not an Echo Speaks device, or this Echo Speaks command is unavailable.
+        }
+    }
+
+    return announced
 }
 
 private void cycleSceneSwitch() {
