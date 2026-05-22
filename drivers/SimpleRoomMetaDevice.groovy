@@ -54,6 +54,8 @@ metadata {
         command 'setMetaLightLevel', [[name: 'MetaLight Level', type: 'NUMBER']]
         command 'setMetaLightColorTemperature', [[name: 'MetaLight Color Temperature', type: 'NUMBER']]
         command 'setCustomLightingState', [[name: 'Custom Lighting State', type: 'ENUM', constraints: ['off', 'on']]]
+        command 'activateCustomLighting'
+        command 'clearCustomLighting'
         command 'setCourtesySwitchState', [[name: 'Courtesy Switch State', type: 'ENUM', constraints: ['off', 'on']]]
         command 'setEngagedSwitchState', [[name: 'Engaged Switch State', type: 'ENUM', constraints: ['off', 'on']]]
         command 'setAsleepSwitchState', [[name: 'Asleep Switch State', type: 'ENUM', constraints: ['off', 'on']]]
@@ -212,6 +214,14 @@ void setCustomLightingState(String value) {
     if (device.currentValue('customLighting') != normalized) {
         sendEvent(name: 'customLighting', value: normalized, isStateChange: true)
     }
+}
+
+void activateCustomLighting() {
+    setCustomLightingState('on')
+}
+
+void clearCustomLighting() {
+    setCustomLightingState('off')
 }
 
 void setCourtesySwitchState(String value) {

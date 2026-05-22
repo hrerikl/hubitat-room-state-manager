@@ -241,7 +241,7 @@ def controlLevelHandler(evt) {
     Integer level = normalizedLevel(evt.value, 0)
     debug "Control level ${level}: ${evt.displayName}"
     suppressNextLevelFollow()
-    roomDevice()?.setLevel(level)
+    setRoomLevelAsCustom(level)
 }
 
 def picoPushedHandler(evt) {
@@ -258,12 +258,12 @@ def picoPushedHandler(evt) {
         roomOnAndEngageIfUnlocked()
     } else if (button == 2) {
         allowNextLevelFollow()
-        room.setLevel(adjustedRoomLevel(step))
+        setRoomLevelAsCustom(adjustedRoomLevel(step))
     } else if (button == 3) {
         cycleSceneSwitch()
     } else if (button == 4) {
         allowNextLevelFollow()
-        room.setLevel(adjustedRoomLevel(-step))
+        setRoomLevelAsCustom(adjustedRoomLevel(-step))
     } else if (button == 5) {
         room.off()
     } else {
@@ -322,10 +322,10 @@ def casetaPushedHandler(evt) {
         roomOnAndEngageIfUnlocked()
     } else if (button == 2) {
         allowNextLevelFollow()
-        room.setLevel(adjustedRoomLevel(step))
+        setRoomLevelAsCustom(adjustedRoomLevel(step))
     } else if (button == 3) {
         allowNextLevelFollow()
-        room.setLevel(adjustedRoomLevel(-step))
+        setRoomLevelAsCustom(adjustedRoomLevel(-step))
     } else if (button == 4) {
         room.off()
     } else {
@@ -1020,10 +1020,22 @@ private void setCustomLighting(Boolean enabled) {
     if (room.currentValue("customLighting") == desired) return
 
     try {
-        room.setCustomLightingState(desired)
+        if (enabled) {
+            room.activateCustomLighting()
+        } else {
+            room.clearCustomLighting()
+        }
     } catch (Exception e) {
         log.warn "${app.label}: Could not set custom lighting ${desired}: ${e.message}"
     }
+}
+
+private void setRoomLevelAsCustom(Integer level) {
+    def room = roomDevice()
+    if (!room) return
+
+    setCustomLighting(true)
+    room.setLevel(level)
 }
 
 private List sceneSwitches() {
