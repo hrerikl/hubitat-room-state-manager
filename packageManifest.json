@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.43",
+  "version": "0.2.44",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-21",
-  "releaseNotes": "Uses Echo Speaks randomized Good Night and Good Morning routines for room sleep and wake announcements when available.",
+  "releaseNotes": "Adds generated Room Lighting shadow scenes for button 3 when no explicit scene switches are configured.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

@@ -988,15 +988,7 @@ private void cycleSceneSwitch() {
     Boolean locked = roomDevice()?.currentValue("lock") == "locked" || roomDevice()?.currentValue("lockedEnabled") == "on"
     List scenes = asleep ? asleepSceneSwitches() : sceneSwitches()
     if (!scenes) {
-        if (asleep) {
-            Integer minutes = sceneNightExtensionMinutesForRoom()
-            Integer boostedLevel = boostedAsleepFallbackLevel()
-            debug "No asleep scenes configured for button 3; extending Night lighting for ${minutes} minutes and boosting MetaLight to ${boostedLevel}"
-            roomDevice()?.activateNightLighting(minutes)
-            boostAsleepMetaLight(boostedLevel)
-        } else {
-            debug "No scene switches configured for button 3"
-        }
+        cycleShadowScene(asleep, locked)
         return
     }
 
@@ -1030,6 +1022,66 @@ private void cycleSceneSwitch() {
         debug "Extending Night lighting for ${minutes} minutes from button 3 asleep scene"
         roomDevice()?.activateNightLighting(minutes)
     }
+}
+
+private void cycleShadowScene(Boolean asleep, Boolean locked) {
+    List shadowScenes = asleep ? asleepShadowScenes() : standardShadowScenes()
+    String indexName = asleep ? "asleepShadowSceneIndex" : "shadowSceneIndex"
+    Integer previousIndex = safeInteger(state[indexName], -1)
+    Integer nextIndex = previousIndex + 1
+
+    if (nextIndex >= shadowScenes.size()) {
+        if (!locked) {
+            state[indexName] = -1
+            setCustomLighting(false)
+            debug "Returned to following house lighting after ${asleep ? 'asleep shadow scene' : 'shadow scene'} cycle"
+            return
+        }
+        nextIndex = 0
+    }
+
+    state[indexName] = nextIndex
+    Map shadowScene = shadowScenes[nextIndex]
+    debug "Activating ${asleep ? 'asleep shadow scene' : 'shadow scene'} ${nextIndex + 1}/${shadowScenes.size()}: ${shadowScene.name}, level=${shadowScene.level}, ct=${shadowScene.ct}"
+    setCustomLighting(true)
+    applyShadowScene(shadowScene)
+
+    if (asleep) {
+        Integer minutes = sceneNightExtensionMinutesForRoom()
+        debug "Extending Night lighting for ${minutes} minutes from button 3 asleep shadow scene"
+        roomDevice()?.activateNightLighting(minutes)
+    }
+}
+
+private void applyShadowScene(Map shadowScene) {
+    def room = roomDevice()
+    if (!room) return
+
+    try {
+        room.setMetaLightSwitchState("on")
+        room.setMetaLightColorTemperature(normalizedColorTemperature(shadowScene.ct, 2700))
+        room.setMetaLightLevel(normalizedLevel(shadowScene.level, 50))
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not apply shadow scene ${shadowScene?.name}: ${e.message}"
+    }
+}
+
+private List standardShadowScenes() {
+    return [
+        [name: "Calm", level: 40, ct: 2400],
+        [name: "Energize", level: 90, ct: 5000],
+        [name: "Reading", level: 75, ct: 3500],
+        [name: "Clean", level: 100, ct: 6000],
+        [name: "Low Lights", level: 20, ct: 2200]
+    ]
+}
+
+private List asleepShadowScenes() {
+    return [
+        [name: "Night Low", level: 8, ct: 2000],
+        [name: "Night Calm", level: 15, ct: 2200],
+        [name: "Night Reading", level: 35, ct: 2700]
+    ]
 }
 
 private void setCustomLighting(Boolean enabled) {
