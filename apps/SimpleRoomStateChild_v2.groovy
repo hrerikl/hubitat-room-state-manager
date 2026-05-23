@@ -705,6 +705,7 @@ def roomLevelHandler(evt) {
 
     debug "Room level set to ${level}"
     pauseCircadianReference("manual room level change")
+    activateCustomLightingFromRoomControl("manual room level change")
 
     if (state.locked) {
         debug "Room is locked; routing room level to MetaLight only"
@@ -739,6 +740,7 @@ def roomColorTemperatureHandler(evt) {
 
     debug "Room color temperature set to ${colorTemperature}"
     pauseCircadianReference("manual room color temperature change")
+    activateCustomLightingFromRoomControl("manual room color temperature change")
     state.metaLightColorTemperature = colorTemperature
 }
 
@@ -755,6 +757,14 @@ def customLightingHandler(evt) {
 
     resumeCircadianReference("custom lighting cleared")
     recomputeAndPublish()
+}
+
+private void activateCustomLightingFromRoomControl(String reason) {
+    try {
+        roomDevice()?.activateCustomLighting()
+    } catch (Exception e) {
+        log.warn "${roomDeviceLabel()}: Could not activate custom lighting for ${reason}: ${e.message}"
+    }
 }
 
 def courtesyEnabledHandler(evt) {

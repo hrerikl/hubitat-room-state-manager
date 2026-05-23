@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.48",
+  "version": "0.2.49",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-22",
-  "releaseNotes": "Adds ColorTemperature capability to the public Room MetaDevice and pauses room reference tracking on manual room CT changes.",
+  "releaseNotes": "Marks direct Room level and color-temperature changes as custom lighting while preserving color-temperature prestaging behavior.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
