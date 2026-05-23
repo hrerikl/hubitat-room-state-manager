@@ -34,8 +34,10 @@ preferences {
         }
 
         section("Room controls") {
-            input "picoRemotes", "capability.pushableButton", title: "5-button Pico remotes", multiple: true, required: false
-            input "sceneCycleSwitches", "capability.switch", title: "Button 3 scene switches/activators", multiple: true, required: false
+            input "picoRemotes", "capability.pushableButton", title: "5-button Pico remotes", multiple: true, required: false, submitOnChange: true
+            if (hasPicoRemotes()) {
+                input "sceneCycleSwitches", "capability.switch", title: "Button 3 scene switches/activators", multiple: true, required: false
+            }
         }
 
         section("Voice") {
@@ -75,11 +77,13 @@ preferences {
 
             section("Advanced room controls") {
                 input "casetaDimmers", "capability.switchLevel", title: "4-button Caseta dimmers/switches", multiple: true, required: false
-                input "picoLevelChangeDimmers", "capability.switchLevel", title: "Dimmers for held level-change buttons", multiple: true, required: false
-                input "asleepSceneCycleSwitches", "capability.switch", title: "Button 3 asleep scene switches/activators", multiple: true, required: false
-                input "picoStepSize", "number", title: "Push level step", defaultValue: 10, required: true
-                input "sleepSceneTimeoutMinutes", "number", title: "When asleep and no asleep scenes are selected, button 3 extends Night lighting minutes", defaultValue: 45, required: true
-                input "asleepFallbackLevelBoost", "number", title: "When asleep and no asleep scenes are selected, button 3 adds this much light", defaultValue: 20, required: true
+                if (hasPicoRemotes()) {
+                    input "picoLevelChangeDimmers", "capability.switchLevel", title: "Dimmers for held level-change buttons", multiple: true, required: false
+                    input "asleepSceneCycleSwitches", "capability.switch", title: "Button 3 asleep scene switches/activators", multiple: true, required: false
+                    input "picoStepSize", "number", title: "Push level step", defaultValue: 10, required: true
+                    input "sleepSceneTimeoutMinutes", "number", title: "When asleep and no asleep scenes are selected, button 3 extends Night lighting minutes", defaultValue: 45, required: true
+                    input "asleepFallbackLevelBoost", "number", title: "When asleep and no asleep scenes are selected, button 3 adds this much light", defaultValue: 20, required: true
+                }
             }
 
             if (announceRoomControls) {
@@ -1453,6 +1457,10 @@ private String stripRoomPrefix(String value) {
 private List levelChangeDimmers() {
     List selected = asList(picoLevelChangeDimmers)
     return selected ?: asList(automatedDimmers)
+}
+
+private Boolean hasPicoRemotes() {
+    return !asList(picoRemotes).isEmpty()
 }
 
 private List selectedMatrixModes() {
