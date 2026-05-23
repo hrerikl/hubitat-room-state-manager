@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.50",
+  "version": "0.2.51",
   "minimumHEVersion": "2.3.0",
-  "dateReleased": "2026-05-22",
-  "releaseNotes": "Adds Bedroom auto-wake from bed-exit/night-motion sensors in Day mode after a configurable sleep grace period.",
+  "dateReleased": "2026-05-23",
+  "releaseNotes": "Adds advanced row off actions so selected devices can turn on at an explicit level when a room is inactive, including override-switch reevaluation.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

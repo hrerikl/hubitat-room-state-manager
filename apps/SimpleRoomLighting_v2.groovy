@@ -65,6 +65,7 @@ preferences {
                 input "referenceTransitionSeconds", "number", title: "Reference change transition seconds", defaultValue: 10, required: true
                 input "reapplyOnModeChange", "bool", title: "Reassess matrix on Location Mode change when MetaLight is on", defaultValue: true, required: true
                 input "alwaysActivateRows", "bool", title: "Always send activation commands for active rows", defaultValue: true, required: true
+                input "showAdvancedOffActions", "bool", title: "Allow rows to turn devices on when room is off", defaultValue: false, required: true, submitOnChange: true
             }
 
             renderMatrixSections()
@@ -173,6 +174,11 @@ def reassessHandler(evt) {
         return
     }
 
+    if (roomLightingInactive()) {
+        applyOffCondition("${evt.name} changed while inactive")
+        return
+    }
+
     reassessLighting("${evt.name} changed")
 }
 
@@ -197,11 +203,20 @@ def locationModeHandler(evt) {
         return
     }
 
+    if (roomLightingInactive()) {
+        applyOffCondition("Location Mode changed while inactive")
+        return
+    }
+
     reassessLighting("Location Mode changed")
 }
 
 def overrideSwitchHandler(evt) {
     debug "Override switch ${evt.value}: ${evt.displayName}"
+    if (roomLightingInactive()) {
+        applyOffCondition("override switch changed while inactive")
+        return
+    }
     reassessLighting("override switch changed")
 }
 
@@ -490,8 +505,8 @@ private Boolean shouldSkipInitialActivation(String reason, Boolean levelChangeOn
 }
 
 private void applyOffCondition(String reason) {
-    String context = (state.lastActiveMatrixContext ?: activeContextKey()) as String
-    String intentBucket = (state.lastActiveMatrixIntent ?: activeIntentBucket(roomDevice()?.currentValue("lightingIntent")?.toString())) as String
+    String context = activeContextKey()
+    String intentBucket = activeIntentBucket(state.lastActiveMatrixIntent ?: roomDevice()?.currentValue("lightingIntent")?.toString())
     debug "Applying off condition context=${context} intent=${intentBucket}: ${reason}"
     applyOffRows(context, intentBucket, reason)
 }
@@ -500,8 +515,22 @@ private void applyOffRows(String context, String intentBucket, String reason) {
     Boolean useOverride = overrideActive(context, intentBucket)
     allAutomatedDevices().each { dev ->
         if (rowOff(context, intentBucket, dev, useOverride)) {
-            turnOffDevice(dev, reason, transitionSecondsFor(reason, "deactivation"))
+            applyOffRow(context, intentBucket, dev, useOverride, reason)
         }
+    }
+}
+
+private void applyOffRow(String context, String intentBucket, def dev, Boolean useOverride, String reason) {
+    String action = advancedOffActionsEnabled() ? rowOffAction(context, intentBucket, dev, useOverride) : "off"
+    if (action == "on") {
+        if (isDimmer(dev)) {
+            Integer level = physicalLevelForRow(context, intentBucket, dev, rowOffLevel(context, intentBucket, dev, 100, useOverride), useOverride)
+            setDimmer(dev, level, transitionSecondsFor(reason, "activation"), alwaysActivateRowsEnabled())
+        } else {
+            turnOnDevice(dev, alwaysActivateRowsEnabled())
+        }
+    } else {
+        turnOffDevice(dev, reason, transitionSecondsFor(reason, "deactivation"))
     }
 }
 
@@ -528,6 +557,14 @@ private Boolean rowAct(String context, String intent, def dev, Boolean override 
 
 private Boolean rowOff(String context, String intent, def dev, Boolean override = false) {
     return settingBool(rowName("off", context, intent, dev, override), true)
+}
+
+private String rowOffAction(String context, String intent, def dev, Boolean override = false) {
+    return (settings[rowName("offAction", context, intent, dev, override)] ?: "off").toString()
+}
+
+private Integer rowOffLevel(String context, String intent, def dev, Integer fallback, Boolean override = false) {
+    return normalizedLevel(settings[rowName("offLevel", context, intent, dev, override)], fallback)
 }
 
 private String rowLevelMode(String context, String intent, def dev, Boolean override = false) {
@@ -629,6 +666,20 @@ private Boolean alwaysActivateRowsEnabled() {
     return settings?.alwaysActivateRows != false
 }
 
+private Boolean advancedOffActionsEnabled() {
+    return showAdvancedOffActions == true
+}
+
+private Boolean roomLightingInactive() {
+    def room = roomDevice()
+    if (!room) return true
+
+    String switchState = room.currentValue("metaLightSwitch") ?: "off"
+    String intent = room.currentValue("lightingIntent") ?: "Off"
+    Integer metaLevel = normalizedLevel(room.currentValue("metaLightLevel"), 0)
+    return switchState != "on" || metaLevel <= 0 || !(intent in ["On", "Courtesy", "Night"])
+}
+
 private String activeContextKey() {
     if (!matrixUsesMode()) return "all"
 
@@ -709,7 +760,16 @@ private void renderMatrixRows(String title, String context, String intent, Boole
             String switchName = rowName("switch", context, intent, dev, override)
 
             input actName, "bool", title: "Act", defaultValue: defaultAct(context, intent), required: true, submitOnChange: true
-            input rowName("off", context, intent, dev, override), "bool", title: "Off", defaultValue: true, required: true
+            String offName = rowName("off", context, intent, dev, override)
+            input offName, "bool", title: "Off", defaultValue: true, required: true, submitOnChange: true
+
+            if (advancedOffActionsEnabled() && settingBool(offName, true)) {
+                String offActionName = rowName("offAction", context, intent, dev, override)
+                input offActionName, "enum", title: "Off action", options: offActionOptions(), defaultValue: "off", required: true, submitOnChange: true
+                if (isDimmer(dev) && (settings[offActionName] ?: "off") == "on") {
+                    input rowName("offLevel", context, intent, dev, override), "number", title: "Off action level", defaultValue: 100, required: true
+                }
+            }
 
             if (settingBool(actName, defaultAct(context, intent))) {
                 input switchName, "enum", title: "Switch", options: switchCommandOptions(), defaultValue: "on", required: true, submitOnChange: true
@@ -742,6 +802,10 @@ private String matrixSummaryTable(String context, String intent, Boolean overrid
     String rows = devices.collect { dev ->
         String act = rowAct(context, intent, dev, override) ? "yes" : "no"
         String off = rowOff(context, intent, dev, override) ? "yes" : "no"
+        if (advancedOffActionsEnabled() && rowOff(context, intent, dev, override)) {
+            String action = rowOffAction(context, intent, dev, override)
+            off = action == "on" && isDimmer(dev) ? "on ${rowOffLevel(context, intent, dev, 100, override)}" : action
+        }
         String switchCommand = rowAct(context, intent, dev, override) ? rowSwitch(context, intent, dev, override) : ""
         String level = ""
         String ct = ""
@@ -818,6 +882,13 @@ private Map switchCommandOptions() {
     return [
         on : "on",
         off: "off"
+    ]
+}
+
+private Map offActionOptions() {
+    return [
+        off: "off",
+        on : "on"
     ]
 }
 
