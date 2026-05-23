@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.45",
+  "version": "0.2.46",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-22",
-  "releaseNotes": "Makes Pico button 3 held explicitly return to automatic lighting and reapply the active row; scene cycling now wraps through custom scenes without returning to automatic.",
+  "releaseNotes": "Adds per-device usable minimum level mapping for dimmers, including inverse feedback mapping when physical level changes update the Room.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

@@ -239,10 +239,11 @@ def controlSwitchHandler(evt) {
 def controlLevelHandler(evt) {
     if (!shouldAcceptControlEvent(evt)) return
 
-    Integer level = normalizedLevel(evt.value, 0)
-    debug "Control level ${level}: ${evt.displayName}"
+    Integer deviceLevel = normalizedLevel(evt.value, 0)
+    Integer roomLevel = roomLevelFromControlDevice(evt.device, deviceLevel)
+    debug "Control level ${deviceLevel} -> Room level ${roomLevel}: ${evt.displayName}"
     suppressNextLevelFollow()
-    setRoomLevelAsCustom(level)
+    setRoomLevelAsCustom(roomLevel)
 }
 
 def picoPushedHandler(evt) {
@@ -443,6 +444,7 @@ private void applyIntentRows(String context, String intentBucket, Integer metaLe
                 turnOnDevice(dev, forceActivation)
             } else {
                 Integer level = levelMode == "explicit" ? rowExplicitLevel(context, intentBucket, dev, metaLevel, useOverride) : rowFollowLevel(context, intentBucket, dev, metaLevel, useOverride)
+                level = physicalLevelForRow(context, intentBucket, dev, level, useOverride)
                 setDimmer(dev, level, transition, forceActivation)
             }
             if (ctMode == "follow") {
@@ -463,7 +465,7 @@ private void applyLevelCtAfterSwitchesRow(String context, String intentBucket, d
     String ctMode = isColorTemperatureDevice(dev) ? rowCtMode(context, intentBucket, dev, useOverride) : "none"
 
     if (!colorTemperatureOnly) {
-        Integer level = rowFollowLevel(context, intentBucket, dev, metaLevel, useOverride)
+        Integer level = physicalLevelForRow(context, intentBucket, dev, rowFollowLevel(context, intentBucket, dev, metaLevel, useOverride), useOverride)
         if (suppressInitialFeedback) {
             suppressControlFeedback(dev)
         }
@@ -551,6 +553,67 @@ private Integer rowFollowLevel(String context, String intent, def dev, Integer m
     Integer offset = normalizedOffset(settings[rowName("levelOffset", context, intent, dev, override)], 0)
     BigDecimal adjusted = ((metaLevel as BigDecimal) * (percent as BigDecimal) / 100G) + (offset as BigDecimal)
     return normalizedLevel(adjusted.setScale(0, BigDecimal.ROUND_HALF_UP) as Integer, metaLevel)
+}
+
+private Integer rowUsableMinimumLevel(String context, String intent, def dev, Boolean override = false) {
+    return normalizedUsableMinimum(settings[rowName("usableMin", context, intent, dev, override)])
+}
+
+private Integer physicalLevelForRow(String context, String intent, def dev, Integer logicalLevel, Boolean override = false) {
+    return physicalLevelFromLogical(logicalLevel, rowUsableMinimumLevel(context, intent, dev, override))
+}
+
+private Integer roomLevelFromControlDevice(def controlDevice, Integer physicalLevel) {
+    Map row = activeRowForControlDevice(controlDevice)
+    if (!row) return physicalLevel
+
+    Integer deviceLogical = logicalLevelFromPhysical(physicalLevel, row.usableMinimum as Integer)
+    Integer percent = normalizedPercent(settings[rowName("levelPercent", row.context as String, row.intent as String, row.device, row.override as Boolean)], 100)
+    Integer offset = normalizedOffset(settings[rowName("levelOffset", row.context as String, row.intent as String, row.device, row.override as Boolean)], 0)
+    if (percent <= 0) return deviceLogical
+
+    BigDecimal roomLevel = (((deviceLogical as BigDecimal) - (offset as BigDecimal)) * 100G) / (percent as BigDecimal)
+    return normalizedLevel(roomLevel.setScale(0, BigDecimal.ROUND_HALF_UP) as Integer, deviceLogical)
+}
+
+private Map activeRowForControlDevice(def controlDevice) {
+    if (!controlDevice) return null
+
+    def dev = allAutomatedDevices().find { "${it.id}" == "${controlDevice.id}" }
+    if (!dev || !isDimmer(dev)) return null
+
+    String context = activeContextKey()
+    String intent = activeIntentBucket(roomDevice()?.currentValue("lightingIntent")?.toString())
+    Boolean useOverride = overrideActive(context, intent)
+    if (!rowAct(context, intent, dev, useOverride) || rowSwitch(context, intent, dev, useOverride) != "on") return null
+
+    String levelMode = rowLevelMode(context, intent, dev, useOverride)
+    if (!(levelMode in ["follow", "followSkip", "followAfterSwitches"])) return null
+
+    return [device: dev, context: context, intent: intent, override: useOverride, usableMinimum: rowUsableMinimumLevel(context, intent, dev, useOverride)]
+}
+
+private Integer physicalLevelFromLogical(Integer logicalLevel, Integer usableMinimum) {
+    Integer logical = normalizedLevel(logicalLevel, 0)
+    if (logical <= 0) return 0
+
+    Integer minimum = normalizedUsableMinimum(usableMinimum)
+    if (minimum <= 1) return logical
+
+    BigDecimal physical = (minimum as BigDecimal) + (((logical - 1) as BigDecimal) * ((100 - minimum) as BigDecimal) / 99G)
+    return normalizedLevel(physical.setScale(0, BigDecimal.ROUND_HALF_UP) as Integer, logical)
+}
+
+private Integer logicalLevelFromPhysical(Integer physicalLevel, Integer usableMinimum) {
+    Integer physical = normalizedLevel(physicalLevel, 0)
+    if (physical <= 0) return 0
+
+    Integer minimum = normalizedUsableMinimum(usableMinimum)
+    if (minimum <= 1) return physical
+    if (physical <= minimum) return 1
+
+    BigDecimal logical = 1G + (((physical - minimum) as BigDecimal) * 99G / ((100 - minimum) as BigDecimal))
+    return normalizedLevel(logical.setScale(0, BigDecimal.ROUND_HALF_UP) as Integer, physical)
 }
 
 private Boolean defaultAct(String context, String intent) {
@@ -658,6 +721,7 @@ private void renderMatrixRows(String title, String context, String intent, Boole
                 if (settings[levelModeName] == "explicit") {
                     input rowName("level", context, intent, dev, override), "number", title: "Explicit level", required: true
                 }
+                input rowName("usableMin", context, intent, dev, override), "number", title: "Usable minimum level. Maps logical 1-100 into this device range", defaultValue: 1, required: true
             }
 
             if (isColorTemperatureDevice(dev) && settingBool(actName, defaultAct(context, intent)) && (settings[switchName] ?: "on") == "on") {
@@ -740,8 +804,10 @@ private String adjustedLevelSummary(String context, String intent, def dev, Bool
 
     Integer percent = normalizedPercent(settings[rowName("levelPercent", context, intent, dev, override)], 100)
     Integer offset = normalizedOffset(settings[rowName("levelOffset", context, intent, dev, override)], 0)
+    Integer usableMinimum = rowUsableMinimumLevel(context, intent, dev, override)
     String offsetText = offset == 0 ? "" : (offset > 0 ? " +${offset}" : " ${offset}")
-    return "${levelModeOptions()[mode]} (${percent}%${offsetText})"
+    String rangeText = usableMinimum > 1 ? ", usable ${usableMinimum}-100" : ""
+    return "${levelModeOptions()[mode]} (${percent}%${offsetText}${rangeText})"
 }
 
 private Map switchCommandOptions() {
@@ -1490,6 +1556,16 @@ private Integer normalizedOffset(value, Integer fallback) {
         offset = fallback == null ? 0 : fallback
     }
     return Math.max(Math.min(offset, 100), -100)
+}
+
+private Integer normalizedUsableMinimum(value) {
+    Integer minimum = 1
+    try {
+        minimum = value == null ? 1 : value as Integer
+    } catch (Exception ignored) {
+        minimum = 1
+    }
+    return Math.max(Math.min(minimum, 99), 1)
 }
 
 private Integer normalizedColorTemperature(value, Integer fallback) {
