@@ -113,6 +113,8 @@ preferences {
                     input "nightMotionSensors", "capability.motionSensor", title: "Motion sensors that trigger Night lighting while Asleep", multiple: true, required: false
                     input "nightLightingTimeoutMinutes", "number", title: "Night lighting timeout minutes", defaultValue: 5, required: true
                     input "nightLightingLevel", "number", title: "Night lighting level", defaultValue: 10, required: true
+                    input "wakeFromSleepOnBedExitInDayMode", "bool", title: "Wake from sleep on these sensors in Day mode after grace period", defaultValue: true, required: true
+                    input "sleepWakeGraceMinutes", "number", title: "Minutes after entering sleep before bed-exit motion can wake room", defaultValue: 30, required: true
                 }
             }
 
@@ -282,6 +284,7 @@ private void ensureInitialState() {
     if (state.metaLightColorTemperature == null) state.metaLightColorTemperature = currentReferenceColorTemperature()
     if (state.circadianReferencePaused == null) state.circadianReferencePaused = false
     if (state.lastActivityAt == null) state.lastActivityAt = null
+    if (state.asleepStartedAt == null && state.asleep) state.asleepStartedAt = now()
 }
 
 private void ensureRoomProfileSetting() {
@@ -873,6 +876,12 @@ def nightMotionActiveHandler(evt) {
         return
     }
 
+    if (shouldWakeFromSleepOnBedExit()) {
+        debug "Waking room from sleep on bed-exit motion in Day mode"
+        wakeFromSleepOnBedExit("bed-exit motion after sleep grace")
+        return
+    }
+
     activateNightLighting(nightLightingTimeoutSeconds(), "night motion active")
 }
 
@@ -1074,6 +1083,7 @@ private void setAsleep(Boolean asleep, String reason) {
     if (asleep) {
         unschedule(clearOccupiedIfStillInactive)
         unschedule(clearEngagedIfStillInactive)
+        state.asleepStartedAt = now()
         state.occupied = false
         state.engaged = false
         state.nightActive = false
@@ -1082,11 +1092,43 @@ private void setAsleep(Boolean asleep, String reason) {
         publishNightLighting(false, 0)
     } else {
         unschedule(clearNightLightingIfStillAsleep)
+        state.asleepStartedAt = null
         state.nightActive = false
         componentSwitchOff("Asleep")
         publishNightLighting(false, 0)
     }
 
+    recomputeAndPublish()
+}
+
+private Boolean shouldWakeFromSleepOnBedExit() {
+    if (wakeFromSleepOnBedExitInDayMode == false) return false
+    if (currentLocationModeName() != "Day") return false
+
+    Long asleepStarted = safeLong(state.asleepStartedAt, 0L)
+    if (!asleepStarted) return false
+
+    Long graceMs = sleepWakeGraceSeconds() * 1000L
+    Long elapsedMs = now() - asleepStarted
+    if (elapsedMs < graceMs) {
+        debug "Bed-exit motion is inside sleep wake grace period (${Math.round(elapsedMs / 60000G)} of ${sleepWakeGraceMinutesValue()} minutes)"
+        return false
+    }
+
+    return true
+}
+
+private void wakeFromSleepOnBedExit(String reason) {
+    unschedule(clearNightLightingIfStillAsleep)
+    state.asleep = false
+    state.asleepStartedAt = null
+    state.nightActive = false
+    componentSwitchOff("Asleep")
+    publishNightLighting(false, 0)
+
+    recordActivity(reason)
+    state.roomLevel = currentRoomControlLevel()
+    state.occupied = true
     recomputeAndPublish()
 }
 
@@ -1116,6 +1158,7 @@ private void setLocked(Boolean locked, String reason, Boolean clearAsleepOnUnloc
 
         if (clearAsleepOnUnlock && state.asleep) {
             state.asleep = false
+            state.asleepStartedAt = null
             state.nightActive = false
             componentSwitchOff("Asleep")
             publishNightLighting(false, 0)
@@ -1157,6 +1200,7 @@ private void clearRoomStateFromRoomSwitch() {
     state.occupied = false
     state.engaged = false
     state.asleep = false
+    state.asleepStartedAt = null
     state.nightActive = false
     state.locked = false
     componentSwitchOff("Engaged")
@@ -1214,6 +1258,20 @@ private Integer lockAutoClearSeconds() {
 private Integer nightLightingTimeoutSeconds() {
     Integer minutes = (nightLightingTimeoutMinutes ?: 5) as Integer
     return positiveSeconds(minutes * 60, 300)
+}
+
+private Integer sleepWakeGraceSeconds() {
+    return Math.max(sleepWakeGraceMinutesValue() * 60, 0)
+}
+
+private Integer sleepWakeGraceMinutesValue() {
+    Integer minutes = 30
+    try {
+        minutes = sleepWakeGraceMinutes == null ? 30 : sleepWakeGraceMinutes as Integer
+    } catch (Exception ignored) {
+        minutes = 30
+    }
+    return Math.max(minutes, 0)
 }
 
 private Integer positiveSeconds(value, Integer defaultSeconds) {
@@ -1776,6 +1834,14 @@ private Integer normalizedColorTemperature(value, Integer fallback) {
 private Integer safeInteger(value, Integer fallback) {
     try {
         return value == null ? fallback : value as Integer
+    } catch (Exception ignored) {
+        return fallback
+    }
+}
+
+private Long safeLong(value, Long fallback) {
+    try {
+        return value == null ? fallback : value as Long
     } catch (Exception ignored) {
         return fallback
     }
