@@ -276,8 +276,12 @@ def picoHeldHandler(evt) {
     Integer button = eventIntegerValue(evt)
     debug "Pico held ${button}: ${evt.displayName}"
 
-    if (button == 2) {
+    if (button == 1) {
+        wakeAndUnlockRoom("Pico held 1")
+    } else if (button == 2) {
         startLevelChange("up")
+    } else if (button == 3) {
+        returnToAutomaticLighting()
     } else if (button == 4) {
         startLevelChange("down")
     } else if (button == 5) {
@@ -301,7 +305,7 @@ def picoDoubleTappedHandler(evt) {
     debug "Pico doubleTapped ${button}: ${evt.displayName}"
 
     if (button == 1) {
-        roomDevice()?.unlock()
+        wakeAndUnlockRoom("Pico double-tapped 1")
     } else if (button == 5) {
         roomDevice()?.lock()
     } else {
@@ -985,10 +989,9 @@ private Boolean announceEchoSpeaksSleepRoutine(Boolean asleep) {
 
 private void cycleSceneSwitch() {
     Boolean asleep = roomDevice()?.currentValue("roomState") == "Asleep"
-    Boolean locked = roomDevice()?.currentValue("lock") == "locked" || roomDevice()?.currentValue("lockedEnabled") == "on"
     List scenes = asleep ? asleepSceneSwitches() : sceneSwitches()
     if (!scenes) {
-        cycleShadowScene(asleep, locked)
+        cycleShadowScene(asleep)
         return
     }
 
@@ -996,12 +999,6 @@ private void cycleSceneSwitch() {
     Integer previousIndex = safeInteger(state[indexName], -1)
     Integer nextIndex = previousIndex + 1
     if (nextIndex >= scenes.size()) {
-        if (!locked) {
-            state[indexName] = -1
-            setCustomLighting(false)
-            debug "Returned to following house lighting after ${asleep ? 'asleep scene' : 'scene'} cycle"
-            return
-        }
         nextIndex = 0
     }
     state[indexName] = nextIndex
@@ -1024,19 +1021,13 @@ private void cycleSceneSwitch() {
     }
 }
 
-private void cycleShadowScene(Boolean asleep, Boolean locked) {
+private void cycleShadowScene(Boolean asleep) {
     List shadowScenes = asleep ? asleepShadowScenes() : standardShadowScenes()
     String indexName = asleep ? "asleepShadowSceneIndex" : "shadowSceneIndex"
     Integer previousIndex = safeInteger(state[indexName], -1)
     Integer nextIndex = previousIndex + 1
 
     if (nextIndex >= shadowScenes.size()) {
-        if (!locked) {
-            state[indexName] = -1
-            setCustomLighting(false)
-            debug "Returned to following house lighting after ${asleep ? 'asleep shadow scene' : 'shadow scene'} cycle"
-            return
-        }
         nextIndex = 0
     }
 
@@ -1110,6 +1101,20 @@ private void setRoomLevelAsCustom(Integer level) {
     room.setLevel(level)
 }
 
+private void returnToAutomaticLighting() {
+    state.sceneCycleIndex = -1
+    state.asleepSceneCycleIndex = -1
+    state.shadowSceneIndex = -1
+    state.asleepShadowSceneIndex = -1
+    setCustomLighting(false)
+    debug "Returning to automatic room-defined lighting"
+    runIn(1, "reapplyAutomaticLighting", [overwrite: true])
+}
+
+def reapplyAutomaticLighting() {
+    reassessLighting("return to automatic lighting")
+}
+
 private List sceneSwitches() {
     return asList(sceneCycleSwitches).findAll { it }.unique { it.id }
 }
@@ -1141,8 +1146,7 @@ private void roomOnAndEngageIfUnlocked() {
     if (!room) return
 
     if (room.currentValue("roomState") == "Asleep") {
-        room.activateNightLighting(0)
-        return
+        room.setAsleepSwitchState("off")
     }
 
     room.on()
@@ -1157,6 +1161,19 @@ private void roomOnAndEngageIfUnlocked() {
     } catch (Exception e) {
         log.warn "${app.label}: Could not engage Room from remote button 1: ${e.message}"
     }
+}
+
+private void wakeAndUnlockRoom(String reason) {
+    def room = roomDevice()
+    if (!room) return
+
+    debug "${reason}: waking and unlocking Room"
+    try {
+        room.setAsleepSwitchState("off")
+    } catch (Exception ignored) {
+        // Older MetaDevice code or non-bedroom rooms may not expose asleep controls.
+    }
+    room.unlock()
 }
 
 private void setRoomAsleepFromRemote(String reason) {

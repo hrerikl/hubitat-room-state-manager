@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.44",
+  "version": "0.2.45",
   "minimumHEVersion": "2.3.0",
-  "dateReleased": "2026-05-21",
-  "releaseNotes": "Adds generated Room Lighting shadow scenes for button 3 when no explicit scene switches are configured.",
+  "dateReleased": "2026-05-22",
+  "releaseNotes": "Makes Pico button 3 held explicitly return to automatic lighting and reapply the active row; scene cycling now wraps through custom scenes without returning to automatic.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
