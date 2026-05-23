@@ -219,6 +219,7 @@ def initializeChild() {
     subscribe(roomDevice(), "switch.on", roomSwitchOnHandler)
     subscribe(roomDevice(), "switch.off", roomSwitchOffHandler)
     subscribe(roomDevice(), "level", roomLevelHandler)
+    subscribe(roomDevice(), "colorTemperature", roomColorTemperatureHandler)
 
     subscribe(roomDevice(), "courtesyEnabled", courtesyEnabledHandler)
     subscribe(roomDevice(), "engagedEnabled", engagedEnabledHandler)
@@ -726,6 +727,19 @@ def roomLevelHandler(evt) {
     } else {
         clearRoomStateFromRoomSwitch()
     }
+}
+
+def roomColorTemperatureHandler(evt) {
+    Integer colorTemperature = normalizedColorTemperature(evt.value, effectiveMetaLightColorTemperature())
+
+    if (!isDigitalEvent(evt)) {
+        debug "Ignoring app-published room color temperature event: ${colorTemperature}"
+        return
+    }
+
+    debug "Room color temperature set to ${colorTemperature}"
+    pauseCircadianReference("manual room color temperature change")
+    state.metaLightColorTemperature = colorTemperature
 }
 
 def customLightingHandler(evt) {

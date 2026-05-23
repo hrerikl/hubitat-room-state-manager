@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.47",
+  "version": "0.2.48",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-22",
-  "releaseNotes": "Hides Pico scene and level-control settings until a Pico remote is selected in Simple Room Lighting.",
+  "releaseNotes": "Adds ColorTemperature capability to the public Room MetaDevice and pauses room reference tracking on manual room CT changes.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

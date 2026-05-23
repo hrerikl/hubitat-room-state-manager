@@ -8,6 +8,7 @@
  * This device is the public Room device:
  *   switch = on/off for dashboard/control use
  *   level = room-level virtual lighting level for dashboard/voice/control use
+ *   colorTemperature = room-level virtual lighting color temperature for dashboard/voice/control use
  *   lock = locked/unlocked for room automation lock control
  *   roomState = Off | Occupied | Engaged | Locked
  *   lightingIntent = Off | Courtesy | On
@@ -28,6 +29,7 @@ metadata {
         capability 'Actuator'
         capability 'Switch'
         capability 'SwitchLevel'
+        capability 'ColorTemperature'
         capability 'Lock'
         capability 'Sensor'
 
@@ -50,6 +52,7 @@ metadata {
         command 'setLightingIntent', [[name: 'Lighting Intent', type: 'ENUM', constraints: ['Off', 'Courtesy', 'Night', 'On']]]
         command 'setSwitchState', [[name: 'Switch State', type: 'ENUM', constraints: ['off', 'on']]]
         command 'setRoomLevel', [[name: 'Room Level', type: 'NUMBER']]
+        command 'setRoomColorTemperature', [[name: 'Room Color Temperature', type: 'NUMBER']]
         command 'setMetaLightSwitchState', [[name: 'Switch State', type: 'ENUM', constraints: ['off', 'on']]]
         command 'setMetaLightLevel', [[name: 'MetaLight Level', type: 'NUMBER']]
         command 'setMetaLightColorTemperature', [[name: 'MetaLight Color Temperature', type: 'NUMBER']]
@@ -85,6 +88,9 @@ void initialize() {
     }
     if (device.currentValue('level') == null) {
         sendEvent(name: 'level', value: 0, unit: '%')
+    }
+    if (device.currentValue('colorTemperature') == null) {
+        sendEvent(name: 'colorTemperature', value: 2700, unit: 'K')
     }
     if (device.currentValue('lock') == null) {
         sendEvent(name: 'lock', value: 'unlocked')
@@ -153,6 +159,12 @@ void setLevel(value) {
     sendEvent(name: 'switch', value: normalized > 0 ? 'on' : 'off', type: 'digital', isStateChange: true)
 }
 
+void setColorTemperature(value) {
+    Integer normalized = normalizeColorTemperature(value)
+    sendEvent(name: 'colorTemperature', value: normalized, unit: 'K', type: 'digital', isStateChange: true)
+    setMetaLightColorTemperature(normalized)
+}
+
 void lock() {
     setLockedSwitchState('on')
 }
@@ -173,6 +185,13 @@ void setRoomLevel(value) {
     Integer normalized = normalizeLevel(value)
     if ((device.currentValue('level') ?: -1) as Integer != normalized) {
         sendEvent(name: 'level', value: normalized, unit: '%')
+    }
+}
+
+void setRoomColorTemperature(value) {
+    Integer normalized = normalizeColorTemperature(value)
+    if ((device.currentValue('colorTemperature') ?: -1) as Integer != normalized) {
+        sendEvent(name: 'colorTemperature', value: normalized, unit: 'K')
     }
 }
 
@@ -203,6 +222,7 @@ void setMetaLightColorTemperature(value) {
     if ((device.currentValue('metaLightColorTemperature') ?: -1) as Integer != normalized) {
         sendEvent(name: 'metaLightColorTemperature', value: normalized, unit: 'K')
     }
+    setRoomColorTemperature(normalized)
 
     def child = metaLightDevice()
     if (!child) return
