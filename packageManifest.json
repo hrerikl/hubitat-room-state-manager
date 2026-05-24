@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.51",
+  "version": "0.2.52",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-23",
-  "releaseNotes": "Adds advanced row off actions so selected devices can turn on at an explicit level when a room is inactive, including override-switch reevaluation.",
+  "releaseNotes": "Updates Open-Meteo outdoor light polling to async fetches with stale local fallback data and weather-code color-temperature modifiers.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

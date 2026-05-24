@@ -21,6 +21,8 @@ metadata {
         attribute 'solarRadiation', 'number'
         attribute 'weatherCode', 'number'
         attribute 'lastUpdated', 'string'
+        attribute 'lastFetchStatus', 'string'
+        attribute 'dataSource', 'string'
     }
 }
 
@@ -33,6 +35,7 @@ preferences {
     input 'lowSunWindowMinutes', 'number', title: 'Low-sun filter window minutes after sunrise and before sunset', defaultValue: 120, required: true
     input 'maxCloudCtBoost', 'number', title: 'Maximum cloud color-temperature boost', defaultValue: 200, required: true
     input 'ctRoundingStep', 'enum', title: 'Round color temperature to nearest', options: ['1', '50', '100', '200'], defaultValue: '100', required: true
+    input 'staleDataMinutes', 'number', title: 'Minutes before Open-Meteo data is stale and local fallback is published. Blank or 0 disables.', defaultValue: 60, required: false
     input 'debugLogging', 'bool', title: 'Enable debug logging', defaultValue: true, required: true
 }
 
@@ -74,31 +77,42 @@ void refresh() {
     ]
 
     try {
-        httpGet(params) { resp ->
-            Map current = resp?.data?.current ?: [:]
-            BigDecimal cloud = decimalValue(current.cloud_cover, 0G)
-            BigDecimal radiation = decimalValue(current.shortwave_radiation, 0G)
-            Integer code = integerValue(current.weather_code, 0)
-            Date sunrise = localDateTime(resp?.data?.daily?.sunrise?.getAt(0))
-            Date sunset = localDateTime(resp?.data?.daily?.sunset?.getAt(0))
-            Integer lux = calculateOutdoorLux(radiation, cloud, sunrise, sunset)
-            Integer ct = calculateOutdoorCT(lux, cloud, sunrise, sunset)
-            String condition = skyCondition(code, cloud)
-            String updated = new Date().format('yyyy-MM-dd HH:mm:ss', location.timeZone)
-
-            publishValue('illuminance', lux, 'lx')
-            publishValue('outdoorLux', lux, 'lx')
-            publishValue('outdoorCT', ct, 'K')
-            publishValue('cloudCover', cloud.setScale(0, BigDecimal.ROUND_HALF_UP) as Integer, '%')
-            publishValue('solarRadiation', radiation.setScale(1, BigDecimal.ROUND_HALF_UP), 'W/m2')
-            publishValue('weatherCode', code, null)
-            publishValue('skyCondition', condition, null)
-            publishValue('lastUpdated', updated, null)
-
-            debug "Open-Meteo updated: lux=${lux}, ct=${ct}, cloud=${cloud}%, radiation=${radiation}, condition=${condition}, sunrise=${sunrise}, sunset=${sunset}"
-        }
+        asynchttpGet('parseMeteoResponse', params)
     } catch (Exception e) {
         log.warn "Simple Open-Meteo Outdoor Light Device: refresh failed: ${e.message}"
+        handleFetchFailure("refresh failed: ${e.message}")
+    }
+}
+
+void parseMeteoResponse(resp, data) {
+    try {
+        Integer status = integerValue(resp?.getStatus(), 0)
+        if (status != 200) {
+            handleFetchFailure("Open-Meteo status ${status}")
+            return
+        }
+
+        Map responseData = resp?.json ?: resp?.data ?: [:]
+        Map current = responseData?.current ?: [:]
+        BigDecimal cloud = decimalValue(current.cloud_cover, 0G)
+        BigDecimal radiation = decimalValue(current.shortwave_radiation, 0G)
+        Integer code = integerValue(current.weather_code, 0)
+        Date sunrise = localDateTime(responseData?.daily?.sunrise?.getAt(0))
+        Date sunset = localDateTime(responseData?.daily?.sunset?.getAt(0))
+        Integer lux = calculateOutdoorLux(radiation, cloud, sunrise, sunset)
+        Integer ct = calculateOutdoorCT(lux, cloud, code, sunrise, sunset)
+        String condition = skyCondition(code, cloud)
+        String updated = new Date().format('yyyy-MM-dd HH:mm:ss', location.timeZone)
+
+        publishOutdoorLight(lux, ct, cloud, radiation, code, condition, updated, 'Open-Meteo', 'ok')
+        state.lastSuccessfulFetchAt = now()
+        state.lastSunrise = sunrise?.time
+        state.lastSunset = sunset?.time
+
+        debug "Open-Meteo updated: lux=${lux}, ct=${ct}, cloud=${cloud}%, radiation=${radiation}, condition=${condition}, sunrise=${sunrise}, sunset=${sunset}"
+    } catch (Exception e) {
+        log.warn "Simple Open-Meteo Outdoor Light Device: async response failed: ${e.message}"
+        handleFetchFailure("response failed: ${e.message}")
     }
 }
 
@@ -111,6 +125,8 @@ private void ensureInitialState() {
     if (device.currentValue('weatherCode') == null) sendEvent(name: 'weatherCode', value: 0)
     if (device.currentValue('skyCondition') == null) sendEvent(name: 'skyCondition', value: 'Unknown')
     if (device.currentValue('lastUpdated') == null) sendEvent(name: 'lastUpdated', value: 'Never')
+    if (device.currentValue('lastFetchStatus') == null) sendEvent(name: 'lastFetchStatus', value: 'Never')
+    if (device.currentValue('dataSource') == null) sendEvent(name: 'dataSource', value: 'Initial')
 }
 
 private void schedulePolling() {
@@ -133,18 +149,56 @@ private void schedulePolling() {
     }
 }
 
+private void publishOutdoorLight(Integer lux, Integer ct, BigDecimal cloud, BigDecimal radiation, Integer code, String condition, String updated, String source, String status) {
+    publishValue('illuminance', lux as Integer, 'lx')
+    publishValue('outdoorLux', lux as Integer, 'lx')
+    publishValue('outdoorCT', ct as Integer, 'K')
+    publishValue('cloudCover', cloud.setScale(0, BigDecimal.ROUND_HALF_UP) as Integer, '%')
+    publishValue('solarRadiation', radiation.setScale(1, BigDecimal.ROUND_HALF_UP), 'W/m2')
+    publishValue('weatherCode', code as Integer, null)
+    publishValue('skyCondition', condition, null)
+    publishValue('lastUpdated', updated, null)
+    publishValue('dataSource', source, null)
+    publishValue('lastFetchStatus', status, null)
+}
+
+private void handleFetchFailure(String status) {
+    publishValue('lastFetchStatus', status, null)
+    if (!staleFallbackEnabled()) {
+        debug "Open-Meteo failure; keeping last values because stale fallback is disabled: ${status}"
+        return
+    }
+
+    Long lastSuccess = longValue(state.lastSuccessfulFetchAt, 0L)
+    Long staleMs = staleDataMinutesValue() * 60000L
+    if (lastSuccess && now() - lastSuccess < staleMs) {
+        debug "Open-Meteo failure; keeping recent values: ${status}"
+        return
+    }
+
+    Date sunrise = state.lastSunrise ? new Date(state.lastSunrise as Long) : null
+    Date sunset = state.lastSunset ? new Date(state.lastSunset as Long) : null
+    BigDecimal daylight = daylightCurve(now(), adjustedTime(sunrise, 0), adjustedTime(sunset, 0))
+    Integer lux = clampInteger((daylight * 70000G).setScale(0, BigDecimal.ROUND_HALF_UP) as Integer, 0, 70000)
+    Integer ct = roundToStep(clampInteger((2200G + (4300G * daylight)).setScale(0, BigDecimal.ROUND_HALF_UP) as Integer, 2200, 6500), ctStep())
+    String updated = new Date().format('yyyy-MM-dd HH:mm:ss', location.timeZone)
+
+    publishOutdoorLight(lux, ct, 0G, 0G, 0, 'Local Fallback', updated, 'Local Fallback', status)
+    debug "Published local fallback after stale Open-Meteo data: lux=${lux}, ct=${ct}, status=${status}"
+}
+
 private Integer calculateOutdoorLux(BigDecimal radiation, BigDecimal cloud, Date sunrise, Date sunset) {
     BigDecimal safeRadiation = (radiation ?: 0G) < 0G ? 0G : (radiation ?: 0G)
     BigDecimal lux = safeRadiation * 120G * valleyLuxMultiplier(now(), cloud, adjustedTime(sunrise, 0), adjustedTime(sunset, 0))
     return clampInteger(lux.setScale(0, BigDecimal.ROUND_HALF_UP) as Integer, 0, 120000)
 }
 
-private Integer calculateOutdoorCT(Integer lux, BigDecimal cloud, Date sunrise, Date sunset) {
+private Integer calculateOutdoorCT(Integer lux, BigDecimal cloud, Integer weatherCode, Date sunrise, Date sunset) {
     if ((lux ?: 0) < 50) return 2200
 
     BigDecimal daylight = daylightCurve(now(), adjustedTime(sunrise, 0), adjustedTime(sunset, 0))
     BigDecimal cloudBoost = clampDecimal(cloud ?: 0G, 0G, 100G) * (maxCloudBoost() as BigDecimal) / 100G
-    BigDecimal ct = 2200G + (4300G * daylight) + cloudBoost
+    BigDecimal ct = 2200G + (4300G * daylight) + cloudBoost + (weatherCodeCtBoost(weatherCode) as BigDecimal)
 
     return roundToStep(clampInteger(ct.setScale(0, BigDecimal.ROUND_HALF_UP) as Integer, 2200, 7000), ctStep())
 }
@@ -257,8 +311,25 @@ private Integer maxCloudBoost() {
     return clampInteger(integerValue(maxCloudCtBoost, 200), 0, 1000)
 }
 
+private Integer weatherCodeCtBoost(Integer code) {
+    Integer safeCode = code ?: 0
+    if (safeCode >= 95) return 350
+    if (safeCode >= 71 && safeCode <= 86) return 300
+    if (safeCode >= 51 && safeCode <= 67) return 200
+    if ([45, 48].contains(safeCode)) return 150
+    return 0
+}
+
 private Integer ctStep() {
     return clampInteger(integerValue(ctRoundingStep, 100), 1, 500)
+}
+
+private Boolean staleFallbackEnabled() {
+    return staleDataMinutesValue() > 0
+}
+
+private Integer staleDataMinutesValue() {
+    return clampInteger(integerValue(staleDataMinutes, 60), 0, 1440)
 }
 
 private Integer roundToStep(Integer value, Integer step) {
@@ -270,6 +341,14 @@ private Integer roundToStep(Integer value, Integer step) {
 
 private Integer clampInteger(Integer value, Integer min, Integer max) {
     return Math.max(Math.min(value ?: min, max), min)
+}
+
+private Long longValue(value, Long fallback) {
+    try {
+        return value == null ? fallback : value as Long
+    } catch (Exception ignored) {
+        return fallback
+    }
 }
 
 private BigDecimal clampDecimal(BigDecimal value, BigDecimal min, BigDecimal max) {
