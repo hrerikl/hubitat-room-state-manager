@@ -1,8 +1,8 @@
 /**
- * Simple Room State Child v2 - Child App
+ * Simple Room State - Child App
  *
  * Install as Apps Code:
- *   Name: Simple Room State Child v2
+ *   Name: Simple Room State
  *   Namespace: lundby
  *
  * Requires drivers:
@@ -33,12 +33,12 @@
  */
 
 definition(
-    name: "Simple Room State Child v2",
+    name: "Simple Room State",
     namespace: "lundby",
     author: "Erik Lundby / ChatGPT",
     description: "Reusable room state child app with Room meta-device, Engaged, Locked, and LightingIntent output.",
     category: "Convenience",
-    parent: "lundby:Simple Room State Manager v2",
+    parent: "lundby:Simple Home",
     singleInstance: false,
     iconUrl: "",
     iconX2Url: ""

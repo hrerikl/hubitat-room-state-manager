@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.55",
+  "version": "0.2.56",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-25",
-  "releaseNotes": "Adds a House Intent room profile for a manually controlled house-level MetaLight reference surface.",
+  "releaseNotes": "Renames the parent app to Simple Home and the room child app to Simple Room State while keeping namespace and HPM IDs stable.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
@@ -12,7 +12,7 @@
   "apps": [
     {
       "id": "b7af26b8-9787-46d7-857e-ea8c85b920e0",
-      "name": "Simple Room State Manager v2",
+      "name": "Simple Home",
       "namespace": "lundby",
       "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleRoomStateManager_v2.groovy",
       "required": true,
@@ -23,7 +23,7 @@
     },
     {
       "id": "14661fd7-420a-40f0-bbca-fbf77ce7aa39",
-      "name": "Simple Room State Child v2",
+      "name": "Simple Room State",
       "namespace": "lundby",
       "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleRoomStateChild_v2.groovy",
       "required": true,

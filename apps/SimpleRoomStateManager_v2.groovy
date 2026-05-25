@@ -1,15 +1,15 @@
 /**
- * Simple Room State Manager v2 - Parent App
+ * Simple Home - Parent App
  *
  * Install as Apps Code:
- *   Name: Simple Room State Manager v2
+ *   Name: Simple Home
  *   Namespace: lundby
  *
  * Provides parent container plus one-time setup helper for reciprocal neighbors. Neighbor relationships are stored by child app ID.
  */
 
 definition(
-    name: "Simple Room State Manager v2",
+    name: "Simple Home",
     namespace: "lundby",
     author: "Erik Lundby / ChatGPT",
     description: "Parent app for lightweight room state child apps.",
@@ -20,11 +20,11 @@ definition(
 )
 
 preferences {
-    page(name: "mainPage", title: "Simple Room State Manager v2", install: true, uninstall: true) {
+    page(name: "mainPage", title: "Simple Home", install: true, uninstall: true) {
         section("Rooms") {
             app(
                 name: "childApps",
-                appName: "Simple Room State Child v2",
+                appName: "Simple Room State",
                 namespace: "lundby",
                 title: "Add a room",
                 multiple: true
@@ -83,12 +83,12 @@ preferences {
 }
 
 def installed() {
-    log.info "Installed Simple Room State Manager v2"
+    log.info "Installed Simple Home"
     initialize()
 }
 
 def updated() {
-    log.info "Updated Simple Room State Manager v2"
+    log.info "Updated Simple Home"
     unsubscribe()
     unschedule()
     initialize()
@@ -117,19 +117,19 @@ def reinitializeChildApps() {
             child.reinitializeFromParent()
             succeeded++
         } catch (Throwable e) {
-            log.warn "Simple Room State Manager v2: Could not reinitialize child ${child?.label ?: child?.id}: ${e.message}"
+            log.warn "Simple Home: Could not reinitialize child ${child?.label ?: child?.id}: ${e.message}"
         }
     }
 
-    log.info "Simple Room State Manager v2: Reinitialized ${succeeded} of ${attempted} child app(s)."
+    log.info "Simple Home: Reinitialized ${succeeded} of ${attempted} child app(s)."
 }
 
 def componentOn(childDevice) {
     if (childDevice?.deviceNetworkId == recoveryDeviceNetworkId()) {
-        log.info "Simple Room State Manager v2: Recover Simple Home requested."
+        log.info "Simple Home: Recover Simple Home requested."
         runIn(1, resetRecoverySwitch, [overwrite: true])
     } else if (childDevice?.deviceNetworkId == arrivalDeviceNetworkId()) {
-        log.info "Simple Room State Manager v2: Someone Arrived activated."
+        log.info "Simple Home: Someone Arrived activated."
         runIn(30, resetArrivalSwitch, [overwrite: true])
     }
 }
@@ -144,7 +144,7 @@ def ensureArrivalDevice() {
 }
 
 def recoverySwitchOnHandler(evt) {
-    log.info "Simple Room State Manager v2: Recover Simple Home switch event received."
+    log.info "Simple Home: Recover Simple Home switch event received."
     runIn(1, resetRecoverySwitch, [overwrite: true])
 }
 
@@ -152,7 +152,7 @@ def resetRecoverySwitch() {
     try {
         recoveryDevice()?.setSwitchState("off")
     } catch (Exception e) {
-        log.warn "Simple Room State Manager v2: Could not reset Recover Simple Home switch: ${e.message}"
+        log.warn "Simple Home: Could not reset Recover Simple Home switch: ${e.message}"
     }
 }
 
@@ -163,7 +163,7 @@ def pulseArrivalDevice(Integer resetSeconds = 30) {
         dev?.setSwitchState("on")
         runIn(Math.max(resetSeconds ?: 30, 1), resetArrivalSwitch, [overwrite: true])
     } catch (Exception e) {
-        log.warn "Simple Room State Manager v2: Could not pulse Someone Arrived switch: ${e.message}"
+        log.warn "Simple Home: Could not pulse Someone Arrived switch: ${e.message}"
     }
 }
 
@@ -171,7 +171,7 @@ def resetArrivalSwitch() {
     try {
         arrivalDevice()?.setSwitchState("off")
     } catch (Exception e) {
-        log.warn "Simple Room State Manager v2: Could not reset Someone Arrived switch: ${e.message}"
+        log.warn "Simple Home: Could not reset Someone Arrived switch: ${e.message}"
     }
 }
 
@@ -213,7 +213,7 @@ private void createOrUpdateRecoveryDevice() {
                 isComponent: true
             ])
         } catch (Exception e) {
-            log.warn "Simple Room State Manager v2: Could not create Recover Simple Home switch: ${e.message}"
+            log.warn "Simple Home: Could not create Recover Simple Home switch: ${e.message}"
             return
         }
     }
@@ -224,7 +224,7 @@ private void createOrUpdateRecoveryDevice() {
         }
         child.initialize()
     } catch (Exception e) {
-        log.warn "Simple Room State Manager v2: Could not initialize Recover Simple Home switch: ${e.message}"
+        log.warn "Simple Home: Could not initialize Recover Simple Home switch: ${e.message}"
     }
 }
 
@@ -246,7 +246,7 @@ private void createOrUpdateArrivalDevice() {
                 isComponent: true
             ])
         } catch (Exception e) {
-            log.warn "Simple Room State Manager v2: Could not create Someone Arrived switch: ${e.message}"
+            log.warn "Simple Home: Could not create Someone Arrived switch: ${e.message}"
             return
         }
     }
@@ -257,7 +257,7 @@ private void createOrUpdateArrivalDevice() {
         }
         child.initialize()
     } catch (Exception e) {
-        log.warn "Simple Room State Manager v2: Could not initialize Someone Arrived switch: ${e.message}"
+        log.warn "Simple Home: Could not initialize Someone Arrived switch: ${e.message}"
     }
 }
 
@@ -290,7 +290,7 @@ def addThisRoomToSelectedNeighbors(sourceChildAppId) {
     def sourceChild = childApps?.find { childAppId(it) == "${sourceChildAppId}" }
 
     if (!sourceChild) {
-        log.warn "Simple Room State Manager v2: Reciprocal neighbor setup failed. Could not find source child app ${sourceChildAppId}."
+        log.warn "Simple Home: Reciprocal neighbor setup failed. Could not find source child app ${sourceChildAppId}."
         return
     }
 
@@ -360,7 +360,7 @@ private Map managedRoomOptions(def requestingChildAppId, Boolean includeHouseInt
         }
         return opts.sort { it.value }
     } catch (Exception e) {
-        log.warn "Simple Room State Manager v2: Could not build neighbor room options: ${e.message}"
+        log.warn "Simple Home: Could not build neighbor room options: ${e.message}"
         return [:]
     }
 }
@@ -418,10 +418,10 @@ List neighborRoomDevicesForChildIds(def selectedChildIds) {
                 }
             }.findAll { it != null }
 
-        log.debug "Simple Room State Manager v2: neighbor child IDs=${ids.join(', ')}, available children=${allChildren.collect { it?.id }.join(', ') ?: 'none'}, matched children=${matchedChildren.collect { it?.id }.join(', ') ?: 'none'}, resolved devices=${devices*.displayName?.join(', ') ?: 'none'}"
+        log.debug "Simple Home: neighbor child IDs=${ids.join(', ')}, available children=${allChildren.collect { it?.id }.join(', ') ?: 'none'}, matched children=${matchedChildren.collect { it?.id }.join(', ') ?: 'none'}, resolved devices=${devices*.displayName?.join(', ') ?: 'none'}"
         return devices
     } catch (Exception e) {
-        log.warn "Simple Room State Manager v2: Could not resolve neighbor room devices: ${e.message}"
+        log.warn "Simple Home: Could not resolve neighbor room devices: ${e.message}"
         return []
     }
 }

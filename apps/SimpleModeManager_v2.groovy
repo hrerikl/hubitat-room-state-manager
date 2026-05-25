@@ -15,7 +15,7 @@ definition(
     author: "Erik Lundby / ChatGPT",
     description: "Lightweight Location Mode manager for Simple Room State.",
     category: "Convenience",
-    parent: "lundby:Simple Room State Manager v2",
+    parent: "lundby:Simple Home",
     singleInstance: false,
     iconUrl: "",
     iconX2Url: ""

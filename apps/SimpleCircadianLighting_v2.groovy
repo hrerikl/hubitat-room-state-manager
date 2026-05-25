@@ -12,7 +12,7 @@ definition(
     author: 'Erik Lundby / ChatGPT',
     description: 'Publishes a circadian reference level and color temperature.',
     category: 'Convenience',
-    parent: 'lundby:Simple Room State Manager v2',
+    parent: 'lundby:Simple Home',
     singleInstance: false,
     iconUrl: '',
     iconX2Url: ''
