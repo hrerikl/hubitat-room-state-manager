@@ -91,6 +91,10 @@ def recoverSimpleHomeHandler(evt) {
     publishReference('Simple Home recovery')
 }
 
+def getReferenceBulb() {
+    return referenceBulb
+}
+
 // -------------------- Publishing --------------------
 
 def publishReference(String reason = 'schedule') {

@@ -625,6 +625,31 @@ def getCustomLightingOffText() {
     return customLightingOffText?.toString()?.trim()
 }
 
+def getCircadianReferenceBulb() {
+    return circadianReferenceBulb
+}
+
+def configureHouseIntentFromParent(def rawReferenceDevice) {
+    try {
+        app.updateSetting("roomProfile", [type: "enum", value: "houseIntent"])
+        app.updateSetting("roomName", [type: "text", value: "House Intent"])
+        app.updateSetting("followCircadianReference", [type: "bool", value: true])
+        app.updateSetting("createDevicesNow", [type: "bool", value: true])
+
+        if (rawReferenceDevice && !sameDevice(rawReferenceDevice, roomDevice())) {
+            app.updateSetting("circadianReferenceBulb", [type: "capability.colorTemperature", value: rawReferenceDevice.id])
+        }
+
+        unsubscribe()
+        unschedule()
+        initializeChild()
+        return true
+    } catch (Exception e) {
+        log.warn "${roomDeviceLabel()}: Could not configure House Intent from parent: ${e.message}"
+        return false
+    }
+}
+
 def getSelectedNeighborChildAppIds() {
     if (!neighborChildAppIds) return []
     return neighborChildAppIds instanceof List ? neighborChildAppIds.collect { "${it}" } : ["${neighborChildAppIds}"]
@@ -1662,6 +1687,11 @@ private Boolean buttonNumberMatches(Integer actual, def expected) {
     } catch (Exception ignored) {
         return false
     }
+}
+
+private Boolean sameDevice(def first, def second) {
+    if (!first || !second) return false
+    return first.id?.toString() == second.id?.toString()
 }
 
 private Integer eventIntegerValue(evt) {

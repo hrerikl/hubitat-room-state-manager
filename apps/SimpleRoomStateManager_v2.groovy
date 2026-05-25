@@ -53,7 +53,9 @@ preferences {
         }
 
         section("Circadian lighting") {
-            input "defaultCircadianReferenceBulb", "capability.colorTemperature", title: "Default circadian reference bulb", multiple: false, required: false
+            input "defaultCircadianReferenceBulb", "capability.colorTemperature", title: "House reference bulb", multiple: false, required: false
+            input "useHouseIntentVirtualRoom", "bool", title: "Use House Intent Virtual Room", defaultValue: false, required: true
+            paragraph houseIntentSummaryText()
             app(
                 name: "circadianApps",
                 appName: "Simple Circadian Lighting v2",
@@ -97,6 +99,11 @@ def updated() {
 
 def initialize() {
     createOrUpdateSharedDevices()
+    if (useHouseIntentVirtualRoom) {
+        createOrUpdateHouseIntentVirtualRoom()
+    } else if (settings?.containsKey("useHouseIntentVirtualRoom") && useHouseIntentVirtualRoom == false) {
+        dewireHouseIntentVirtualRoomIfNeeded()
+    }
     subscribe(recoveryDevice(), "switch.on", recoverySwitchOnHandler)
 }
 
@@ -121,10 +128,157 @@ String roomSummaryText() {
     return "Rooms:\n${rows.sort().join('\n')}"
 }
 
+String houseIntentSummaryText() {
+    def child = houseIntentChildApp()
+    String childText = child ? "House Intent room: ${child.label ?: child.id}" : "House Intent room: not configured"
+    String referenceText = defaultCircadianReferenceBulb ? "House reference bulb: ${defaultCircadianReferenceBulb.displayName}" : "House reference bulb: not selected"
+    return "${referenceText}\n${childText}"
+}
+
 private String profileLabel(String profile) {
     if (profile == "houseIntent") return "House Intent"
     if (profile == "bedroom") return "Bedroom"
     return "Standard"
+}
+
+private void createOrUpdateHouseIntentVirtualRoom() {
+    def child = houseIntentChildApp()
+    def rawReference = rawCircadianReferenceBulb(child)
+
+    if (!child) {
+        try {
+            child = addChildApp("lundby", "Simple Room State", "Room House Intent", [
+                settings: [
+                    roomProfile             : [type: "enum", value: "houseIntent"],
+                    roomName                : [type: "text", value: "House Intent"],
+                    followCircadianReference: [type: "bool", value: true],
+                    createDevicesNow        : [type: "bool", value: true]
+                ]
+            ])
+            log.info "Simple Home: Created House Intent virtual room."
+        } catch (Throwable e) {
+            log.warn "Simple Home: Could not create House Intent virtual room: ${e.message}"
+            return
+        }
+    }
+
+    rawReference = rawCircadianReferenceBulb(child)
+
+    try {
+        child.configureHouseIntentFromParent(rawReference)
+    } catch (Throwable e) {
+        log.warn "Simple Home: Could not configure House Intent virtual room: ${e.message}"
+    }
+
+    def houseReference = null
+    try {
+        houseReference = child.getManagedRoomDevice()
+    } catch (Throwable e) {
+        log.warn "Simple Home: Could not get House Intent room device: ${e.message}"
+    }
+
+    if (houseReference) {
+        try {
+            houseReference.on()
+        } catch (Throwable e) {
+            log.warn "Simple Home: Could not turn on House Intent room reference: ${e.message}"
+        }
+
+        if (sameDevice(rawReference, houseReference)) {
+            log.warn "Simple Home: House reference already points at House Intent. Confirm the House Intent child has an override raw circadian reference selected."
+        } else {
+            try {
+                app.updateSetting("defaultCircadianReferenceBulb", [type: "capability.colorTemperature", value: houseReference.id])
+                log.info "Simple Home: House reference bulb set to ${houseReference.displayName}."
+            } catch (Exception e) {
+                log.warn "Simple Home: Could not set House reference bulb: ${e.message}"
+            }
+        }
+    } else {
+        log.warn "Simple Home: House Intent virtual room was configured, but no House Intent room device was available to set as the House reference."
+    }
+
+}
+
+private void dewireHouseIntentVirtualRoomIfNeeded() {
+    def child = houseIntentChildApp()
+    if (!child) return
+
+    def houseReference = null
+    try {
+        houseReference = child.getManagedRoomDevice()
+    } catch (Throwable ignored) {
+        houseReference = null
+    }
+
+    if (!sameDevice(defaultCircadianReferenceBulb, houseReference)) return
+
+    def rawReference = rawCircadianReferenceBulb(child)
+    if (!rawReference || sameDevice(rawReference, houseReference)) {
+        log.warn "Simple Home: Could not dewire House Intent reference because no raw Circadian reference bulb was found."
+        return
+    }
+
+    try {
+        app.updateSetting("defaultCircadianReferenceBulb", [type: "capability.colorTemperature", value: rawReference.id])
+        log.info "Simple Home: House reference bulb reset to ${rawReference.displayName}."
+    } catch (Exception e) {
+        log.warn "Simple Home: Could not reset House reference bulb: ${e.message}"
+    }
+}
+
+private def rawCircadianReferenceBulb(def houseIntentChild = null) {
+    def circadianReference = circadianAppReferenceBulb()
+    if (circadianReference) return circadianReference
+
+    try {
+        def childReference = houseIntentChild?.getCircadianReferenceBulb()
+        if (childReference) return childReference
+    } catch (Throwable ignored) {
+        // Fall through to parent setting.
+    }
+
+    def houseReference = null
+    try {
+        houseReference = houseIntentChild?.getManagedRoomDevice()
+    } catch (Throwable ignored) {
+        houseReference = null
+    }
+
+    return sameDevice(defaultCircadianReferenceBulb, houseReference) ? null : defaultCircadianReferenceBulb
+}
+
+private def circadianAppReferenceBulb() {
+    def appWithReference = (circadianApps ?: []).find { child ->
+        try {
+            return child.getReferenceBulb() != null
+        } catch (Throwable ignored) {
+            return false
+        }
+    }
+
+    try {
+        return appWithReference?.getReferenceBulb()
+    } catch (Throwable ignored) {
+        return null
+    }
+}
+
+private def houseIntentChildApp() {
+    return (childApps ?: []).find { child ->
+        try {
+            if (child.getRoomProfile() == "houseIntent") return true
+            if (child.getConfiguredRoomName() == "House Intent") return true
+        } catch (Throwable ignored) {
+            // Ignore non-room child apps.
+        }
+        return child?.label == "Room House Intent"
+    }
+}
+
+private Boolean sameDevice(def first, def second) {
+    if (!first || !second) return false
+    return first.id?.toString() == second.id?.toString()
 }
 
 def reinitializeChildApps() {
