@@ -29,6 +29,7 @@ preferences {
                 title: "Add a room",
                 multiple: true
             )
+            paragraph roomSummaryText()
         }
 
         section("House mode") {
@@ -103,6 +104,27 @@ def appButtonHandler(String buttonName) {
     if (buttonName == "reinitializeChildrenNow") {
         reinitializeChildApps()
     }
+}
+
+String roomSummaryText() {
+    List rows = (childApps ?: []).collect { child ->
+        try {
+            String label = child.getManagedRoomDeviceLabel()
+            String profile = profileLabel(child.getRoomProfile())
+            return "${label} - ${profile}"
+        } catch (Throwable ignored) {
+            return null
+        }
+    }.findAll { it }
+
+    if (!rows) return "No Simple Room State rooms configured yet."
+    return "Rooms:\n${rows.sort().join('\n')}"
+}
+
+private String profileLabel(String profile) {
+    if (profile == "houseIntent") return "House Intent"
+    if (profile == "bedroom") return "Bedroom"
+    return "Standard"
 }
 
 def reinitializeChildApps() {

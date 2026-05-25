@@ -129,15 +129,19 @@ preferences {
             section("Room lighting levels") {
                 input "followCircadianReference", "bool", title: "Follow circadian reference for MetaLight level and CT", defaultValue: defaultFollowCircadianReference(), required: true, submitOnChange: true
 
-                if (followCircadianReference) {
+                if (followCircadianReferenceSettingEnabled()) {
                     input "circadianReferenceBulb", "capability.colorTemperature", title: "Override circadian reference bulb. Blank uses parent default.", multiple: false, required: false
                     input "occupiedReferencePercent", "number", title: "Occupied reference multiplier percent", defaultValue: 100, required: true
                     input "occupiedReferenceOffset", "number", title: "Occupied reference offset. Example: +10 or -10", defaultValue: 0, required: true
-                    input "courtesyReferencePercent", "number", title: "Courtesy reference multiplier percent", defaultValue: 30, required: true
-                    input "courtesyReferenceOffset", "number", title: "Courtesy reference offset. Example: +10 or -10", defaultValue: 0, required: true
+                    if (!houseIntentProfile()) {
+                        input "courtesyReferencePercent", "number", title: "Courtesy reference multiplier percent", defaultValue: 30, required: true
+                        input "courtesyReferenceOffset", "number", title: "Courtesy reference offset. Example: +10 or -10", defaultValue: 0, required: true
+                    }
                 } else {
                     input "occupiedLightingLevel", "number", title: "Default occupied lighting level. Blank uses the last on level.", required: false
-                    input "courtesyLightingLevel", "number", title: "Courtesy/convenience lighting level", defaultValue: 20, required: true
+                    if (!houseIntentProfile()) {
+                        input "courtesyLightingLevel", "number", title: "Courtesy/convenience lighting level", defaultValue: 20, required: true
+                    }
                 }
 
                 input "useModeBasedLightingLevels", "bool", title: "Use Location Mode based lighting settings", defaultValue: false, required: true, submitOnChange: true
@@ -146,14 +150,18 @@ preferences {
                     input "changeLightingLevelOnModeChange", "bool", title: "Change level on Location Mode change", defaultValue: false, required: true
 
                     locationModeNames().each { modeName ->
-                        if (followCircadianReference) {
+                        if (followCircadianReferenceSettingEnabled()) {
                             input modeLevelSettingName("occupiedReferencePercent", modeName), "number", title: "Occupied reference multiplier percent - ${modeName}. Blank uses default.", required: false
                             input modeLevelSettingName("occupiedReferenceOffset", modeName), "number", title: "Occupied reference offset - ${modeName}. Blank uses default.", required: false
-                            input modeLevelSettingName("courtesyReferencePercent", modeName), "number", title: "Courtesy reference multiplier percent - ${modeName}. Blank uses default.", required: false
-                            input modeLevelSettingName("courtesyReferenceOffset", modeName), "number", title: "Courtesy reference offset - ${modeName}. Blank uses default.", required: false
+                            if (!houseIntentProfile()) {
+                                input modeLevelSettingName("courtesyReferencePercent", modeName), "number", title: "Courtesy reference multiplier percent - ${modeName}. Blank uses default.", required: false
+                                input modeLevelSettingName("courtesyReferenceOffset", modeName), "number", title: "Courtesy reference offset - ${modeName}. Blank uses default.", required: false
+                            }
                         } else {
                             input modeLevelSettingName("occupiedLightingLevel", modeName), "number", title: "Occupied level - ${modeName}. Blank uses default.", required: false
-                            input modeLevelSettingName("courtesyLightingLevel", modeName), "number", title: "Courtesy level - ${modeName}. Blank uses default.", required: false
+                            if (!houseIntentProfile()) {
+                                input modeLevelSettingName("courtesyLightingLevel", modeName), "number", title: "Courtesy level - ${modeName}. Blank uses default.", required: false
+                            }
                         }
                     }
                 }
@@ -362,6 +370,10 @@ private Boolean houseIntentProfile() {
 
 private Boolean defaultFollowCircadianReference() {
     return houseIntentProfile()
+}
+
+private Boolean followCircadianReferenceSettingEnabled() {
+    return houseIntentProfile() || followCircadianReference == true
 }
 
 private List locationModeNames() {
@@ -1755,7 +1767,7 @@ private Integer currentReferenceColorTemperature() {
 }
 
 private Boolean followCircadianReferenceEnabled() {
-    return followCircadianReference == true && circadianReferenceDevice()
+    return followCircadianReferenceSettingEnabled() && circadianReferenceDevice()
 }
 
 private Boolean circadianReferenceTrackingActive() {

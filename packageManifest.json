@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.56",
+  "version": "0.2.57",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-25",
-  "releaseNotes": "Renames the parent app to Simple Home and the room child app to Simple Room State while keeping namespace and HPM IDs stable.",
+  "releaseNotes": "Cleans up House Intent reference settings and shows each room profile in the Simple Home parent app.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
