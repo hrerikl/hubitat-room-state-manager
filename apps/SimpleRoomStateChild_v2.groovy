@@ -618,15 +618,15 @@ def getRoomProfile() {
 }
 
 def getCustomLightingOnText() {
-    return customLightingOnText?.toString()?.trim()
+    return settings?.customLightingOnText?.toString()?.trim()
 }
 
 def getCustomLightingOffText() {
-    return customLightingOffText?.toString()?.trim()
+    return settings?.customLightingOffText?.toString()?.trim()
 }
 
 def getCircadianReferenceBulb() {
-    return circadianReferenceBulb
+    return settings?.circadianReferenceBulb
 }
 
 def configureHouseIntentFromParent(def rawReferenceDevice) {

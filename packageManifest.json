@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.58",
+  "version": "0.2.59",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-25",
-  "releaseNotes": "Adds a Simple Home helper to create and wire a House Intent virtual room as the house reference.",
+  "releaseNotes": "Fixes recursive child-app getters used by House Intent reference wiring.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

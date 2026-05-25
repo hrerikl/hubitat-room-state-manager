@@ -92,7 +92,7 @@ def recoverSimpleHomeHandler(evt) {
 }
 
 def getReferenceBulb() {
-    return referenceBulb
+    return settings?.referenceBulb
 }
 
 // -------------------- Publishing --------------------
