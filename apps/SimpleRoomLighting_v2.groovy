@@ -659,7 +659,7 @@ private Integer logicalLevelFromPhysical(Integer physicalLevel, Integer usableMi
 
 private Boolean defaultAct(String context, String intent) {
     if (context != "all") return false
-    return intent in ["Any", "On"]
+    return intent in ["Any", "On", "Courtesy", "Night"]
 }
 
 private Boolean alwaysActivateRowsEnabled() {

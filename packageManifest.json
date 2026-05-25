@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.52",
+  "version": "0.2.53",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-23",
-  "releaseNotes": "Updates Open-Meteo outdoor light polling to async fetches with stale local fallback data and weather-code color-temperature modifiers.",
+  "releaseNotes": "Defaults Courtesy and Night intent rows to active for All Modes in Simple Room Lighting.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
