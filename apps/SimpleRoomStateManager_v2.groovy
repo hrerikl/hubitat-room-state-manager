@@ -50,6 +50,13 @@ preferences {
                 title: "Add room lighting",
                 multiple: true
             )
+            app(
+                name: "houseIntentLightingApps",
+                appName: "Simple House Intent Lighting",
+                namespace: "lundby",
+                title: "Add House Intent lighting",
+                multiple: true
+            )
         }
 
         section("Circadian lighting") {
@@ -117,6 +124,7 @@ String roomSummaryText() {
     List rows = (childApps ?: []).collect { child ->
         try {
             String label = child.getManagedRoomDeviceLabel()
+            if (!label || label == "null") return null
             String profile = profileLabel(child.getRoomProfile())
             return "${label} - ${profile}"
         } catch (Throwable ignored) {
@@ -170,11 +178,13 @@ private void createOrUpdateHouseIntentVirtualRoom() {
         log.warn "Simple Home: Could not configure House Intent virtual room: ${e.message}"
     }
 
+    createOrUpdateHouseIntentLighting(child)
+
     def houseReference = null
     try {
-        houseReference = child.getManagedRoomDevice()
+        houseReference = child.getManagedMetaLightDevice()
     } catch (Throwable e) {
-        log.warn "Simple Home: Could not get House Intent room device: ${e.message}"
+        log.warn "Simple Home: Could not get House Intent MetaLight device: ${e.message}"
     }
 
     if (houseReference) {
@@ -195,9 +205,34 @@ private void createOrUpdateHouseIntentVirtualRoom() {
             }
         }
     } else {
-        log.warn "Simple Home: House Intent virtual room was configured, but no House Intent room device was available to set as the House reference."
+        log.warn "Simple Home: House Intent virtual room was configured, but no House Intent MetaLight device was available to set as the House reference."
     }
 
+}
+
+private void createOrUpdateHouseIntentLighting(def houseIntentChild) {
+    if (!houseIntentChild) return
+
+    def lighting = houseIntentLightingChildApp()
+    if (!lighting) {
+        try {
+            lighting = addChildApp("lundby", "Simple House Intent Lighting", "# House Intent Lighting", [
+                settings: [
+                    roomChildAppId: [type: "enum", value: houseIntentChild.id?.toString()]
+                ]
+            ])
+            log.info "Simple Home: Created House Intent lighting app."
+        } catch (Throwable e) {
+            log.warn "Simple Home: Could not create House Intent lighting app: ${e.message}"
+            return
+        }
+    }
+
+    try {
+        lighting.configureHouseIntentLightingFromParent(houseIntentChild.id)
+    } catch (Throwable e) {
+        log.warn "Simple Home: Could not configure House Intent lighting app: ${e.message}"
+    }
 }
 
 private void dewireHouseIntentVirtualRoomIfNeeded() {
@@ -206,7 +241,7 @@ private void dewireHouseIntentVirtualRoomIfNeeded() {
 
     def houseReference = null
     try {
-        houseReference = child.getManagedRoomDevice()
+        houseReference = child.getManagedMetaLightDevice()
     } catch (Throwable ignored) {
         houseReference = null
     }
@@ -240,7 +275,7 @@ private def rawCircadianReferenceBulb(def houseIntentChild = null) {
 
     def houseReference = null
     try {
-        houseReference = houseIntentChild?.getManagedRoomDevice()
+        houseReference = houseIntentChild?.getManagedMetaLightDevice()
     } catch (Throwable ignored) {
         houseReference = null
     }
@@ -273,6 +308,16 @@ private def houseIntentChildApp() {
             // Ignore non-room child apps.
         }
         return child?.label == "Room House Intent"
+    }
+}
+
+private def houseIntentLightingChildApp() {
+    return (houseIntentLightingApps ?: []).find { child ->
+        try {
+            return child?.label == "# House Intent Lighting" || child?.label == "Simple House Intent Lighting"
+        } catch (Throwable ignored) {
+            return false
+        }
     }
 }
 
@@ -446,7 +491,7 @@ private String arrivalDeviceNetworkId() {
 }
 
 private List allManagedChildren() {
-    return ((childApps ?: []) + (modeApps ?: []) + (lightingApps ?: []) + (circadianApps ?: [])).findAll { it }
+    return ((childApps ?: []) + (modeApps ?: []) + (lightingApps ?: []) + (houseIntentLightingApps ?: []) + (circadianApps ?: [])).findAll { it }
 }
 
 /**

@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.59",
+  "version": "0.2.64",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-25",
-  "releaseNotes": "Fixes recursive child-app getters used by House Intent reference wiring.",
+  "releaseNotes": "Add shared Util.groovy and refactor Simple Room State child to use shared helpers. Also misc fixes.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
@@ -53,6 +53,17 @@
       "primary": false,
       "category": "Convenience",
       "description": "Room-centric lighting adapter for MetaLight output, physical lights, scenes, remotes, and mode or intent matrices."
+    },
+    {
+      "id": "297b24d4-7f07-4f9d-930d-96067a03a8a7",
+      "name": "Simple House Intent Lighting",
+      "namespace": "lundby",
+      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleHouseIntentLighting_v2.groovy",
+      "required": true,
+      "oauth": false,
+      "primary": false,
+      "category": "Convenience",
+      "description": "House Intent lighting controls for scene, level, color temperature, speech, and delayed preview commit."
     },
     {
       "id": "e8a46264-a0f2-4d7f-9b3f-a6b05b2fe2a0",
@@ -106,6 +117,17 @@
       "oauth": false,
       "category": "Convenience",
       "description": "Outdoor light context driver that publishes lux, color temperature, cloud cover, and sky condition from Open-Meteo."
+    }
+  ]
+  ,
+  "libraries": [
+    {
+      "id": "util-1",
+      "name": "Util",
+      "namespace": "lundby",
+      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/src/main/groovy/lundby/Util.groovy",
+      "required": true,
+      "description": "Shared utility helpers used by apps."
     }
   ]
 }

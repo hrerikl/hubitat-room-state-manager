@@ -593,6 +593,17 @@ def getManagedRoomDevice() {
     return roomDevice()
 }
 
+def getManagedMetaLightDevice() {
+    def room = roomDevice()
+    if (!room) return null
+
+    try {
+        return room.getChildDevice("${dniFor("Room")}-MetaLight")
+    } catch (Throwable ignored) {
+        return null
+    }
+}
+
 def getManagedRoomDeviceId() {
     return roomDevice()?.id?.toString()
 }
@@ -755,6 +766,12 @@ def roomSwitchOffHandler(evt) {
         return
     }
 
+    if (houseIntentProfile()) {
+        debug "House Intent room switch off clears custom lighting"
+        clearCustomLightingFromRoomControl("house intent room switch off")
+        return
+    }
+
     clearRoomStateFromRoomSwitch()
 }
 
@@ -833,6 +850,14 @@ private void activateCustomLightingFromRoomControl(String reason) {
         roomDevice()?.activateCustomLighting()
     } catch (Exception e) {
         log.warn "${roomDeviceLabel()}: Could not activate custom lighting for ${reason}: ${e.message}"
+    }
+}
+
+private void clearCustomLightingFromRoomControl(String reason) {
+    try {
+        roomDevice()?.clearCustomLighting()
+    } catch (Exception e) {
+        log.warn "${roomDeviceLabel()}: Could not clear custom lighting for ${reason}: ${e.message}"
     }
 }
 
@@ -1340,16 +1365,9 @@ private Integer sleepWakeGraceMinutesValue() {
     return Math.max(minutes, 0)
 }
 
-private Integer positiveSeconds(value, Integer defaultSeconds) {
-    Integer seconds = value ? value as Integer : defaultSeconds
-    return seconds > 0 ? seconds : 1
-}
+private Integer positiveSeconds(value, Integer defaultSeconds) { return lundby.Util.positiveSeconds(value, defaultSeconds) }
 
-private Integer minutesRoundedUp(Integer seconds) {
-    Integer safeSeconds = positiveSeconds(seconds, 60)
-    Integer wholeMinutes = (safeSeconds / 60) as Integer
-    return safeSeconds % 60 == 0 ? wholeMinutes : wholeMinutes + 1
-}
+private Integer minutesRoundedUp(Integer seconds) { return lundby.Util.minutesRoundedUp(seconds) }
 
 private void scheduleOccupiedTimeout(String reason) {
     Long lastActivity = (state.lastActivityAt ?: state.lastInactiveAt ?: now()) as Long
@@ -1545,10 +1563,7 @@ private String activeMotionLabels(List activeMotion) {
     return activeMotion.collect { it?.displayName ?: it?.name ?: it?.id }.join(", ")
 }
 
-private List asList(def value) {
-    if (!value) return []
-    return value instanceof List ? value : [value]
-}
+private List asList(def value) { return lundby.Util.asList(value) }
 
 private Boolean allDoorsClosed() {
     if (!doorContactSensors) {
@@ -1694,29 +1709,13 @@ private Boolean sameDevice(def first, def second) {
     return first.id?.toString() == second.id?.toString()
 }
 
-private Integer eventIntegerValue(evt) {
-    try {
-        return evt.value as Integer
-    } catch (Exception ignored) {
-        return null
-    }
-}
+private Integer eventIntegerValue(evt) { return lundby.Util.eventIntegerValue(evt) }
 
-private Boolean isPhysicalEvent(evt) {
-    return eventType(evt) == "physical"
-}
+private Boolean isPhysicalEvent(evt) { return eventType(evt) == "physical" }
 
-private Boolean isDigitalEvent(evt) {
-    return eventType(evt) == "digital"
-}
+private Boolean isDigitalEvent(evt) { return eventType(evt) == "digital" }
 
-private String eventType(evt) {
-    try {
-        return evt.type?.toString()
-    } catch (Throwable ignored) {
-        return ""
-    }
-}
+private String eventType(evt) { return lundby.Util.eventType(evt) }
 
 // -------------------- State Computation and Output --------------------
 
@@ -1888,51 +1887,15 @@ private String currentLocationModeName() {
     }
 }
 
-private Integer normalizedPercent(value, Integer fallback) {
-    Integer percent = fallback
-    try {
-        percent = (value == null ? fallback : value) as Integer
-    } catch (Exception ignored) {
-        percent = fallback
-    }
-    return Math.max(Math.min(percent, 100), 0)
-}
+private Integer normalizedPercent(value, Integer fallback) { return lundby.Util.normalizedPercent(value, fallback) }
 
-private Integer normalizedOffset(value, Integer fallback) {
-    Integer offset = fallback
-    try {
-        offset = (value == null ? fallback : value) as Integer
-    } catch (Exception ignored) {
-        offset = fallback
-    }
-    return Math.max(Math.min(offset, 100), -100)
-}
+private Integer normalizedOffset(value, Integer fallback) { return lundby.Util.normalizedOffset(value, fallback) }
 
-private Integer normalizedColorTemperature(value, Integer fallback) {
-    Integer ct = fallback
-    try {
-        ct = (value == null ? fallback : value) as Integer
-    } catch (Exception ignored) {
-        ct = fallback
-    }
-    return Math.max(Math.min(ct, 10000), 1500)
-}
+private Integer normalizedColorTemperature(value, Integer fallback) { return lundby.Util.normalizedColorTemperature(value, fallback) }
 
-private Integer safeInteger(value, Integer fallback) {
-    try {
-        return value == null ? fallback : value as Integer
-    } catch (Exception ignored) {
-        return fallback
-    }
-}
+private Integer safeInteger(value, Integer fallback) { return lundby.Util.safeInteger(value, fallback) }
 
-private Long safeLong(value, Long fallback) {
-    try {
-        return value == null ? fallback : value as Long
-    } catch (Exception ignored) {
-        return fallback
-    }
-}
+private Long safeLong(value, Long fallback) { return lundby.Util.safeLong(value, fallback) }
 
 private void recomputeAndPublish() {
     ensureInitialState()
