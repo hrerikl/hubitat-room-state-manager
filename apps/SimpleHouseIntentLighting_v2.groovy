@@ -318,17 +318,17 @@ private Integer ctStep() {
     return Math.max(safeInteger(colorTemperatureStep, 250), 1)
 }
 
-private Integer eventIntegerValue(evt) { return lundby.Util.eventIntegerValue(evt) }
+private Integer eventIntegerValue(evt) { return Util.eventIntegerValue(evt) }
 
 private Integer normalizedLevel(value) {
     return Math.max(Math.min(safeInteger(value, 50), 100), 0)
 }
 
-private Integer normalizedColorTemperature(value) { return lundby.Util.normalizedColorTemperature(value, 2700) }
+private Integer normalizedColorTemperature(value) { return Util.normalizedColorTemperature(value, 2700) }
 
-private Integer safeInteger(value, Integer fallback) { return lundby.Util.safeInteger(value, fallback) }
+private Integer safeInteger(value, Integer fallback) { return Util.safeInteger(value, fallback) }
 
-private List asList(value) { return lundby.Util.asList(value) }
+private List asList(value) { return Util.asList(value) }
 
 private void debug(String message) {
     if (debugLogging) {

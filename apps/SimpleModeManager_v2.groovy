@@ -410,7 +410,7 @@ private String formatTime(Long epochMs) {
     return new Date(epochMs).format("yyyy-MM-dd HH:mm:ss", location.timeZone)
 }
 
-private List asList(def value) { return lundby.Util.asList(value) }
+private List asList(def value) { return Util.asList(value) }
 
 private void debug(String msg) {
     if (debugLogging) {

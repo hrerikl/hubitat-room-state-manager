@@ -1365,9 +1365,9 @@ private Integer sleepWakeGraceMinutesValue() {
     return Math.max(minutes, 0)
 }
 
-private Integer positiveSeconds(value, Integer defaultSeconds) { return lundby.Util.positiveSeconds(value, defaultSeconds) }
+private Integer positiveSeconds(value, Integer defaultSeconds) { return Util.positiveSeconds(value, defaultSeconds) }
 
-private Integer minutesRoundedUp(Integer seconds) { return lundby.Util.minutesRoundedUp(seconds) }
+private Integer minutesRoundedUp(Integer seconds) { return Util.minutesRoundedUp(seconds) }
 
 private void scheduleOccupiedTimeout(String reason) {
     Long lastActivity = (state.lastActivityAt ?: state.lastInactiveAt ?: now()) as Long
@@ -1563,7 +1563,7 @@ private String activeMotionLabels(List activeMotion) {
     return activeMotion.collect { it?.displayName ?: it?.name ?: it?.id }.join(", ")
 }
 
-private List asList(def value) { return lundby.Util.asList(value) }
+private List asList(def value) { return Util.asList(value) }
 
 private Boolean allDoorsClosed() {
     if (!doorContactSensors) {
@@ -1709,13 +1709,13 @@ private Boolean sameDevice(def first, def second) {
     return first.id?.toString() == second.id?.toString()
 }
 
-private Integer eventIntegerValue(evt) { return lundby.Util.eventIntegerValue(evt) }
+private Integer eventIntegerValue(evt) { return Util.eventIntegerValue(evt) }
 
 private Boolean isPhysicalEvent(evt) { return eventType(evt) == "physical" }
 
 private Boolean isDigitalEvent(evt) { return eventType(evt) == "digital" }
 
-private String eventType(evt) { return lundby.Util.eventType(evt) }
+private String eventType(evt) { return Util.eventType(evt) }
 
 // -------------------- State Computation and Output --------------------
 
@@ -1887,15 +1887,15 @@ private String currentLocationModeName() {
     }
 }
 
-private Integer normalizedPercent(value, Integer fallback) { return lundby.Util.normalizedPercent(value, fallback) }
+private Integer normalizedPercent(value, Integer fallback) { return Util.normalizedPercent(value, fallback) }
 
-private Integer normalizedOffset(value, Integer fallback) { return lundby.Util.normalizedOffset(value, fallback) }
+private Integer normalizedOffset(value, Integer fallback) { return Util.normalizedOffset(value, fallback) }
 
-private Integer normalizedColorTemperature(value, Integer fallback) { return lundby.Util.normalizedColorTemperature(value, fallback) }
+private Integer normalizedColorTemperature(value, Integer fallback) { return Util.normalizedColorTemperature(value, fallback) }
 
-private Integer safeInteger(value, Integer fallback) { return lundby.Util.safeInteger(value, fallback) }
+private Integer safeInteger(value, Integer fallback) { return Util.safeInteger(value, fallback) }
 
-private Long safeLong(value, Long fallback) { return lundby.Util.safeLong(value, fallback) }
+private Long safeLong(value, Long fallback) { return Util.safeLong(value, fallback) }
 
 private void recomputeAndPublish() {
     ensureInitialState()

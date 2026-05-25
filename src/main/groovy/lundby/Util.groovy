@@ -1,5 +1,3 @@
-package lundby
-
 class Util {
     static List asList(def value) {
         if (!value) return []

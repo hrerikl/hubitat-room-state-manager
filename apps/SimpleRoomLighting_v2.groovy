@@ -1349,7 +1349,7 @@ private Boolean shouldAcceptControlEvent(evt) {
     return false
 }
 
-private String eventType(evt) { return lundby.Util.eventType(evt) }
+private String eventType(evt) { return Util.eventType(evt) }
 
 private void suppressControlFeedback(def dev) {
     String deviceId = dev?.id?.toString()
@@ -1567,9 +1567,9 @@ private Integer sceneNightExtensionMinutesForRoom() {
     return Math.max(minutes, 1)
 }
 
-private Integer safeInteger(value, Integer fallback) { return lundby.Util.safeInteger(value, fallback) }
+private Integer safeInteger(value, Integer fallback) { return Util.safeInteger(value, fallback) }
 
-private Long safeLong(value, Long fallback) { return lundby.Util.safeLong(value, fallback) }
+private Long safeLong(value, Long fallback) { return Util.safeLong(value, fallback) }
 
 private String currentLocationModeName() {
     try {
@@ -1597,7 +1597,7 @@ private String htmlEscape(value) {
         .replace('"', "&quot;")
 }
 
-private List asList(def value) { return lundby.Util.asList(value) }
+private List asList(def value) { return Util.asList(value) }
 
 private Integer normalizedLevel(value, Integer fallback) {
     Integer level = fallback == null ? 0 : fallback
@@ -1609,9 +1609,9 @@ private Integer normalizedLevel(value, Integer fallback) {
     return Math.max(Math.min(level, 100), 0)
 }
 
-private Integer normalizedPercent(value, Integer fallback) { return lundby.Util.normalizedPercent(value, fallback) }
+private Integer normalizedPercent(value, Integer fallback) { return Util.normalizedPercent(value, fallback) }
 
-private Integer normalizedOffset(value, Integer fallback) { return lundby.Util.normalizedOffset(value, fallback) }
+private Integer normalizedOffset(value, Integer fallback) { return Util.normalizedOffset(value, fallback) }
 
 private Integer normalizedUsableMinimum(value) {
     Integer minimum = 1
@@ -1623,14 +1623,14 @@ private Integer normalizedUsableMinimum(value) {
     return Math.max(Math.min(minimum, 99), 1)
 }
 
-private Integer normalizedColorTemperature(value, Integer fallback) { return lundby.Util.normalizedColorTemperature(value, fallback == null ? 2700 : fallback) }
+private Integer normalizedColorTemperature(value, Integer fallback) { return Util.normalizedColorTemperature(value, fallback == null ? 2700 : fallback) }
 
 private Integer adjustedRoomLevel(Integer delta) {
     Integer current = normalizedLevel(roomDevice()?.currentValue("level"), 0)
     return normalizedLevel(current + delta, current)
 }
 
-private Integer eventIntegerValue(evt) { return lundby.Util.eventIntegerValue(evt) }
+private Integer eventIntegerValue(evt) { return Util.eventIntegerValue(evt) }
 
 private void debug(String msg) {
     if (debugLogging) {
