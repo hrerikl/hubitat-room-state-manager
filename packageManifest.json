@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.53",
+  "version": "0.2.55",
   "minimumHEVersion": "2.3.0",
-  "dateReleased": "2026-05-23",
-  "releaseNotes": "Defaults Courtesy and Night intent rows to active for All Modes in Simple Room Lighting.",
+  "dateReleased": "2026-05-25",
+  "releaseNotes": "Adds a House Intent room profile for a manually controlled house-level MetaLight reference surface.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

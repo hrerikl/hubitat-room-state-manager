@@ -334,6 +334,14 @@ def addThisRoomToSelectedNeighbors(sourceChildAppId) {
 // -------------------- Room Child Registry --------------------
 
 Map neighborRoomOptions(def requestingChildAppId) {
+    return managedRoomOptions(requestingChildAppId, false)
+}
+
+Map roomStateChildOptions(def requestingChildAppId) {
+    return managedRoomOptions(requestingChildAppId, true)
+}
+
+private Map managedRoomOptions(def requestingChildAppId, Boolean includeHouseIntent) {
     try {
         Map opts = [:]
         childApps?.each { child ->
@@ -341,6 +349,7 @@ Map neighborRoomOptions(def requestingChildAppId) {
             if (id == "${requestingChildAppId}") return
 
             try {
+                if (!includeHouseIntent && child.getRoomProfile() == "houseIntent") return
                 String label = child.getManagedRoomDeviceLabel()
                 if (id && label) {
                     opts[(id)] = label
@@ -354,10 +363,6 @@ Map neighborRoomOptions(def requestingChildAppId) {
         log.warn "Simple Room State Manager v2: Could not build neighbor room options: ${e.message}"
         return [:]
     }
-}
-
-Map roomStateChildOptions(def requestingChildAppId) {
-    return neighborRoomOptions(requestingChildAppId)
 }
 
 Map roomStateChildInfo(def childAppId) {
@@ -397,7 +402,14 @@ List neighborRoomDevicesForChildIds(def selectedChildIds) {
 
     try {
         List allChildren = childApps ?: []
-        List matchedChildren = allChildren.findAll { child -> ids.contains(child?.id?.toString()) }
+        List matchedChildren = allChildren.findAll { child ->
+            if (!ids.contains(child?.id?.toString())) return false
+            try {
+                return child.getRoomProfile() != "houseIntent"
+            } catch (Throwable ignored) {
+                return false
+            }
+        }
         List devices = matchedChildren.collect { child ->
                 try {
                     child.getManagedRoomDevice()

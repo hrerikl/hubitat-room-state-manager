@@ -52,19 +52,25 @@ preferences {
             paragraph "Select the Hubitat Room explicitly. If the room name override is blank, the selected Hubitat Room name is used. Creates: Room <name>, plus MetaLight, Courtesy, Engaged, Asleep, and Locked component devices."
         }
 
-        section("Activity") {
-            input "motionSensors", "capability.motionSensor", title: "Motion sensors", multiple: true, required: false
-            input "doorContactSensors", "capability.contactSensor", title: "Door contact sensors. Opening a door counts as occupancy evidence.", multiple: true, required: false
-        }
+        if (houseIntentProfile()) {
+            section("House intent") {
+                paragraph "House Intent is a manually controlled reference room. It does not participate in neighbor Courtesy and is intended to publish the house-level MetaLight for other rooms to follow."
+            }
+        } else {
+            section("Activity") {
+                input "motionSensors", "capability.motionSensor", title: "Motion sensors", multiple: true, required: false
+                input "doorContactSensors", "capability.contactSensor", title: "Door contact sensors. Opening a door counts as occupancy evidence.", multiple: true, required: false
+            }
 
-        section("Neighbor courtesy") {
-            input "neighborChildAppIds", "enum", title: "Neighbor rooms that should trigger courtesy lighting", options: safeNeighborRoomOptions(), multiple: true, required: false
-            paragraph "Select other Simple Room State rooms. Neighbor rooms trigger Courtesy only when their roomState is Occupied or Engaged. Locked rooms do not propagate Courtesy."
-        }
+            section("Neighbor courtesy") {
+                input "neighborChildAppIds", "enum", title: "Neighbor rooms that should trigger courtesy lighting", options: safeNeighborRoomOptions(), multiple: true, required: false
+                paragraph "Select other Simple Room State rooms. Neighbor rooms trigger Courtesy only when their roomState is Occupied or Engaged. Locked rooms do not propagate Courtesy."
+            }
 
-        section("Timeouts") {
-            input "occupiedTimeoutMinutes", "number", title: "Occupied timeout after no motion", defaultValue: 5, required: true
-            input "engagedTimeoutMinutes", "number", title: "Engaged timeout after no activity", defaultValue: 30, required: true
+            section("Timeouts") {
+                input "occupiedTimeoutMinutes", "number", title: "Occupied timeout after no motion", defaultValue: 5, required: true
+                input "engagedTimeoutMinutes", "number", title: "Engaged timeout after no activity", defaultValue: 30, required: true
+            }
         }
 
         section("Advanced") {
@@ -81,31 +87,33 @@ preferences {
                 input "customLightingOffText", "text", title: "Custom lighting off text override, optional", required: false
             }
 
-            section("Advanced activity") {
-                input "activitySwitches", "capability.switch", title: "Switches that imply room activity when turned on", multiple: true, required: false
-                input "activitySwitchesPhysicalOnly", "bool", title: "Only physical activity switch events imply room activity", defaultValue: false, required: true
-                input "activityButtons", "capability.pushableButton", title: "Buttons that imply room activity when pushed", multiple: true, required: false
-                input "activityButtonNumbers", "text", title: "Activity button numbers, comma separated. Blank means any pushed button.", required: false
-                input "lockHeldButtonNumber", "number", title: "Held button number that locks this room. Blank disables.", required: false
-                input "unlockHeldButtonNumber", "number", title: "Held button number that unlocks this room. Blank disables.", required: false
-                input "staleActiveMotionMinutes", "number", title: "Ignore active motion sensor after no motion/device activity for this many minutes. Blank or 0 disables.", defaultValue: 60, required: false
-            }
+            if (!houseIntentProfile()) {
+                section("Advanced activity") {
+                    input "activitySwitches", "capability.switch", title: "Switches that imply room activity when turned on", multiple: true, required: false
+                    input "activitySwitchesPhysicalOnly", "bool", title: "Only physical activity switch events imply room activity", defaultValue: false, required: true
+                    input "activityButtons", "capability.pushableButton", title: "Buttons that imply room activity when pushed", multiple: true, required: false
+                    input "activityButtonNumbers", "text", title: "Activity button numbers, comma separated. Blank means any pushed button.", required: false
+                    input "lockHeldButtonNumber", "number", title: "Held button number that locks this room. Blank disables.", required: false
+                    input "unlockHeldButtonNumber", "number", title: "Held button number that unlocks this room. Blank disables.", required: false
+                    input "staleActiveMotionMinutes", "number", title: "Ignore active motion sensor after no motion/device activity for this many minutes. Blank or 0 disables.", defaultValue: 60, required: false
+                }
 
-            section("Advanced engagement") {
-                input "engagementSwitches", "capability.switch", title: "Switches that imply engaged state when turned on", multiple: true, required: false
-                input "engageOnMotionWithDoorsClosed", "bool", title: "Engage on motion with doors closed", defaultValue: false, required: true
-                paragraph "When enabled, motion marks the room Engaged if every configured door contact is closed. Opening any configured door clears Engaged and still counts as occupancy evidence."
-            }
+                section("Advanced engagement") {
+                    input "engagementSwitches", "capability.switch", title: "Switches that imply engaged state when turned on", multiple: true, required: false
+                    input "engageOnMotionWithDoorsClosed", "bool", title: "Engage on motion with doors closed", defaultValue: false, required: true
+                    paragraph "When enabled, motion marks the room Engaged if every configured door contact is closed. Opening any configured door clears Engaged and still counts as occupancy evidence."
+                }
 
-            section("Advanced courtesy") {
-                input "syncReciprocalNeighborsOnSave", "bool", title: "Add this room back to selected neighbors on save", defaultValue: false, required: true
-                paragraph "When enabled, saving this room attempts to add it to each selected neighbor's courtesy list. Each child app still owns its own neighbor list."
-            }
+                section("Advanced courtesy") {
+                    input "syncReciprocalNeighborsOnSave", "bool", title: "Add this room back to selected neighbors on save", defaultValue: false, required: true
+                    paragraph "When enabled, saving this room attempts to add it to each selected neighbor's courtesy list. Each child app still owns its own neighbor list."
+                }
 
-            section("Advanced lock") {
-                input "externalLockedSwitches", "capability.switch", title: "External switches that should lock this room", multiple: true, required: false
-                input "lockAutoClearMinutes", "number", title: "Auto-clear Locked after X minutes. Blank or 0 disables.", required: false
-                input "unlockImpliesActivity", "bool", title: "Treat unlock as occupancy activity", defaultValue: false, required: true
+                section("Advanced lock") {
+                    input "externalLockedSwitches", "capability.switch", title: "External switches that should lock this room", multiple: true, required: false
+                    input "lockAutoClearMinutes", "number", title: "Auto-clear Locked after X minutes. Blank or 0 disables.", required: false
+                    input "unlockImpliesActivity", "bool", title: "Treat unlock as occupancy activity", defaultValue: false, required: true
+                }
             }
 
             if (bedroomProfile()) {
@@ -119,7 +127,7 @@ preferences {
             }
 
             section("Room lighting levels") {
-                input "followCircadianReference", "bool", title: "Follow circadian reference for MetaLight level and CT", defaultValue: false, required: true, submitOnChange: true
+                input "followCircadianReference", "bool", title: "Follow circadian reference for MetaLight level and CT", defaultValue: defaultFollowCircadianReference(), required: true, submitOnChange: true
 
                 if (followCircadianReference) {
                     input "circadianReferenceBulb", "capability.colorTemperature", title: "Override circadian reference bulb. Blank uses parent default.", multiple: false, required: false
@@ -272,6 +280,7 @@ def clearNightLightingFromDevice() {
 
 private void ensureInitialState() {
     ensureRoomProfileSetting()
+    ensureHouseIntentDefaults()
     if (state.occupied == null) state.occupied = false
     if (state.courtesy == null) state.courtesy = false
     if (state.engaged == null) state.engaged = engagedEnabled()
@@ -294,6 +303,17 @@ private void ensureRoomProfileSetting() {
         app.updateSetting("roomProfile", [type: "enum", value: "standard"])
     } catch (Exception e) {
         log.warn "${roomDeviceLabel()}: Could not default room profile: ${e.message}"
+    }
+}
+
+private void ensureHouseIntentDefaults() {
+    if (!houseIntentProfile()) return
+    if (settings?.followCircadianReference != null) return
+
+    try {
+        app.updateSetting("followCircadianReference", [type: "bool", value: true])
+    } catch (Exception e) {
+        log.warn "${roomDeviceLabel()}: Could not default House Intent reference tracking: ${e.message}"
     }
 }
 
@@ -327,12 +347,21 @@ private Map hubitatRoomOptions() {
 private Map roomProfileOptions() {
     return [
         standard: "Standard",
-        bedroom : "Bedroom"
+        bedroom : "Bedroom",
+        houseIntent: "House Intent"
     ]
 }
 
 private Boolean bedroomProfile() {
     return getRoomProfile() == "bedroom"
+}
+
+private Boolean houseIntentProfile() {
+    return getRoomProfile() == "houseIntent"
+}
+
+private Boolean defaultFollowCircadianReference() {
+    return houseIntentProfile()
 }
 
 private List locationModeNames() {
@@ -359,7 +388,7 @@ private String safeRoomName() {
     }
 
     if (!name) {
-        name = app.label ?: "Room"
+        name = houseIntentProfile() ? "House Intent" : (app.label ?: "Room")
     }
 
     name = name.trim()
@@ -1332,6 +1361,11 @@ def clearNightLightingIfStillAsleep() {
 }
 
 def clearOccupiedIfStillInactive() {
+    if (houseIntentProfile()) {
+        debug "Occupied timeout ignored for House Intent profile"
+        return
+    }
+
     if (state.locked) {
         debug "Occupied timeout blocked: locked is true"
         return
@@ -1374,6 +1408,11 @@ def clearOccupiedIfStillInactive() {
 }
 
 def clearEngagedIfStillInactive() {
+    if (houseIntentProfile()) {
+        debug "Engaged timeout ignored for House Intent profile"
+        return
+    }
+
     if (state.locked) {
         debug "Engaged timeout blocked: locked is true"
         return
@@ -1545,6 +1584,12 @@ private void refreshAsleepState() {
 }
 
 private void refreshCourtesyState() {
+    if (houseIntentProfile()) {
+        state.courtesy = false
+        debug "Courtesy false because House Intent rooms do not participate in neighbor courtesy"
+        return
+    }
+
     if (!courtesyEnabled()) {
         state.courtesy = false
         debug "Courtesy false because Courtesy switch is off"

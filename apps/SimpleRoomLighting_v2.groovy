@@ -204,7 +204,7 @@ def locationModeHandler(evt) {
     }
 
     if (roomLightingInactive()) {
-        applyOffCondition("Location Mode changed while inactive")
+        applyInactiveOnRowOffCondition("Location Mode changed while inactive")
         return
     }
 
@@ -214,7 +214,7 @@ def locationModeHandler(evt) {
 def overrideSwitchHandler(evt) {
     debug "Override switch ${evt.value}: ${evt.displayName}"
     if (roomLightingInactive()) {
-        applyOffCondition("override switch changed while inactive")
+        applyInactiveOnRowOffCondition("override switch changed while inactive")
         return
     }
     reassessLighting("override switch changed")
@@ -511,6 +511,13 @@ private void applyOffCondition(String reason) {
     applyOffRows(context, intentBucket, reason)
 }
 
+private void applyInactiveOnRowOffCondition(String reason) {
+    String context = activeContextKey()
+    String intentBucket = matrixUsesIntent() ? "On" : "Any"
+    debug "Applying inactive On-row off condition context=${context} intent=${intentBucket}: ${reason}"
+    applyOffRows(context, intentBucket, reason)
+}
+
 private void applyOffRows(String context, String intentBucket, String reason) {
     Boolean useOverride = overrideActive(context, intentBucket)
     allAutomatedDevices().each { dev ->
@@ -547,7 +554,7 @@ private void recoverSimpleHome() {
         reassessLighting("Simple Home recovery")
     } else {
         debug "Recover Simple Home: applying Off rows"
-        applyOffCondition("Simple Home recovery")
+        applyInactiveOnRowOffCondition("Simple Home recovery")
     }
 }
 
