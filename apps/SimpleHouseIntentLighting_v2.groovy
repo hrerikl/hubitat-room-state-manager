@@ -105,12 +105,13 @@ def recoverSimpleHomeHandler(evt) {
 
 def picoPushedHandler(evt) {
     Integer button = eventIntegerValue(evt)
+    Integer step = levelStepValue()
     debug "Pico pushed ${button}: ${evt?.displayName}"
 
     if (button == 2) {
-        adjustLevel(levelStepValue())
+        adjustLevel(step)
     } else if (button == 4) {
-        adjustLevel(-levelStepValue())
+        adjustLevel(0 - step)
     } else {
         debug "No House Intent Pico push action for button ${button}"
     }
@@ -143,7 +144,8 @@ def commitPendingIntent() {
 
 private void adjustLevel(Integer delta) {
     ensurePendingFromRoom()
-    Integer level = normalizedLevel((state.pendingLevel ?: 50) as Integer + delta)
+    Integer current = safeInteger(state.pendingLevel, 50)
+    Integer level = normalizedLevel(current + delta)
     state.pendingLevel = level
     state.pendingCustom = true
     state.pendingSceneName = "Custom"
