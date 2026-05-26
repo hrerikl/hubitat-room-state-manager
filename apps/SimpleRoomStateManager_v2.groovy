@@ -60,6 +60,7 @@ preferences {
             input "defaultCircadianReferenceBulb", "capability.colorTemperature", title: "House reference bulb", multiple: false, required: false
             input "useHouseIntentVirtualRoom", "bool", title: "Use House Intent Virtual Room", defaultValue: false, required: true
             paragraph houseIntentSummaryText()
+            renderHouseIntentLightingLink()
             app(
                 name: "circadianApps",
                 appName: "Simple Circadian Lighting v2",
@@ -139,6 +140,25 @@ String houseIntentSummaryText() {
     String childText = child ? "House Intent room: ${child.label ?: child.id}" : "House Intent room: not configured"
     String referenceText = defaultCircadianReferenceBulb ? "House reference bulb: ${defaultCircadianReferenceBulb.displayName}" : "House reference bulb: not selected"
     return "${referenceText}\n${childText}"
+}
+
+private void renderHouseIntentLightingLink() {
+    def lighting = houseIntentLightingChildApp()
+    if (!lighting) {
+        paragraph "House Intent Lighting: not configured"
+        return
+    }
+
+    href(
+        name: "configureHouseIntentLighting",
+        title: "Configure House Intent Lighting",
+        description: lighting.label ?: "# House Intent Lighting",
+        url: childConfigureUrl(lighting)
+    )
+}
+
+private String childConfigureUrl(def child) {
+    return "/installedapp/configure/${child.id}/"
 }
 
 private String profileLabel(String profile) {
