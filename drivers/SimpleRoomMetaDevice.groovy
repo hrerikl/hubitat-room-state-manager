@@ -475,6 +475,7 @@ private String attributeForRole(String role) {
 private String roleFromDni(String dni) {
     if (dni == childSwitchDni('Courtesy')) return 'Courtesy'
     if (dni == childSwitchDni('Engaged')) return 'Engaged'
+    if (dni == childSwitchDni('Asleep')) return 'Asleep'
     if (dni == childSwitchDni('Locked')) return 'Locked'
     return null
 }
