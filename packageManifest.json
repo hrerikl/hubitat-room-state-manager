@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.97",
+  "version": "0.2.98",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-26",
-  "releaseNotes": "Re-evaluate Night readiness after Mode Manager updates during the night window.",
+  "releaseNotes": "Apply inactive Room Lighting off rows on Location Mode changes.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

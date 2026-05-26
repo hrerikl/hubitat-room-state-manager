@@ -207,11 +207,6 @@ def locationModeHandler(evt) {
         return
     }
 
-    if (roomDevice()?.currentValue("metaLightSwitch") != "on") {
-        debug "Mode change ignored because MetaLight is off"
-        return
-    }
-
     if (roomLightingInactive()) {
         applyInactiveOnRowOffCondition("Location Mode changed while inactive")
         return
