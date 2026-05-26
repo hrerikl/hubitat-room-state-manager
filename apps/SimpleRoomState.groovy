@@ -768,7 +768,7 @@ def roomSwitchOnHandler(evt) {
     }
 
     state.roomLevel = nextRoomControlLevel()
-    setOccupied("room switch on")
+    setOccupied(eventReason("room switch on", evt))
 }
 
 def roomSwitchOffHandler(evt) {
@@ -814,8 +814,8 @@ def roomLevelHandler(evt) {
     }
 
     debug "Room level set to ${level}"
-    pauseCircadianReference("manual room level change")
-    activateCustomLightingFromRoomControl("manual room level change")
+    pauseCircadianReference(eventReason("manual room level change", evt))
+    activateCustomLightingFromRoomControl(eventReason("manual room level change", evt))
 
     if (state.locked) {
         debug "Room is locked; routing room level to MetaLight only"
@@ -834,7 +834,7 @@ def roomLevelHandler(evt) {
 
     if (level > 0) {
         state.roomLevel = level
-        setOccupied("room level set")
+        setOccupied(eventReason("room level set", evt))
     } else {
         clearRoomStateFromRoomSwitch()
     }
@@ -849,8 +849,8 @@ def roomColorTemperatureHandler(evt) {
     }
 
     debug "Room color temperature set to ${colorTemperature}"
-    pauseCircadianReference("manual room color temperature change")
-    activateCustomLightingFromRoomControl("manual room color temperature change")
+    pauseCircadianReference(eventReason("manual room color temperature change", evt))
+    activateCustomLightingFromRoomControl(eventReason("manual room color temperature change", evt))
     state.metaLightColorTemperature = colorTemperature
 }
 
@@ -894,23 +894,23 @@ def courtesyEnabledHandler(evt) {
 def engagedEnabledHandler(evt) {
     debug "Engaged enabled ${evt.value}"
     if (evt.value == "on") {
-        setEngaged("engaged switch on")
+        setEngaged(eventReason("engaged switch on", evt))
     } else {
         state.engaged = false
         clearEngagedReason()
-        scheduleOccupiedTimeout("engaged turned off")
+        scheduleOccupiedTimeout(eventReason("engaged turned off", evt))
         recomputeAndPublish()
     }
 }
 
 def asleepEnabledHandler(evt) {
     debug "Asleep enabled ${evt.value}"
-    setAsleep(evt.value == "on", evt.value == "on" ? "asleep switch on" : "asleep switch off")
+    setAsleep(evt.value == "on", eventReason(evt.value == "on" ? "asleep switch on" : "asleep switch off", evt))
 }
 
 def lockedEnabledHandler(evt) {
     debug "Locked enabled ${evt.value}"
-    setLocked(evt.value == "on", evt.value == "on" ? "locked switch on" : "locked switch off")
+    setLocked(evt.value == "on", eventReason(evt.value == "on" ? "locked switch on" : "locked switch off", evt))
 }
 
 def locationModeHandler(evt) {
@@ -987,6 +987,11 @@ def recordEngagementActivity(String reason) {
 private String activityReason(String reason, String fallback) {
     String text = reason?.toString()?.trim()
     return text ?: fallback
+}
+
+private String eventReason(String reason, evt) {
+    String source = evt?.displayName?.toString()?.trim()
+    return source ? "${activityReason(reason, 'activity')}: ${source}" : activityReason(reason, "activity")
 }
 
 def motionInactiveHandler(evt) {
@@ -1101,11 +1106,11 @@ def engagementSwitchOnHandler(evt) {
     debug "Engagement switch on: ${evt.displayName}"
 
     if (state.locked) {
-        recordLatentActivity("engagement switch on while locked")
+        recordLatentActivity(eventReason("engagement switch on while locked", evt))
         return
     }
 
-    setEngaged("engagement switch on")
+    setEngaged(eventReason("engagement switch on", evt))
 }
 
 def neighborRoomHandler(evt) {
