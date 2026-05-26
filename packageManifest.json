@@ -1,26 +1,15 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.91",
+  "version": "0.2.92",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-25",
-  "releaseNotes": "Install SimpleHomeHelpers as app code before apps that include it.",
+  "releaseNotes": "Remove SimpleHomeHelpers from HPM manifest; install helper manually in Libraries Code.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
   "communityLink": "https://github.com/hrerikl/hubitat-room-state-manager",
   "apps": [
-    {
-      "id": "542c4c6c-650a-48e0-8e8b-00fd97fd6425",
-      "name": "SimpleHomeHelpers",
-      "namespace": "lundby",
-      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/libraries/SimpleHomeHelpers.groovy",
-      "required": true,
-      "oauth": false,
-      "primary": false,
-      "category": "Convenience",
-      "description": "Hubitat include library with shared helper methods for Simple Home apps."
-    },
     {
       "id": "b7af26b8-9787-46d7-857e-ea8c85b920e0",
       "name": "Simple Home",
