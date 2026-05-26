@@ -105,6 +105,30 @@ def getModeManagerAppName() {
     return "Simple Mode Manager v2"
 }
 
+def getRoomStateAppName() {
+    return null
+}
+
+def getRoomLightingAppName() {
+    return null
+}
+
+def getHouseIntentLightingAppName() {
+    return null
+}
+
+def getRoomProfile() {
+    return null
+}
+
+def getConfiguredRoomName() {
+    return null
+}
+
+def getManagedRoomDeviceLabel() {
+    return null
+}
+
 private Boolean modeManagerAllowed() {
     try {
         return parent.modeManagerAllowed(app.id) != false

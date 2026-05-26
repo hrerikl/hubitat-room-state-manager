@@ -600,6 +600,22 @@ def getManagedRoomDevice() {
     return roomDevice()
 }
 
+def getRoomStateAppName() {
+    return "Simple Room State"
+}
+
+def getRoomLightingAppName() {
+    return null
+}
+
+def getHouseIntentLightingAppName() {
+    return null
+}
+
+def getModeManagerAppName() {
+    return null
+}
+
 def getManagedMetaLightDevice() {
     def room = roomDevice()
     if (!room) return null

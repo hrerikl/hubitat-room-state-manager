@@ -33,13 +33,17 @@ preferences {
         }
 
         section("House mode") {
-            app(
-                name: "modeApps",
-                appName: "Simple Mode Manager v2",
-                namespace: "lundby",
-                title: "Add mode manager",
-                multiple: false
-            )
+            if (modeManagerChildApps()) {
+                paragraph "Mode Manager is already configured."
+            } else {
+                app(
+                    name: "modeApps",
+                    appName: "Simple Mode Manager v2",
+                    namespace: "lundby",
+                    title: "Add mode manager",
+                    multiple: false
+                )
+            }
         }
 
         section("Lighting") {
@@ -115,7 +119,7 @@ def appButtonHandler(String buttonName) {
 }
 
 String roomSummaryText() {
-    List rows = (childApps ?: []).collect { child ->
+    List rows = roomStateChildApps().collect { child ->
         try {
             String label = child.getManagedRoomDeviceLabel()
             if (!label || label == "null") return null
@@ -302,7 +306,7 @@ private def houseIntentChildApp() {
 }
 
 private List houseIntentChildApps() {
-    return (childApps ?: []).findAll { child ->
+    return roomStateChildApps().findAll { child ->
         try {
             if (child.getRoomProfile() == "houseIntent") return true
             if (child.getConfiguredRoomName() == "House Intent") return true
@@ -311,6 +315,25 @@ private List houseIntentChildApps() {
         }
         return child?.label == "Room House Intent"
     }
+}
+
+private List roomStateChildApps() {
+    List configured = childApps ?: []
+    List discovered = []
+    try {
+        discovered = getChildApps()?.findAll { child ->
+            try {
+                return child?.getRoomStateAppName() == "Simple Room State"
+            } catch (Throwable ignored) {
+                String label = child?.label?.toString()
+                return label == "Simple Room State" || label?.startsWith("Room ")
+            }
+        } ?: []
+    } catch (Throwable ignored) {
+        discovered = []
+    }
+
+    return uniqueChildApps(configured + discovered)
 }
 
 private def houseIntentLightingChildApp() {
@@ -643,7 +666,7 @@ private String arrivalDeviceNetworkId() {
 }
 
 private List allManagedChildren() {
-    return uniqueChildApps((childApps ?: []) + modeManagerChildApps() + simpleRoomLightingChildApps() + houseIntentLightingChildApps() + (circadianApps ?: []))
+    return uniqueChildApps(roomStateChildApps() + modeManagerChildApps() + simpleRoomLightingChildApps() + houseIntentLightingChildApps() + (circadianApps ?: []))
 }
 
 /**
@@ -721,7 +744,7 @@ private Map managedRoomOptions(def requestingChildAppId, Boolean includeHouseInt
         Boolean requestingRoomLighting = roomLightingRequester(requestingChildAppId)
         List usedRoomLightingIds = roomLightingRoomChildIds(requestingChildAppId)
 
-        childApps?.each { child ->
+        roomStateChildApps().each { child ->
             String id = child?.id?.toString()
             if (id == "${requestingChildAppId}") return
 
@@ -790,7 +813,7 @@ private def childAppById(def childAppId) {
 }
 
 Map roomStateChildInfo(def childAppId) {
-    def child = childApps?.find { it?.id?.toString() == "${childAppId}" }
+    def child = roomStateChildApps().find { it?.id?.toString() == "${childAppId}" }
     if (!child) return [:]
 
     try {
@@ -810,7 +833,7 @@ Map roomStateChildInfo(def childAppId) {
 }
 
 def roomStateChildRoomDevice(def childAppId) {
-    def child = childApps?.find { it?.id?.toString() == "${childAppId}" }
+    def child = roomStateChildApps().find { it?.id?.toString() == "${childAppId}" }
     if (!child) return null
 
     try {
@@ -825,7 +848,7 @@ List neighborRoomDevicesForChildIds(def selectedChildIds) {
     if (!ids) return []
 
     try {
-        List allChildren = childApps ?: []
+        List allChildren = roomStateChildApps()
         List matchedChildren = allChildren.findAll { child ->
             if (!ids.contains(child?.id?.toString())) return false
             try {

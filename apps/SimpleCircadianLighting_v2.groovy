@@ -95,6 +95,34 @@ def getReferenceBulb() {
     return settings?.referenceBulb
 }
 
+def getRoomStateAppName() {
+    return null
+}
+
+def getRoomLightingAppName() {
+    return null
+}
+
+def getHouseIntentLightingAppName() {
+    return null
+}
+
+def getModeManagerAppName() {
+    return null
+}
+
+def getRoomProfile() {
+    return null
+}
+
+def getConfiguredRoomName() {
+    return null
+}
+
+def getManagedRoomDeviceLabel() {
+    return null
+}
+
 // -------------------- Publishing --------------------
 
 def publishReference(String reason = 'schedule') {

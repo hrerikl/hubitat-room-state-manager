@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.82",
+  "version": "0.2.83",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-25",
-  "releaseNotes": "Rename duplicate child apps to Duplicate-Delete before refusing initialization.",
+  "releaseNotes": "Quiet child app identity probes and hide Mode Manager creation when one exists.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

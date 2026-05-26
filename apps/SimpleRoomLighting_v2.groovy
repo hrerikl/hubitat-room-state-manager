@@ -1431,8 +1431,28 @@ def getManagedRoomDeviceLabel() {
     return null
 }
 
+def getRoomStateAppName() {
+    return null
+}
+
+def getRoomProfile() {
+    return null
+}
+
+def getConfiguredRoomName() {
+    return null
+}
+
 def getRoomLightingAppName() {
     return "Simple Room Lighting v2"
+}
+
+def getHouseIntentLightingAppName() {
+    return null
+}
+
+def getModeManagerAppName() {
+    return null
 }
 
 def getConfiguredRoomChildAppId() {
