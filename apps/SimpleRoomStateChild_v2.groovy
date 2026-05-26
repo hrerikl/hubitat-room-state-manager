@@ -353,11 +353,12 @@ private Map hubitatRoomOptions() {
 }
 
 private Map roomProfileOptions() {
-    return [
+    Map options = [
         standard: "Standard",
-        bedroom : "Bedroom",
-        houseIntent: "House Intent"
+        bedroom : "Bedroom"
     ]
+    if (houseIntentProfile()) options.houseIntent = "House Intent"
+    return options
 }
 
 private Boolean bedroomProfile() {

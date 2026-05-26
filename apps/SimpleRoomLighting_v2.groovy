@@ -1425,6 +1425,14 @@ def getManagedRoomDeviceLabel() {
     return null
 }
 
+def getRoomLightingAppName() {
+    return "Simple Room Lighting v2"
+}
+
+def getConfiguredRoomChildAppId() {
+    return roomChildAppId
+}
+
 private void updateAppLabel() {
     String desired = lightingName?.trim()
     if (!desired) {

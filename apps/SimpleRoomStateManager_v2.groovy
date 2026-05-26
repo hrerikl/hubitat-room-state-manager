@@ -38,7 +38,7 @@ preferences {
                 appName: "Simple Mode Manager v2",
                 namespace: "lundby",
                 title: "Add mode manager",
-                multiple: true
+                multiple: false
             )
         }
 
@@ -48,13 +48,6 @@ preferences {
                 appName: "Simple Room Lighting v2",
                 namespace: "lundby",
                 title: "Add room lighting",
-                multiple: true
-            )
-            app(
-                name: "houseIntentLightingApps",
-                appName: "Simple House Intent Lighting",
-                namespace: "lundby",
-                title: "Add House Intent lighting",
                 multiple: true
             )
         }
@@ -106,6 +99,7 @@ def updated() {
 
 def initialize() {
     createOrUpdateSharedDevices()
+    validateDefensiveAppCreation()
     if (useHouseIntentVirtualRoom) {
         createOrUpdateHouseIntentVirtualRoom()
     } else if (settings?.containsKey("useHouseIntentVirtualRoom") && useHouseIntentVirtualRoom == false) {
@@ -214,6 +208,10 @@ private void createOrUpdateHouseIntentLighting(def houseIntentChild) {
     if (!houseIntentChild) return
 
     def lighting = houseIntentLightingChildApp()
+    if (multipleHouseIntentLightingApps()) {
+        log.error "Simple Home: More than one House Intent Lighting child exists. Reusing ${lighting?.label ?: lighting?.id}; delete extras manually."
+    }
+
     if (!lighting) {
         try {
             lighting = addChildApp("lundby", "Simple House Intent Lighting", "# House Intent Lighting", [
@@ -300,7 +298,11 @@ private def circadianAppReferenceBulb() {
 }
 
 private def houseIntentChildApp() {
-    return (childApps ?: []).find { child ->
+    return houseIntentChildApps().find { child -> child }
+}
+
+private List houseIntentChildApps() {
+    return (childApps ?: []).findAll { child ->
         try {
             if (child.getRoomProfile() == "houseIntent") return true
             if (child.getConfiguredRoomName() == "House Intent") return true
@@ -312,19 +314,104 @@ private def houseIntentChildApp() {
 }
 
 private def houseIntentLightingChildApp() {
-    def configured = (houseIntentLightingApps ?: []).find { child -> child }
-    if (configured) return configured
+    return houseIntentLightingChildApps().find { child -> child }
+}
 
+private List houseIntentLightingChildApps() {
+    List configured = houseIntentLightingApps ?: []
+    List discovered = []
     try {
-        return getChildApps()?.find { child ->
+        discovered = getChildApps()?.findAll { child ->
             try {
                 return child?.getHouseIntentLightingAppName() == "Simple House Intent Lighting"
             } catch (Throwable ignored) {
                 return child?.label == "# House Intent Lighting" || child?.label == "Simple House Intent Lighting"
             }
-        }
+        } ?: []
     } catch (Throwable ignored) {
-        return null
+        discovered = []
+    }
+
+    return uniqueChildApps(configured + discovered)
+}
+
+private Boolean multipleHouseIntentLightingApps() {
+    return houseIntentLightingChildApps().size() > 1
+}
+
+private List simpleRoomLightingChildApps() {
+    List configured = lightingApps ?: []
+    List discovered = []
+    try {
+        discovered = getChildApps()?.findAll { child ->
+            try {
+                if (child?.getHouseIntentLightingAppName() == "Simple House Intent Lighting") return false
+            } catch (Throwable ignored) {
+                // Continue probing for room lighting identity.
+            }
+
+            try {
+                return child?.getRoomLightingAppName() == "Simple Room Lighting v2"
+            } catch (Throwable ignored) {
+                String label = child?.label?.toString()
+                return label == "Simple Room Lighting" || (label?.endsWith(" Lighting") && label != "# House Intent Lighting")
+            }
+        } ?: []
+    } catch (Throwable ignored) {
+        discovered = []
+    }
+
+    return uniqueChildApps(configured + discovered)
+}
+
+private List modeManagerChildApps() {
+    return uniqueChildApps(modeApps ?: [])
+}
+
+private List uniqueChildApps(List apps) {
+    Map byId = [:]
+    apps.findAll { it }.each { child ->
+        String id = child?.id?.toString()
+        if (id && !byId.containsKey(id)) byId[id] = child
+    }
+    return byId.values() as List
+}
+
+private void validateDefensiveAppCreation() {
+    List modes = modeManagerChildApps()
+    if (modes.size() > 1) {
+        log.error "Simple Home: More than one Mode Manager exists. Keep one and delete extras manually."
+    }
+
+    List houseIntentRooms = houseIntentChildApps()
+    if (houseIntentRooms.size() > 1) {
+        log.error "Simple Home: More than one House Intent room exists. Reusing ${houseIntentRooms[0]?.label ?: houseIntentRooms[0]?.id}; delete extras manually."
+    }
+
+    List houseIntentLighting = houseIntentLightingChildApps()
+    if (houseIntentLighting.size() > 1) {
+        log.error "Simple Home: More than one House Intent Lighting app exists. Reusing ${houseIntentLighting[0]?.label ?: houseIntentLighting[0]?.id}; delete extras manually."
+    }
+
+    Map roomLightingByRoom = [:]
+    simpleRoomLightingChildApps().each { lighting ->
+        String roomId = null
+        try {
+            roomId = lighting.getConfiguredRoomChildAppId()?.toString()
+        } catch (Throwable ignored) {
+            roomId = null
+        }
+        if (!roomId) return
+
+        List appsForRoom = roomLightingByRoom[roomId] ?: []
+        appsForRoom << lighting
+        roomLightingByRoom[roomId] = appsForRoom
+    }
+
+    roomLightingByRoom.each { roomId, appsForRoom ->
+        if (appsForRoom.size() > 1) {
+            log.error "Simple Home: More than one Room Lighting app targets room child ${roomId}. Keep one and delete extras manually."
+        }
     }
 }
 
@@ -498,7 +585,7 @@ private String arrivalDeviceNetworkId() {
 }
 
 private List allManagedChildren() {
-    return ((childApps ?: []) + (modeApps ?: []) + (lightingApps ?: []) + (houseIntentLightingApps ?: []) + (circadianApps ?: [])).findAll { it }
+    return uniqueChildApps((childApps ?: []) + modeManagerChildApps() + simpleRoomLightingChildApps() + houseIntentLightingChildApps() + (circadianApps ?: []))
 }
 
 /**
@@ -572,12 +659,20 @@ Map roomStateChildOptions(def requestingChildAppId) {
 private Map managedRoomOptions(def requestingChildAppId, Boolean includeHouseIntent) {
     try {
         Map opts = [:]
+        Boolean requestingHouseIntentLighting = houseIntentLightingRequester(requestingChildAppId)
+        Boolean requestingRoomLighting = roomLightingRequester(requestingChildAppId)
+        List usedRoomLightingIds = roomLightingRoomChildIds(requestingChildAppId)
+
         childApps?.each { child ->
             String id = child?.id?.toString()
             if (id == "${requestingChildAppId}") return
 
             try {
-                if (!includeHouseIntent && child.getRoomProfile() == "houseIntent") return
+                Boolean childIsHouseIntent = child.getRoomProfile() == "houseIntent"
+                if (requestingHouseIntentLighting && !childIsHouseIntent) return
+                if (!requestingHouseIntentLighting && childIsHouseIntent) return
+                if (requestingRoomLighting && usedRoomLightingIds.contains(id)) return
+                if (!includeHouseIntent && childIsHouseIntent) return
                 String label = child.getManagedRoomDeviceLabel()
                 if (id && label) {
                     opts[(id)] = label
@@ -590,6 +685,49 @@ private Map managedRoomOptions(def requestingChildAppId, Boolean includeHouseInt
     } catch (Exception e) {
         log.warn "Simple Home: Could not build neighbor room options: ${e.message}"
         return [:]
+    }
+}
+
+private Boolean houseIntentLightingRequester(def requestingChildAppId) {
+    def requester = childAppById(requestingChildAppId)
+    if (!requester) return false
+    try {
+        return requester.getHouseIntentLightingAppName() == "Simple House Intent Lighting"
+    } catch (Throwable ignored) {
+        return false
+    }
+}
+
+private Boolean roomLightingRequester(def requestingChildAppId) {
+    def requester = childAppById(requestingChildAppId)
+    if (!requester) return false
+    try {
+        return requester.getRoomLightingAppName() == "Simple Room Lighting v2"
+    } catch (Throwable ignored) {
+        return false
+    }
+}
+
+private List roomLightingRoomChildIds(def requestingChildAppId) {
+    List ids = []
+    simpleRoomLightingChildApps().each { lighting ->
+        if (lighting?.id?.toString() == "${requestingChildAppId}") return
+        try {
+            String roomId = lighting.getConfiguredRoomChildAppId()?.toString()
+            if (roomId) ids << roomId
+        } catch (Throwable ignored) {
+            // Ignore child apps that cannot report a room selection.
+        }
+    }
+    return ids.unique()
+}
+
+private def childAppById(def childAppId) {
+    if (!childAppId) return null
+    try {
+        return getChildApps()?.find { child -> child?.id?.toString() == "${childAppId}" }
+    } catch (Throwable ignored) {
+        return allManagedChildren().find { child -> child?.id?.toString() == "${childAppId}" }
     }
 }
 

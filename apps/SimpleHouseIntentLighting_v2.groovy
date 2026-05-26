@@ -106,6 +106,10 @@ def getHouseIntentLightingAppName() {
     return "Simple House Intent Lighting"
 }
 
+def getConfiguredRoomChildAppId() {
+    return roomChildAppId
+}
+
 def recoverSimpleHomeHandler(evt) {
     state.commitReason = "Simple Home recovery"
     commitPendingIntent()
