@@ -26,7 +26,7 @@ tasks.register('generateHubitatSources') {
         def librarySource = file('libraries/SimpleHomeHelpers.groovy')
         def libraryBody = ''
         if (librarySource.exists()) {
-            libraryBody = librarySource.text.replaceFirst(/(?s)^\s*(?:@SuppressWarnings\([^\n]+\)\s*)?library\s*\(.*?\)\s*/, '')
+            libraryBody = librarySource.text.replaceFirst(/(?s)^\s*(?:\/\*.*?\*\/\s*)?library\s*\(.*?\)\s*/, '')
         }
 
         def expandIncludes = { String text ->

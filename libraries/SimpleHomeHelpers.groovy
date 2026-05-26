@@ -1,4 +1,4 @@
-@SuppressWarnings('UnusedPrivateMethod')
+/* groovylint-disable IfStatementBraces, UnusedPrivateMethod */
 library(
     base: "app",
     author: "Erik Lundby / ChatGPT",
