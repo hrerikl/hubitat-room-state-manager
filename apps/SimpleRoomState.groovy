@@ -1231,6 +1231,15 @@ private void setOccupied(String reason) {
 
 private void setEngaged(String reason) {
     reason = activityReason(reason, "engagement activity")
+
+    if (state.asleep) {
+        debug "Ignoring Engaged while asleep: ${reason}"
+        state.engaged = false
+        clearEngagedReason()
+        componentSwitchOff("Engaged")
+        return
+    }
+
     debug "Engaged true: ${reason}"
     unschedule(clearEngagedIfStillInactive)
     state.lastEngagedInactiveAt = now()
