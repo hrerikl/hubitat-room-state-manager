@@ -67,8 +67,6 @@ def reinitializeFromParent() {
 
 def initialize() {
     updateAppLabel()
-    subscribe(picoRemotes, "pushed", picoPushedHandler)
-    subscribe(picoRemotes, "held", picoHeldHandler)
     def recovery = recoveryDevice()
     if (recovery) {
         subscribe(recovery, "switch.on", recoverSimpleHomeHandler)
@@ -104,32 +102,6 @@ def recoverSimpleHomeHandler(evt) {
     commitPendingIntent()
 }
 
-def picoPushedHandler(evt) {
-    Integer button = eventIntegerValue(evt)
-    debug "Pico pushed ${button}: ${evt.displayName}"
-
-    if (button == 1) {
-        adjustColorTemperature(-ctStep())
-    } else if (button == 2) {
-        adjustLevel(levelStepValue())
-    } else if (button == 4) {
-        adjustLevel(-levelStepValue())
-    } else if (button == 5) {
-        adjustColorTemperature(ctStep())
-    } else {
-        debug "No House Intent Pico push action for button ${button}"
-    }
-}
-
-def picoHeldHandler(evt) {
-    Integer button = eventIntegerValue(evt)
-    debug "Pico held ${button}: ${evt.displayName}"
-
-    if (button == 3) {
-        returnToHouseReference()
-    }
-}
-
 def commitPendingIntent() {
     String reason = state.commitReason ?: "scheduled"
     def room = roomDevice()
@@ -154,35 +126,6 @@ def commitPendingIntent() {
 }
 
 // -------------------- Helpers --------------------
-
-private void adjustLevel(Integer delta) {
-    ensurePendingFromRoom()
-    Integer level = normalizedLevel((state.pendingLevel ?: 50) as Integer + delta)
-    state.pendingLevel = level
-    state.pendingCustom = true
-    state.pendingSceneName = "Custom"
-
-    applyPreview("level adjusted")
-    scheduleCommit("level adjusted")
-}
-
-private void adjustColorTemperature(Integer delta) {
-    ensurePendingFromRoom()
-    Integer ct = normalizedColorTemperature((state.pendingCt ?: 2700) as Integer + delta)
-    state.pendingCt = ct
-    state.pendingCustom = true
-    state.pendingSceneName = "Custom"
-
-    applyPreview("color temperature adjusted")
-    scheduleCommit("color temperature adjusted")
-}
-
-private void returnToHouseReference() {
-    state.pendingCustom = false
-    state.pendingSceneName = "Follow House"
-    roomDevice()?.clearCustomLighting()
-    debug "Returned House Intent to automatic reference"
-}
 
 private void ensurePendingFromRoom() {
     if (state.pendingLevel == null) state.pendingLevel = currentRoomLevel()
@@ -261,22 +204,6 @@ private void updateAppLabel() {
     if (!desired) desired = "# House Intent Lighting"
     if (app.label != desired) {
         app.updateLabel(desired)
-    }
-}
-
-private Integer levelStepValue() {
-    return Math.max(safeInteger(levelStep, 10), 1)
-}
-
-private Integer ctStep() {
-    return Math.max(safeInteger(colorTemperatureStep, 250), 1)
-}
-
-private Integer eventIntegerValue(evt) {
-    try {
-        return evt.value as Integer
-    } catch (Exception ignored) {
-        return null
     }
 }
 
