@@ -1,5 +1,5 @@
 /**
- * Simple Circadian Lighting v2 - Child App
+ * Simple Circadian Lighting - Child App
  *
  * Consumes an outdoor light sensor and publishes a house reference level/CT
  * to a selected color-temperature bulb. Optionally publishes a house-wide
@@ -7,7 +7,7 @@
  */
 
 definition(
-    name: 'Simple Circadian Lighting v2',
+    name: 'Simple Circadian Lighting',
     namespace: 'lundby',
     author: 'Erik Lundby / ChatGPT',
     description: 'Publishes a circadian reference level and color temperature.',
@@ -119,7 +119,7 @@ def getModeManagerAppName() {
 }
 
 def getCircadianLightingAppName() {
-    return 'Simple Circadian Lighting v2'
+    return 'Simple Circadian Lighting'
 }
 
 def getRoomProfile() {

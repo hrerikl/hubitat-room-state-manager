@@ -1,8 +1,8 @@
 /**
- * Simple Mode Manager v2 - Child App
+ * Simple Mode Manager - Child App
  *
  * Install as Apps Code:
- *   Name: Simple Mode Manager v2
+ *   Name: Simple Mode Manager
  *   Namespace: lundby
  *
  * Manages Hubitat Location Mode from house-level presence, vacation, evening,
@@ -10,7 +10,7 @@
  */
 
 definition(
-    name: "Simple Mode Manager v2",
+    name: "Simple Mode Manager",
     namespace: "lundby",
     author: "Erik Lundby / ChatGPT",
     description: "Lightweight Location Mode manager for Simple Room State.",
@@ -105,7 +105,7 @@ def initialize() {
 }
 
 def getModeManagerAppName() {
-    return "Simple Mode Manager v2"
+    return "Simple Mode Manager"
 }
 
 def getRoomStateAppName() {

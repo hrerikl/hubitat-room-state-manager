@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.92",
+  "version": "0.2.93",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-25",
-  "releaseNotes": "Remove SimpleHomeHelpers from HPM manifest; install helper manually in Libraries Code.",
+  "releaseNotes": "Remove v2 from Hubitat app names.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
@@ -34,7 +34,7 @@
     },
     {
       "id": "5d6a0a37-9201-42b6-9655-729fdc506d2d",
-      "name": "Simple Mode Manager v2",
+      "name": "Simple Mode Manager",
       "namespace": "lundby",
       "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleModeManager_v2.groovy",
       "required": true,
@@ -45,7 +45,7 @@
     },
     {
       "id": "80f6efa1-1ba6-42e2-845f-a5b92161f85f",
-      "name": "Simple Room Lighting v2",
+      "name": "Simple Room Lighting",
       "namespace": "lundby",
       "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleRoomLighting_v2.groovy",
       "required": true,
@@ -67,7 +67,7 @@
     },
     {
       "id": "e8a46264-a0f2-4d7f-9b3f-a6b05b2fe2a0",
-      "name": "Simple Circadian Lighting v2",
+      "name": "Simple Circadian Lighting",
       "namespace": "lundby",
       "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleCircadianLighting_v2.groovy",
       "required": true,

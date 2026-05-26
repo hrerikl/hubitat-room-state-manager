@@ -1,8 +1,8 @@
 /**
- * Simple Room Lighting v2 - Child App
+ * Simple Room Lighting - Child App
  *
  * Install as Apps Code:
- *   Name: Simple Room Lighting v2
+ *   Name: Simple Room Lighting
  *   Namespace: lundby
  *
  * Opinionated room lighting adapter:
@@ -11,7 +11,7 @@
  */
 
 definition(
-    name: "Simple Room Lighting v2",
+    name: "Simple Room Lighting",
     namespace: "lundby",
     author: "Erik Lundby / ChatGPT",
     description: "Simple room-centric lighting adapter for Room MetaLight output and physical controls.",
@@ -1439,7 +1439,7 @@ def getConfiguredRoomName() {
 }
 
 def getRoomLightingAppName() {
-    return "Simple Room Lighting v2"
+    return "Simple Room Lighting"
 }
 
 def getHouseIntentLightingAppName() {

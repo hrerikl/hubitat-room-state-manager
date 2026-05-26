@@ -41,7 +41,7 @@ preferences {
             } else {
                 app(
                     name: "modeApps",
-                    appName: "Simple Mode Manager v2",
+                    appName: "Simple Mode Manager",
                     namespace: "lundby",
                     title: "Add mode manager",
                     multiple: false
@@ -52,7 +52,7 @@ preferences {
         section("Lighting") {
             app(
                 name: "lightingApps",
-                appName: "Simple Room Lighting v2",
+                appName: "Simple Room Lighting",
                 namespace: "lundby",
                 title: "Add room lighting",
                 multiple: true
@@ -74,7 +74,7 @@ preferences {
             } else {
                 app(
                     name: "circadianApps",
-                    appName: "Simple Circadian Lighting v2",
+                    appName: "Simple Circadian Lighting",
                     namespace: "lundby",
                     title: "Add circadian reference lighting",
                     multiple: false
@@ -487,7 +487,7 @@ private List simpleRoomLightingChildApps() {
             }
 
             try {
-                return child?.getRoomLightingAppName() == "Simple Room Lighting v2"
+                return ["Simple Room Lighting", "Simple Room Lighting v2"].contains(child?.getRoomLightingAppName())
             } catch (Throwable ignored) {
                 String label = child?.label?.toString()
                 return label == "Simple Room Lighting" || (label?.endsWith(" Lighting") && label != "# House Intent Lighting")
@@ -506,7 +506,7 @@ private List modeManagerChildApps() {
     try {
         discovered = getChildApps()?.findAll { child ->
             try {
-                return child?.getModeManagerAppName() == "Simple Mode Manager v2"
+                return ["Simple Mode Manager", "Simple Mode Manager v2"].contains(child?.getModeManagerAppName())
             } catch (Throwable ignored) {
                 return child?.label == "Simple Mode Manager" || child?.label == "Simple Mode Manager v2"
             }
@@ -528,7 +528,7 @@ private List circadianLightingChildApps() {
     try {
         discovered = getChildApps()?.findAll { child ->
             try {
-                return child?.getCircadianLightingAppName() == "Simple Circadian Lighting v2"
+                return ["Simple Circadian Lighting", "Simple Circadian Lighting v2"].contains(child?.getCircadianLightingAppName())
             } catch (Throwable ignored) {
                 return child?.label == "Simple Circadian Lighting" || child?.label == "Simple Circadian Lighting v2"
             }
@@ -974,7 +974,7 @@ private Boolean roomLightingRequester(def requestingChildAppId) {
     def requester = childAppById(requestingChildAppId)
     if (!requester) return false
     try {
-        return requester.getRoomLightingAppName() == "Simple Room Lighting v2"
+        return ["Simple Room Lighting", "Simple Room Lighting v2"].contains(requester.getRoomLightingAppName())
     } catch (Throwable ignored) {
         return false
     }
