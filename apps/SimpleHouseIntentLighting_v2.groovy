@@ -74,6 +74,7 @@ def reinitializeFromParent() {
 def initialize() {
     updateAppLabel()
     if (!houseIntentLightingAllowed()) {
+        markDuplicateForDelete("House Intent Lighting")
         log.error "${app.label}: Duplicate House Intent Lighting app. Delete this child app and keep the parent-created primary app."
         return
     }
@@ -121,6 +122,15 @@ private Boolean houseIntentLightingAllowed() {
     } catch (Throwable e) {
         log.warn "${app.label}: Could not validate House Intent Lighting uniqueness: ${e.message}"
         return true
+    }
+}
+
+private void markDuplicateForDelete(String duplicateType) {
+    String desired = "Duplicate-Delete ${duplicateType}"
+    try {
+        if (app.label != desired) app.updateLabel(desired)
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not rename duplicate app: ${e.message}"
     }
 }
 

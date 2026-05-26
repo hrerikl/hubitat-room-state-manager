@@ -80,6 +80,7 @@ def reinitializeFromParent() {
 
 def initialize() {
     if (!modeManagerAllowed()) {
+        markDuplicateForDelete("Mode Manager")
         log.error "${app.label}: Duplicate Mode Manager app. Delete this child app and keep the primary Mode Manager."
         return
     }
@@ -110,6 +111,15 @@ private Boolean modeManagerAllowed() {
     } catch (Throwable e) {
         log.warn "${app.label}: Could not validate Mode Manager uniqueness: ${e.message}"
         return true
+    }
+}
+
+private void markDuplicateForDelete(String duplicateType) {
+    String desired = "Duplicate-Delete ${duplicateType}"
+    try {
+        if (app.label != desired) app.updateLabel(desired)
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not rename duplicate app: ${e.message}"
     }
 }
 

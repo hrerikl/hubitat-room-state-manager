@@ -219,6 +219,7 @@ def initializeChild() {
     updateChildAppLabel()
 
     if (!roomStateChildAllowed()) {
+        markDuplicateForDelete("House Intent Room")
         log.error "${app.label}: Duplicate House Intent room. Delete this child app and keep the parent-created House Intent room."
         return
     }
@@ -641,6 +642,15 @@ private Boolean roomStateChildAllowed() {
     } catch (Throwable e) {
         log.warn "${app.label}: Could not validate House Intent room uniqueness: ${e.message}"
         return true
+    }
+}
+
+private void markDuplicateForDelete(String duplicateType) {
+    String desired = "Duplicate-Delete ${duplicateType}"
+    try {
+        if (app.label != desired) app.updateLabel(desired)
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not rename duplicate app: ${e.message}"
     }
 }
 

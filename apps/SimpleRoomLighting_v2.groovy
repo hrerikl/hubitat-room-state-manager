@@ -137,6 +137,7 @@ def initialize() {
     updateAppLabel()
 
     if (!roomLightingAllowed()) {
+        markDuplicateForDelete("Room Lighting")
         log.error "${app.label}: Duplicate Room Lighting app for this room. Delete this child app or choose an unused room."
         return
     }
@@ -1444,6 +1445,15 @@ private Boolean roomLightingAllowed() {
     } catch (Throwable e) {
         log.warn "${app.label}: Could not validate Room Lighting uniqueness: ${e.message}"
         return true
+    }
+}
+
+private void markDuplicateForDelete(String duplicateType) {
+    String desired = "Duplicate-Delete ${duplicateType}"
+    try {
+        if (app.label != desired) app.updateLabel(desired)
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not rename duplicate app: ${e.message}"
     }
 }
 
