@@ -616,6 +616,10 @@ def getModeManagerAppName() {
     return null
 }
 
+def getCircadianLightingAppName() {
+    return null
+}
+
 def getManagedMetaLightDevice() {
     def room = roomDevice()
     if (!room) return null

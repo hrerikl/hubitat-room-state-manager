@@ -63,13 +63,18 @@ preferences {
             paragraph houseIntentSummaryText()
             renderHouseIntentRoomLink()
             renderHouseIntentLightingLink()
-            app(
-                name: "circadianApps",
-                appName: "Simple Circadian Lighting v2",
-                namespace: "lundby",
-                title: "Add circadian reference lighting",
-                multiple: true
-            )
+            def circadian = circadianLightingChildApp()
+            if (circadian) {
+                renderChildConfigureLink("configureCircadianLighting", "Configure Circadian Lighting", circadian, "Simple Circadian Lighting")
+            } else {
+                app(
+                    name: "circadianApps",
+                    appName: "Simple Circadian Lighting v2",
+                    namespace: "lundby",
+                    title: "Add circadian reference lighting",
+                    multiple: false
+                )
+            }
         }
 
         section("Recovery") {
@@ -319,7 +324,7 @@ private def rawCircadianReferenceBulb(def houseIntentChild = null) {
 }
 
 private def circadianAppReferenceBulb() {
-    def appWithReference = (circadianApps ?: []).find { child ->
+    def appWithReference = circadianLightingChildApps().find { child ->
         try {
             return child.getReferenceBulb() != null
         } catch (Throwable ignored) {
@@ -442,6 +447,28 @@ private def modeManagerChildApp() {
     return modeManagerChildApps().find { child -> child }
 }
 
+private List circadianLightingChildApps() {
+    List configured = circadianApps ?: []
+    List discovered = []
+    try {
+        discovered = getChildApps()?.findAll { child ->
+            try {
+                return child?.getCircadianLightingAppName() == "Simple Circadian Lighting v2"
+            } catch (Throwable ignored) {
+                return child?.label == "Simple Circadian Lighting" || child?.label == "Simple Circadian Lighting v2"
+            }
+        } ?: []
+    } catch (Throwable ignored) {
+        discovered = []
+    }
+
+    return uniqueChildApps(configured + discovered)
+}
+
+private def circadianLightingChildApp() {
+    return circadianLightingChildApps().find { child -> child }
+}
+
 private List uniqueChildApps(List apps) {
     Map byId = [:]
     apps.findAll { it }.each { child ->
@@ -455,6 +482,11 @@ private void validateDefensiveAppCreation() {
     List modes = modeManagerChildApps()
     if (modes.size() > 1) {
         log.error "Simple Home: More than one Mode Manager exists. Keep one and delete extras manually."
+    }
+
+    List circadianLighting = circadianLightingChildApps()
+    if (circadianLighting.size() > 1) {
+        log.error "Simple Home: More than one Circadian Lighting app exists. Keep one and delete extras manually."
     }
 
     List houseIntentRooms = houseIntentChildApps()
@@ -491,6 +523,10 @@ private void validateDefensiveAppCreation() {
 
 Boolean modeManagerAllowed(def requestingChildAppId) {
     return primaryChildAllowed(modeManagerChildApps(), requestingChildAppId, "Mode Manager")
+}
+
+Boolean circadianLightingAllowed(def requestingChildAppId) {
+    return primaryChildAllowed(circadianLightingChildApps(), requestingChildAppId, "Circadian Lighting")
 }
 
 Boolean houseIntentRoomAllowed(def requestingChildAppId) {
@@ -703,7 +739,7 @@ private String arrivalDeviceNetworkId() {
 }
 
 private List allManagedChildren() {
-    return uniqueChildApps(roomStateChildApps() + modeManagerChildApps() + simpleRoomLightingChildApps() + houseIntentLightingChildApps() + (circadianApps ?: []))
+    return uniqueChildApps(roomStateChildApps() + modeManagerChildApps() + simpleRoomLightingChildApps() + houseIntentLightingChildApps() + circadianLightingChildApps())
 }
 
 /**

@@ -76,6 +76,12 @@ def reinitializeFromParent() {
 }
 
 def initialize() {
+    if (!circadianLightingAllowed()) {
+        markDuplicateForDelete('Circadian Lighting')
+        log.error "${app.label}: Duplicate Circadian Lighting app. Delete this child app and keep the primary Circadian Lighting app."
+        return
+    }
+
     subscribe(parent.recoveryDevice(), 'switch.on', recoverSimpleHomeHandler)
     schedulePublishing()
     publishReference('initialize')
@@ -111,6 +117,10 @@ def getModeManagerAppName() {
     return null
 }
 
+def getCircadianLightingAppName() {
+    return 'Simple Circadian Lighting v2'
+}
+
 def getRoomProfile() {
     return null
 }
@@ -121,6 +131,24 @@ def getConfiguredRoomName() {
 
 def getManagedRoomDeviceLabel() {
     return null
+}
+
+private Boolean circadianLightingAllowed() {
+    try {
+        return parent.circadianLightingAllowed(app.id) != false
+    } catch (Throwable e) {
+        log.warn "${app.label}: Could not validate Circadian Lighting uniqueness: ${e.message}"
+        return true
+    }
+}
+
+private void markDuplicateForDelete(String duplicateType) {
+    String desired = "Duplicate-Delete ${duplicateType}"
+    try {
+        if (app.label != desired) app.updateLabel(desired)
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not rename duplicate app: ${e.message}"
+    }
 }
 
 // -------------------- Publishing --------------------

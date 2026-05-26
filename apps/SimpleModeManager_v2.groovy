@@ -117,6 +117,10 @@ def getHouseIntentLightingAppName() {
     return null
 }
 
+def getCircadianLightingAppName() {
+    return null
+}
+
 def getRoomProfile() {
     return null
 }

@@ -1455,6 +1455,10 @@ def getModeManagerAppName() {
     return null
 }
 
+def getCircadianLightingAppName() {
+    return null
+}
+
 def getConfiguredRoomChildAppId() {
     return roomChildAppId
 }
