@@ -60,6 +60,9 @@ preferences {
         section("Circadian lighting") {
             input "defaultCircadianReferenceBulb", "capability.colorTemperature", title: "House reference bulb", multiple: false, required: false
             input "useHouseIntentVirtualRoom", "bool", title: "Use House Intent Virtual Room", defaultValue: false, required: true
+            input "createOpenMeteoReferenceNow", "button", title: "Create Open-Meteo reference device"
+            paragraph openMeteoReferenceSummaryText()
+            renderOpenMeteoReferenceLink()
             paragraph houseIntentSummaryText()
             renderHouseIntentRoomLink()
             renderHouseIntentLightingLink()
@@ -124,6 +127,9 @@ def appButtonHandler(String buttonName) {
     if (buttonName == "reinitializeChildrenNow") {
         reinitializeChildApps()
     }
+    if (buttonName == "createOpenMeteoReferenceNow") {
+        createOpenMeteoReferenceDevice()
+    }
 }
 
 String roomSummaryText() {
@@ -147,6 +153,24 @@ String houseIntentSummaryText() {
     String childText = child ? "House Intent room: ${child.label ?: child.id}" : "House Intent room: not configured"
     String referenceText = defaultCircadianReferenceBulb ? "House reference bulb: ${defaultCircadianReferenceBulb.displayName}" : "House reference bulb: not selected"
     return "${referenceText}\n${childText}"
+}
+
+String openMeteoReferenceSummaryText() {
+    def dev = openMeteoReferenceDevice()
+    if (dev) return "Open-Meteo reference device: ${dev.displayName}"
+    return "Open-Meteo reference device: not created by Simple Home"
+}
+
+private void renderOpenMeteoReferenceLink() {
+    def dev = openMeteoReferenceDevice()
+    if (!dev) return
+
+    href(
+        name: "configureOpenMeteoReference",
+        title: "Configure Open-Meteo Reference Device",
+        description: dev.displayName ?: "Simple Open-Meteo Reference",
+        url: deviceConfigureUrl(dev)
+    )
 }
 
 private void renderHouseIntentRoomLink() {
@@ -177,6 +201,10 @@ private void renderChildConfigureLink(String name, String title, def child, Stri
 
 private String childConfigureUrl(def child) {
     return "/installedapp/configure/${child.id}"
+}
+
+private String deviceConfigureUrl(def dev) {
+    return "/device/edit/${dev.id}"
 }
 
 private String profileLabel(String profile) {
@@ -656,6 +684,10 @@ def circadianReferenceBulb() {
     return defaultCircadianReferenceBulb
 }
 
+def openMeteoReferenceDevice() {
+    return getChildDevice(openMeteoReferenceDeviceNetworkId())
+}
+
 String customLightingOnText() {
     return customLightingText(defaultCustomLightingOnText, '<audio src="soundbank://soundlibrary/alarms/beeps_and_bloops/bell_01"/>')
 }
@@ -702,6 +734,46 @@ private void createOrUpdateSharedDevices() {
     createOrUpdateArrivalDevice()
 }
 
+private void createOpenMeteoReferenceDevice() {
+    String dni = openMeteoReferenceDeviceNetworkId()
+    String label = "Simple Open-Meteo Reference"
+    def child = getChildDevice(dni)
+
+    if (!child) {
+        try {
+            child = addChildDevice("lundby", "Simple Open-Meteo Outdoor Light Device", dni, [
+                label      : label,
+                name       : label,
+                isComponent: false
+            ])
+            log.info "Simple Home: Created Open-Meteo reference device."
+        } catch (Exception e) {
+            log.warn "Simple Home: Could not create Open-Meteo reference device: ${e.message}"
+            return
+        }
+    } else {
+        log.info "Simple Home: Open-Meteo reference device already exists; leaving settings unchanged."
+    }
+
+    try {
+        if (child.displayName != label) {
+            child.setLabel(label)
+        }
+        child.initialize()
+    } catch (Exception e) {
+        log.warn "Simple Home: Could not initialize Open-Meteo reference device: ${e.message}"
+    }
+
+    if (!defaultCircadianReferenceBulb) {
+        try {
+            app.updateSetting("defaultCircadianReferenceBulb", [type: "capability.colorTemperature", value: child.id])
+            log.info "Simple Home: House reference bulb set to ${child.displayName}."
+        } catch (Exception e) {
+            log.warn "Simple Home: Could not set Open-Meteo reference as House reference bulb: ${e.message}"
+        }
+    }
+}
+
 private void createOrUpdateArrivalDevice() {
     String dni = arrivalDeviceNetworkId()
     String label = "Someone Arrived"
@@ -736,6 +808,10 @@ private String recoveryDeviceNetworkId() {
 
 private String arrivalDeviceNetworkId() {
     return "simple-home-arrival-${app.id}"
+}
+
+private String openMeteoReferenceDeviceNetworkId() {
+    return "simple-home-open-meteo-reference-${app.id}"
 }
 
 private List allManagedChildren() {

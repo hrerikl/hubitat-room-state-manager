@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.86",
+  "version": "0.2.87",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-25",
-  "releaseNotes": "Make Circadian Lighting a singleton with a direct parent configure link.",
+  "releaseNotes": "Add a parent helper to create and configure a new Open-Meteo reference device.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
