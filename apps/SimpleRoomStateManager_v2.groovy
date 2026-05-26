@@ -312,13 +312,7 @@ private def houseIntentChildApp() {
 }
 
 private def houseIntentLightingChildApp() {
-    return (houseIntentLightingApps ?: []).find { child ->
-        try {
-            return child?.label == "# House Intent Lighting" || child?.label == "Simple House Intent Lighting"
-        } catch (Throwable ignored) {
-            return false
-        }
-    }
+    return (houseIntentLightingApps ?: []).find { child -> child }
 }
 
 private Boolean sameDevice(def first, def second) {

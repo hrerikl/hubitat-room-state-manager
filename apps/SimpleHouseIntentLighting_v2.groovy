@@ -85,9 +85,6 @@ def initialize() {
 def configureHouseIntentLightingFromParent(def houseIntentChildAppId) {
     try {
         app.updateSetting("roomChildAppId", [type: "enum", value: houseIntentChildAppId?.toString()])
-        app.updateSetting("commitDelaySeconds", [type: "number", value: 10])
-        app.updateSetting("levelStep", [type: "number", value: 10])
-        app.updateSetting("colorTemperatureStep", [type: "number", value: 250])
         initialize()
         return true
     } catch (Exception e) {
