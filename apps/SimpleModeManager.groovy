@@ -102,6 +102,7 @@ def initialize() {
     scheduleNightStart()
 
     evaluatePresenceMode("initialize")
+    evaluateNight("initialize")
 }
 
 def getModeManagerAppName() {

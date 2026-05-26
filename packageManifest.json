@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.96",
+  "version": "0.2.97",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-26",
-  "releaseNotes": "Allow Asleep component switch dashboard toggles to update room state device.",
+  "releaseNotes": "Re-evaluate Night readiness after Mode Manager updates during the night window.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
