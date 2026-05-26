@@ -67,6 +67,7 @@ def reinitializeFromParent() {
 
 def initialize() {
     updateAppLabel()
+    subscribe(picoRemotes, "pushed", "picoPushedHandler")
     def recovery = recoveryDevice()
     if (recovery) {
         subscribe(recovery, "switch.on", recoverSimpleHomeHandler)
@@ -100,6 +101,10 @@ def getManagedRoomDeviceLabel() {
 def recoverSimpleHomeHandler(evt) {
     state.commitReason = "Simple Home recovery"
     commitPendingIntent()
+}
+
+def picoPushedHandler(evt) {
+    debug "Pico pushed ${evt?.value}: ${evt?.displayName}"
 }
 
 def commitPendingIntent() {

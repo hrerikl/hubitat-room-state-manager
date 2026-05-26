@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.73",
+  "version": "0.2.74",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-25",
-  "releaseNotes": "Binary-search House Intent Lighting Pico support by keeping control inputs without event subscriptions.",
+  "releaseNotes": "Add logging-only House Intent Pico pushed subscription using string handler form.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
