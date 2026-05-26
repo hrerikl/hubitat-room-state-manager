@@ -27,6 +27,11 @@ preferences {
             input "lightingName", "text", title: "Lighting app name override, optional", required: false
         }
 
+        section("Preview") {
+            input "previewDevice", "capability.colorTemperature", title: "Preview/feedback device", multiple: false, required: false
+            input "commitDelaySeconds", "number", title: "Commit after inactivity seconds", defaultValue: 10, required: true
+        }
+
         section("Debug") {
             input "debugLogging", "bool", title: "Enable debug logging", defaultValue: true, required: true
         }
@@ -56,11 +61,17 @@ def reinitializeFromParent() {
 
 def initialize() {
     updateAppLabel()
+    def recovery = recoveryDevice()
+    if (recovery) {
+        subscribe(recovery, "switch.on", recoverSimpleHomeHandler)
+    }
+    ensurePendingFromRoom()
 }
 
 def configureHouseIntentLightingFromParent(def houseIntentChildAppId) {
     try {
         app.updateSetting("roomChildAppId", [type: "enum", value: houseIntentChildAppId?.toString()])
+        app.updateSetting("commitDelaySeconds", [type: "number", value: 10])
         initialize()
         return true
     } catch (Exception e) {
@@ -78,7 +89,74 @@ def getManagedRoomDeviceLabel() {
     return room?.displayName ?: room?.label ?: ""
 }
 
+def recoverSimpleHomeHandler(evt) {
+    state.commitReason = "Simple Home recovery"
+    commitPendingIntent()
+}
+
+def commitPendingIntent() {
+    String reason = state.commitReason ?: "scheduled"
+    def room = roomDevice()
+    if (!room) {
+        log.warn "${app.label}: Cannot commit House Intent because no room is selected."
+        return
+    }
+
+    Integer level = normalizedLevel(state.pendingLevel ?: currentRoomLevel())
+    Integer ct = normalizedColorTemperature(state.pendingCt ?: currentRoomCt())
+
+    try {
+        room.activateCustomLighting()
+        room.setMetaLightSwitchState(level > 0 ? "on" : "off")
+        room.setMetaLightColorTemperature(ct)
+        room.setMetaLightLevel(level)
+        debug "Committed House Intent level=${level}, ct=${ct}: ${reason}"
+        state.remove("commitReason")
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not commit House Intent level=${level}, ct=${ct}: ${e.message}"
+    }
+}
+
 // -------------------- Helpers --------------------
+
+private void ensurePendingFromRoom() {
+    if (state.pendingLevel == null) state.pendingLevel = currentRoomLevel()
+    if (state.pendingCt == null) state.pendingCt = currentRoomCt()
+}
+
+private void applyPreview(String reason) {
+    def dev = previewDevice
+    if (!dev) return
+
+    Integer level = normalizedLevel(state.pendingLevel ?: currentRoomLevel())
+    Integer ct = normalizedColorTemperature(state.pendingCt ?: currentRoomCt())
+
+    try {
+        dev.setColorTemperature(ct, level)
+    } catch (Exception ignored) {
+        try {
+            dev.setColorTemperature(ct)
+            dev.setLevel(level)
+        } catch (Exception e) {
+            log.warn "${app.label}: Could not apply preview for ${reason}: ${e.message}"
+        }
+    }
+}
+
+private void scheduleCommit(String reason) {
+    Integer seconds = Math.max(safeInteger(commitDelaySeconds, 10), 1)
+    state.commitReason = reason
+    debug "Scheduling House Intent commit in ${seconds} seconds: ${reason}"
+    runIn(seconds, "commitPendingIntent", [overwrite: true])
+}
+
+private Integer currentRoomLevel() {
+    return normalizedLevel(roomDevice()?.currentValue("metaLightLevel") ?: roomDevice()?.currentValue("level") ?: 50)
+}
+
+private Integer currentRoomCt() {
+    return normalizedColorTemperature(roomDevice()?.currentValue("metaLightColorTemperature") ?: roomDevice()?.currentValue("colorTemperature") ?: 2700)
+}
 
 private def roomDevice() {
     try {
@@ -86,6 +164,16 @@ private def roomDevice() {
         if (!parentApp) return null
         if (!roomChildAppId) return null
         return parentApp.roomStateChildRoomDevice(roomChildAppId)
+    } catch (Throwable ignored) {
+        return null
+    }
+}
+
+private def recoveryDevice() {
+    try {
+        def parentApp = parent
+        if (!parentApp) return null
+        return parentApp.recoveryDevice()
     } catch (Throwable ignored) {
         return null
     }
@@ -108,6 +196,28 @@ private void updateAppLabel() {
     if (!desired) desired = "# House Intent Lighting"
     if (app.label != desired) {
         app.updateLabel(desired)
+    }
+}
+
+private Integer normalizedLevel(value) {
+    return Math.max(Math.min(safeInteger(value, 50), 100), 0)
+}
+
+private Integer normalizedColorTemperature(value) {
+    Integer ct = 2700
+    try {
+        ct = (value == null ? 2700 : value) as Integer
+    } catch (Exception ignored) {
+        ct = 2700
+    }
+    return Math.max(Math.min(ct, 10000), 1500)
+}
+
+private Integer safeInteger(value, Integer fallback) {
+    try {
+        return value == null ? fallback : value as Integer
+    } catch (Exception ignored) {
+        return fallback
     }
 }
 

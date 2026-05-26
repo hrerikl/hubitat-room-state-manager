@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.70",
+  "version": "0.2.71",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-25",
-  "releaseNotes": "Reduce Simple House Intent Lighting to an installable shell so HPM can add the optional app before features are reintroduced.",
+  "releaseNotes": "Add House Intent Lighting recovery, preview, and delayed commit path back after install-shell recovery.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
