@@ -18,6 +18,8 @@ definition(
     iconX2Url: ''
 )
 
+#include lundby.SimpleHomeHelpers
+
 preferences {
     page(name: 'mainPage', title: 'Simple Circadian Lighting', install: true, uninstall: true) {
         section('Devices') {
