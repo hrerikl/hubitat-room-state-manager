@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.65",
+  "version": "0.2.66",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-25",
-  "releaseNotes": "Inline Hubitat app helpers again and guard child room option loading when parent is unavailable during upgrade.",
+  "releaseNotes": "Harden child room option loading during HPM upgrade by capturing parent once before calling roomStateChildOptions.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

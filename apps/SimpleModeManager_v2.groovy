@@ -361,9 +361,11 @@ private List nightReadyRooms() {
 }
 
 private Map roomOptions() {
+    def parentApp = parent
+    if (!parentApp) return [:]
+
     try {
-        if (!parent) return [:]
-        return parent.roomStateChildOptions(app.id) ?: [:]
+        return parentApp.roomStateChildOptions(app?.id) ?: [:]
     } catch (Exception e) {
         log.warn "${app.label}: Could not load room options: ${e.message}"
         return [:]
