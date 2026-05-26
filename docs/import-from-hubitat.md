@@ -8,9 +8,12 @@ Save the four Hubitat code entries here:
 
 ```text
 apps/
-  SimpleRoomStateManager_v2.groovy       # parent app
-  SimpleRoomStateChild_v2.groovy         # child app 1
-  RoomLightingTemplateBuilder_v2.groovy  # child app 2
+  SimpleHome.groovy                      # parent app
+  SimpleRoomState.groovy                 # room state child app
+  SimpleRoomLighting.groovy              # room lighting child app
+  SimpleModeManager.groovy               # mode manager child app
+  SimpleHouseIntentLighting.groovy       # house intent lighting child app
+  SimpleCircadianLighting.groovy         # circadian lighting child app
 drivers/
   SimpleRoomMetaDevice.groovy            # device driver, later
 ```
@@ -21,10 +24,9 @@ Keeping apps in `apps/` and drivers in `drivers/` lets Gradle compile them witho
 
 1. Open your Hubitat admin UI.
 2. Go to **Apps Code**.
-3. Open `SimpleRoomStateManager_v2`.
-4. Select all source, copy it, and paste it into `apps/SimpleRoomStateManager_v2.groovy`.
-5. Repeat for `SimpleRoomStateChild_v2`.
-6. Repeat for `RoomLightingTemplateBuilder_v2`.
+3. Open `Simple Home`.
+4. Select all source, copy it, and paste it into `apps/SimpleHome.groovy`.
+5. Repeat for the child apps listed above.
 7. Later, when you are ready, copy `SimpleRoomMetaDevice` from **Drivers Code** into `drivers/SimpleRoomMetaDevice.groovy`.
 
 After copying, run:

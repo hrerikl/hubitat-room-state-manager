@@ -4,9 +4,12 @@ This workspace gives you a local development loop for Hubitat Groovy apps withou
 
 ## What is included
 
-- `apps/SimpleRoomStateManager_v2.groovy` - parent app source copied from your hub.
-- `apps/SimpleRoomStateChild_v2.groovy` - room state child app source copied from your hub.
-- `apps/RoomLightingTemplateBuilder_v2.groovy` - lighting template child app source copied from your hub.
+- `apps/SimpleHome.groovy` - parent app source.
+- `apps/SimpleRoomState.groovy` - room state child app source.
+- `apps/SimpleRoomLighting.groovy` - room lighting child app source.
+- `apps/SimpleModeManager.groovy` - mode manager child app source.
+- `apps/SimpleHouseIntentLighting.groovy` - house intent lighting child app source.
+- `apps/SimpleCircadianLighting.groovy` - circadian lighting child app source.
 - `drivers/` - Hubitat driver source copied from your hub.
 - `src/main/groovy/apps/RoomStateAutomation.groovy` - starter app source that can be deleted once your real code is imported.
 - `src/test/groovy/apps/RoomStateAutomationSpec.groovy` - Spock tests.
