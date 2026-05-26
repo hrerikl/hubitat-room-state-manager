@@ -893,6 +893,12 @@ def courtesyEnabledHandler(evt) {
 
 def engagedEnabledHandler(evt) {
     debug "Engaged enabled ${evt.value}"
+
+    if (!isDigitalEvent(evt)) {
+        debug "Ignoring app-published Engaged switch ${evt.value} event"
+        return
+    }
+
     if (evt.value == "on") {
         setEngaged(eventReason("engaged switch on", evt))
     } else {
