@@ -104,6 +104,10 @@ def getReferenceBulb() {
     return settings?.referenceBulb
 }
 
+def getSimpleHomeAppType() {
+    return 'circadianLighting'
+}
+
 def getRoomStateAppName() {
     return null
 }

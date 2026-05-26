@@ -109,6 +109,10 @@ def getModeManagerAppName() {
     return "Simple Mode Manager"
 }
 
+def getSimpleHomeAppType() {
+    return "modeManager"
+}
+
 def getRoomStateAppName() {
     return null
 }

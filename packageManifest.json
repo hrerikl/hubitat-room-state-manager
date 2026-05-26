@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.98",
+  "version": "0.2.99",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-26",
-  "releaseNotes": "Apply inactive Room Lighting off rows on Location Mode changes.",
+  "releaseNotes": "Add Simple Home app type identity for child discovery.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

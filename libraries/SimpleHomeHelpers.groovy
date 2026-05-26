@@ -123,3 +123,11 @@ private Boolean debugEnabled(Boolean localDebugSetting) {
     }
     return localDebugSetting == true
 }
+
+def getSimpleHomeAppName() {
+    try {
+        return app?.name?.toString()
+    } catch (Throwable ignored) {
+        return null
+    }
+}

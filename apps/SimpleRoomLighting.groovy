@@ -1421,6 +1421,10 @@ def getManagedRoomDeviceLabel() {
     return null
 }
 
+def getSimpleHomeAppType() {
+    return "roomLighting"
+}
+
 def getRoomStateAppName() {
     return null
 }

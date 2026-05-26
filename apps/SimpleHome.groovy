@@ -135,6 +135,10 @@ def initialize() {
     subscribe(recoveryDevice(), "switch.on", recoverySwitchOnHandler)
 }
 
+def getSimpleHomeAppType() {
+    return "parent"
+}
+
 def appButtonHandler(String buttonName) {
     if (buttonName == "reinitializeChildrenNow") {
         reinitializeChildApps()
@@ -435,6 +439,7 @@ private List roomStateChildApps() {
     List discovered = []
     try {
         discovered = getChildApps()?.findAll { child ->
+            if (simpleHomeChildTypeIs(child, "roomState")) return true
             try {
                 return child?.getRoomStateAppName() == "Simple Room State"
             } catch (Throwable ignored) {
@@ -458,6 +463,7 @@ private List houseIntentLightingChildApps() {
     List discovered = []
     try {
         discovered = getChildApps()?.findAll { child ->
+            if (simpleHomeChildTypeIs(child, "houseIntentLighting")) return true
             try {
                 return child?.getHouseIntentLightingAppName() == "Simple House Intent Lighting"
             } catch (Throwable ignored) {
@@ -480,6 +486,8 @@ private List simpleRoomLightingChildApps() {
     List discovered = []
     try {
         discovered = getChildApps()?.findAll { child ->
+            if (simpleHomeChildTypeIs(child, "houseIntentLighting")) return false
+            if (simpleHomeChildTypeIs(child, "roomLighting")) return true
             try {
                 if (child?.getHouseIntentLightingAppName() == "Simple House Intent Lighting") return false
             } catch (Throwable ignored) {
@@ -505,6 +513,7 @@ private List modeManagerChildApps() {
     List discovered = []
     try {
         discovered = getChildApps()?.findAll { child ->
+            if (simpleHomeChildTypeIs(child, "modeManager")) return true
             try {
                 return ["Simple Mode Manager", "Simple Mode Manager v2"].contains(child?.getModeManagerAppName())
             } catch (Throwable ignored) {
@@ -527,6 +536,7 @@ private List circadianLightingChildApps() {
     List discovered = []
     try {
         discovered = getChildApps()?.findAll { child ->
+            if (simpleHomeChildTypeIs(child, "circadianLighting")) return true
             try {
                 return ["Simple Circadian Lighting", "Simple Circadian Lighting v2"].contains(child?.getCircadianLightingAppName())
             } catch (Throwable ignored) {
@@ -551,6 +561,18 @@ private List uniqueChildApps(List apps) {
         if (id && !byId.containsKey(id)) byId[id] = child
     }
     return byId.values() as List
+}
+
+private String simpleHomeAppType(def child) {
+    try {
+        return child?.getSimpleHomeAppType()?.toString()
+    } catch (Throwable ignored) {
+        return null
+    }
+}
+
+private Boolean simpleHomeChildTypeIs(def child, String type) {
+    return simpleHomeAppType(child) == type
 }
 
 private void validateDefensiveAppCreation() {
@@ -963,6 +985,7 @@ private Map managedRoomOptions(def requestingChildAppId, Boolean includeHouseInt
 private Boolean houseIntentLightingRequester(def requestingChildAppId) {
     def requester = childAppById(requestingChildAppId)
     if (!requester) return false
+    if (simpleHomeChildTypeIs(requester, "houseIntentLighting")) return true
     try {
         return requester.getHouseIntentLightingAppName() == "Simple House Intent Lighting"
     } catch (Throwable ignored) {
@@ -973,6 +996,7 @@ private Boolean houseIntentLightingRequester(def requestingChildAppId) {
 private Boolean roomLightingRequester(def requestingChildAppId) {
     def requester = childAppById(requestingChildAppId)
     if (!requester) return false
+    if (simpleHomeChildTypeIs(requester, "roomLighting")) return true
     try {
         return ["Simple Room Lighting", "Simple Room Lighting v2"].contains(requester.getRoomLightingAppName())
     } catch (Throwable ignored) {

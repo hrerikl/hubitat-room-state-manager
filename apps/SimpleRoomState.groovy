@@ -603,6 +603,10 @@ def getManagedRoomDevice() {
     return roomDevice()
 }
 
+def getSimpleHomeAppType() {
+    return "roomState"
+}
+
 def getRoomStateAppName() {
     return "Simple Room State"
 }
