@@ -312,7 +312,20 @@ private def houseIntentChildApp() {
 }
 
 private def houseIntentLightingChildApp() {
-    return (houseIntentLightingApps ?: []).find { child -> child }
+    def configured = (houseIntentLightingApps ?: []).find { child -> child }
+    if (configured) return configured
+
+    try {
+        return getChildApps()?.find { child ->
+            try {
+                return child?.getHouseIntentLightingAppName() == "Simple House Intent Lighting"
+            } catch (Throwable ignored) {
+                return child?.label == "# House Intent Lighting" || child?.label == "Simple House Intent Lighting"
+            }
+        }
+    } catch (Throwable ignored) {
+        return null
+    }
 }
 
 private Boolean sameDevice(def first, def second) {

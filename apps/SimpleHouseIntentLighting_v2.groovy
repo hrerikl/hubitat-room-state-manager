@@ -102,6 +102,10 @@ def getManagedRoomDeviceLabel() {
     return room?.displayName ?: room?.label ?: ""
 }
 
+def getHouseIntentLightingAppName() {
+    return "Simple House Intent Lighting"
+}
+
 def recoverSimpleHomeHandler(evt) {
     state.commitReason = "Simple Home recovery"
     commitPendingIntent()
