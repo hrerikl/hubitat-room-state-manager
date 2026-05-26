@@ -1730,6 +1730,7 @@ private Boolean buttonNumberMatches(Integer actual, def expected) {
 // -------------------- State Computation and Output --------------------
 
 private String computeRoomState() {
+    if (houseIntentProfile()) return "Occupied"
     if (state.locked) return "Locked"
     if (state.asleep) return "Asleep"
     if (state.engaged) return "Engaged"
@@ -1738,6 +1739,7 @@ private String computeRoomState() {
 }
 
 private String computeLightingIntent(String roomState) {
+    if (houseIntentProfile()) return "On"
     if (roomState in ["Locked", "Engaged", "Occupied"]) return "On"
     if (roomState == "Asleep") return state.nightActive ? "Night" : "Off"
     if (state.courtesy) return "Courtesy"
