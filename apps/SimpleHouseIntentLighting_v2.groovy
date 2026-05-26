@@ -262,6 +262,7 @@ private def roomDevice() {
 
 private Map roomOptions() {
     try {
+        if (!parent) return [:]
         return parent.roomStateChildOptions(app.id) ?: [:]
     } catch (Exception e) {
         log.warn "${app.label}: Could not load room options: ${e.message}"
@@ -318,17 +319,40 @@ private Integer ctStep() {
     return Math.max(safeInteger(colorTemperatureStep, 250), 1)
 }
 
-private Integer eventIntegerValue(evt) { return Util.eventIntegerValue(evt) }
+private Integer eventIntegerValue(evt) {
+    try {
+        return evt.value as Integer
+    } catch (Exception ignored) {
+        return null
+    }
+}
 
 private Integer normalizedLevel(value) {
     return Math.max(Math.min(safeInteger(value, 50), 100), 0)
 }
 
-private Integer normalizedColorTemperature(value) { return Util.normalizedColorTemperature(value, 2700) }
+private Integer normalizedColorTemperature(value) {
+    Integer ct = 2700
+    try {
+        ct = (value == null ? 2700 : value) as Integer
+    } catch (Exception ignored) {
+        ct = 2700
+    }
+    return Math.max(Math.min(ct, 10000), 1500)
+}
 
-private Integer safeInteger(value, Integer fallback) { return Util.safeInteger(value, fallback) }
+private Integer safeInteger(value, Integer fallback) {
+    try {
+        return value == null ? fallback : value as Integer
+    } catch (Exception ignored) {
+        return fallback
+    }
+}
 
-private List asList(value) { return Util.asList(value) }
+private List asList(value) {
+    if (!value) return []
+    return value instanceof List ? value : [value]
+}
 
 private void debug(String message) {
     if (debugLogging) {

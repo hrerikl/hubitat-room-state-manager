@@ -362,6 +362,7 @@ private List nightReadyRooms() {
 
 private Map roomOptions() {
     try {
+        if (!parent) return [:]
         return parent.roomStateChildOptions(app.id) ?: [:]
     } catch (Exception e) {
         log.warn "${app.label}: Could not load room options: ${e.message}"
@@ -410,7 +411,10 @@ private String formatTime(Long epochMs) {
     return new Date(epochMs).format("yyyy-MM-dd HH:mm:ss", location.timeZone)
 }
 
-private List asList(def value) { return Util.asList(value) }
+private List asList(def value) {
+    if (!value) return []
+    return value instanceof List ? value : [value]
+}
 
 private void debug(String msg) {
     if (debugLogging) {

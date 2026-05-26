@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.64",
+  "version": "0.2.65",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-25",
-  "releaseNotes": "Add shared Util.groovy and refactor Simple Room State child to use shared helpers. Also misc fixes.",
+  "releaseNotes": "Inline Hubitat app helpers again and guard child room option loading when parent is unavailable during upgrade.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
@@ -117,17 +117,6 @@
       "oauth": false,
       "category": "Convenience",
       "description": "Outdoor light context driver that publishes lux, color temperature, cloud cover, and sky condition from Open-Meteo."
-    }
-  ]
-  ,
-  "libraries": [
-    {
-      "id": "util-1",
-      "name": "Util",
-      "namespace": "lundby",
-      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/src/main/groovy/lundby/Util.groovy",
-      "required": true,
-      "description": "Shared utility helpers used by apps."
     }
   ]
 }

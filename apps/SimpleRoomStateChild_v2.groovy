@@ -1365,9 +1365,16 @@ private Integer sleepWakeGraceMinutesValue() {
     return Math.max(minutes, 0)
 }
 
-private Integer positiveSeconds(value, Integer defaultSeconds) { return Util.positiveSeconds(value, defaultSeconds) }
+private Integer positiveSeconds(value, Integer defaultSeconds) {
+    Integer seconds = value ? value as Integer : defaultSeconds
+    return seconds > 0 ? seconds : 1
+}
 
-private Integer minutesRoundedUp(Integer seconds) { return Util.minutesRoundedUp(seconds) }
+private Integer minutesRoundedUp(Integer seconds) {
+    Integer safeSeconds = positiveSeconds(seconds, 60)
+    Integer wholeMinutes = (safeSeconds / 60) as Integer
+    return safeSeconds % 60 == 0 ? wholeMinutes : wholeMinutes + 1
+}
 
 private void scheduleOccupiedTimeout(String reason) {
     Long lastActivity = (state.lastActivityAt ?: state.lastInactiveAt ?: now()) as Long
@@ -1563,7 +1570,10 @@ private String activeMotionLabels(List activeMotion) {
     return activeMotion.collect { it?.displayName ?: it?.name ?: it?.id }.join(", ")
 }
 
-private List asList(def value) { return Util.asList(value) }
+private List asList(def value) {
+    if (!value) return []
+    return value instanceof List ? value : [value]
+}
 
 private Boolean allDoorsClosed() {
     if (!doorContactSensors) {
@@ -1709,13 +1719,25 @@ private Boolean sameDevice(def first, def second) {
     return first.id?.toString() == second.id?.toString()
 }
 
-private Integer eventIntegerValue(evt) { return Util.eventIntegerValue(evt) }
+private Integer eventIntegerValue(evt) {
+    try {
+        return evt.value as Integer
+    } catch (Exception ignored) {
+        return null
+    }
+}
 
 private Boolean isPhysicalEvent(evt) { return eventType(evt) == "physical" }
 
 private Boolean isDigitalEvent(evt) { return eventType(evt) == "digital" }
 
-private String eventType(evt) { return Util.eventType(evt) }
+private String eventType(evt) {
+    try {
+        return evt.type?.toString() ?: ""
+    } catch (Throwable ignored) {
+        return ""
+    }
+}
 
 // -------------------- State Computation and Output --------------------
 
@@ -1887,15 +1909,51 @@ private String currentLocationModeName() {
     }
 }
 
-private Integer normalizedPercent(value, Integer fallback) { return Util.normalizedPercent(value, fallback) }
+private Integer normalizedPercent(value, Integer fallback) {
+    Integer percent = fallback
+    try {
+        percent = (value == null ? fallback : value) as Integer
+    } catch (Exception ignored) {
+        percent = fallback
+    }
+    return Math.max(Math.min(percent, 100), 0)
+}
 
-private Integer normalizedOffset(value, Integer fallback) { return Util.normalizedOffset(value, fallback) }
+private Integer normalizedOffset(value, Integer fallback) {
+    Integer offset = fallback
+    try {
+        offset = (value == null ? fallback : value) as Integer
+    } catch (Exception ignored) {
+        offset = fallback
+    }
+    return Math.max(Math.min(offset, 100), -100)
+}
 
-private Integer normalizedColorTemperature(value, Integer fallback) { return Util.normalizedColorTemperature(value, fallback) }
+private Integer normalizedColorTemperature(value, Integer fallback) {
+    Integer ct = fallback
+    try {
+        ct = (value == null ? fallback : value) as Integer
+    } catch (Exception ignored) {
+        ct = fallback
+    }
+    return Math.max(Math.min(ct, 10000), 1500)
+}
 
-private Integer safeInteger(value, Integer fallback) { return Util.safeInteger(value, fallback) }
+private Integer safeInteger(value, Integer fallback) {
+    try {
+        return value == null ? fallback : value as Integer
+    } catch (Exception ignored) {
+        return fallback
+    }
+}
 
-private Long safeLong(value, Long fallback) { return Util.safeLong(value, fallback) }
+private Long safeLong(value, Long fallback) {
+    try {
+        return value == null ? fallback : value as Long
+    } catch (Exception ignored) {
+        return fallback
+    }
+}
 
 private void recomputeAndPublish() {
     ensureInitialState()
