@@ -114,3 +114,12 @@ private List normalizeIdList(def rawIds) {
         .findAll { it }
         .unique()
 }
+
+private Boolean debugEnabled(Boolean localDebugSetting) {
+    try {
+        if (parent) return parent.simpleHomeDebugEnabled(localDebugSetting == true) == true
+    } catch (Throwable ignored) {
+        // Fall through to the child app's local setting.
+    }
+    return localDebugSetting == true
+}

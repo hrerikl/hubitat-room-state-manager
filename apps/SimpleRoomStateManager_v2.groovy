@@ -95,6 +95,16 @@ preferences {
             input "defaultCustomLightingOffText", "text", title: "Custom lighting off text", defaultValue: '<audio src="soundbank://soundlibrary/alarms/beeps_and_bloops/boing_01"/>', required: true
         }
 
+        section("Debug logging") {
+            input "simpleHomeDebugMode", "enum", title: "Simple Home debug logging", options: simpleHomeDebugModeOptions(), defaultValue: "follow", required: true, submitOnChange: true
+            if (simpleHomeDebugMode == "temporary") {
+                input "simpleHomeDebugMinutes", "number", title: "Temporary debug minutes", defaultValue: 30, required: true
+                input "startSimpleHomeTemporaryDebugNow", "button", title: "Start temporary debug logging"
+                paragraph simpleHomeTemporaryDebugText()
+            }
+            paragraph "This parent setting can suppress or force debug logging in Simple Home child apps."
+        }
+
         section("Maintenance") {
             input "reinitializeChildrenNow", "button", title: "Reinitialize child apps"
             paragraph "Use after code changes to rebuild child app subscriptions and schedules without opening each child app."
@@ -131,6 +141,9 @@ def appButtonHandler(String buttonName) {
     }
     if (buttonName == "createOpenMeteoReferenceNow") {
         createOpenMeteoReferenceDevice()
+    }
+    if (buttonName == "startSimpleHomeTemporaryDebugNow") {
+        startSimpleHomeTemporaryDebug()
     }
 }
 
@@ -213,6 +226,38 @@ private String profileLabel(String profile) {
     if (profile == "houseIntent") return "House Intent"
     if (profile == "bedroom") return "Bedroom"
     return "Standard"
+}
+
+Map simpleHomeDebugModeOptions() {
+    return [
+        follow   : "Follow child settings",
+        forceOff : "Force debug off",
+        forceOn  : "Force debug on",
+        temporary: "Force debug on temporarily"
+    ]
+}
+
+Boolean simpleHomeDebugEnabled(Boolean childSetting) {
+    if (simpleHomeDebugMode == "forceOff") return false
+    if (simpleHomeDebugMode == "forceOn") return true
+    if (simpleHomeDebugMode == "temporary") {
+        return safeLong(state.simpleHomeDebugUntil, 0L) > now()
+    }
+    return childSetting == true
+}
+
+private void startSimpleHomeTemporaryDebug() {
+    Integer minutes = Math.max(safeInteger(simpleHomeDebugMinutes, 30), 1)
+    state.simpleHomeDebugUntil = now() + (minutes * 60L * 1000L)
+    log.info "Simple Home: Temporary debug logging enabled for ${minutes} minute(s)."
+}
+
+private String simpleHomeTemporaryDebugText() {
+    Long debugUntil = safeLong(state.simpleHomeDebugUntil, 0L)
+    if (debugUntil <= now()) return "Temporary debug logging is not active."
+
+    Date until = new Date(debugUntil)
+    return "Temporary debug logging active until ${until.format('yyyy-MM-dd HH:mm:ss', location.timeZone)}."
 }
 
 private void createOrUpdateHouseIntentVirtualRoom() {

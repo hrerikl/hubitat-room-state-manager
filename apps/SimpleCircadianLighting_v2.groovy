@@ -50,6 +50,7 @@ preferences {
 
         section('Debug') {
             input 'debugLogging', 'bool', title: 'Enable debug logging', defaultValue: true, required: true
+            paragraph 'Simple Home can suppress or force debug logging from the parent app.'
         }
     }
 }
@@ -333,7 +334,7 @@ private BigDecimal clampDecimal(BigDecimal value, BigDecimal min, BigDecimal max
 }
 
 private void debug(String message) {
-    if (debugLogging != false) {
+    if (debugEnabled(debugLogging != false)) {
         log.debug "${app.label}: ${message}"
     }
 }

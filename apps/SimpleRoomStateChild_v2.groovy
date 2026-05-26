@@ -180,6 +180,7 @@ preferences {
 
             section("Debug") {
                 input "debugLogging", "bool", title: "Enable debug logging", defaultValue: true, required: true
+                paragraph "Simple Home can suppress or force debug logging from the parent app."
             }
         }
     }
@@ -562,7 +563,7 @@ private List selectedNeighborRoomDevices() {
 }
 
 private void debugNeighborResolution(List neighborDevices) {
-    if (!debugLogging) return
+    if (!debugEnabled(debugLogging)) return
 
     List selectedIds = getSelectedNeighborChildAppIds()
     List resolvedLabels = neighborDevices.collect { dev ->
@@ -2038,7 +2039,7 @@ private void publishMetaLightDevice(Boolean switchOn, Integer lightingLevel, Int
 // -------------------- Logging --------------------
 
 private void debug(String msg) {
-    if (debugLogging) {
+    if (debugEnabled(debugLogging)) {
         log.debug "${roomDeviceLabel()}: ${msg}"
     }
 }

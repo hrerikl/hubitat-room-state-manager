@@ -48,6 +48,7 @@ preferences {
 
         section("Debug") {
             input "debugLogging", "bool", title: "Enable debug logging", defaultValue: true, required: true
+            paragraph "Simple Home can suppress or force debug logging from the parent app."
         }
     }
 }
@@ -411,7 +412,7 @@ private String colorTemperatureName(Integer ct) {
 }
 
 private void debug(String message) {
-    if (debugLogging) {
+    if (debugEnabled(debugLogging)) {
         log.debug "${app.label}: ${message}"
     }
 }

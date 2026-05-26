@@ -55,6 +55,7 @@ preferences {
 
         section("Debug") {
             input "debugLogging", "bool", title: "Enable debug logging", defaultValue: true, required: true
+            paragraph "Simple Home can suppress or force debug logging from the parent app."
         }
     }
 }
@@ -472,7 +473,7 @@ private String formatTime(Long epochMs) {
 }
 
 private void debug(String msg) {
-    if (debugLogging) {
+    if (debugEnabled(debugLogging)) {
         log.debug "${app.label}: ${msg}"
     }
 }
