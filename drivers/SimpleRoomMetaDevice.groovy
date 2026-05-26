@@ -47,6 +47,8 @@ metadata {
         attribute 'lockedEnabled', 'enum', ['off', 'on']
         attribute 'presenceActivity', 'number'
         attribute 'lastPresenceActivity', 'string'
+        attribute 'lastActivityReason', 'string'
+        attribute 'engagedReason', 'string'
 
         command 'setRoomState', [[name: 'Room State', type: 'ENUM', constraints: ['Off', 'Occupied', 'Engaged', 'Asleep', 'Locked']]]
         command 'setLightingIntent', [[name: 'Lighting Intent', type: 'ENUM', constraints: ['Off', 'Courtesy', 'Night', 'On']]]
@@ -71,6 +73,9 @@ metadata {
         command 'setAsleepSwitchLabel', [[name: 'Asleep Switch Label', type: 'STRING']]
         command 'setLockedSwitchLabel', [[name: 'Locked Switch Label', type: 'STRING']]
         command 'recordPresenceActivity', [[name: 'Epoch milliseconds', type: 'STRING']]
+        command 'recordPresenceActivityDetail', [[name: 'Epoch milliseconds', type: 'STRING'], [name: 'Reason', type: 'STRING']]
+        command 'recordActivityDetail', [[name: 'Epoch milliseconds', type: 'STRING'], [name: 'Reason', type: 'STRING']]
+        command 'setEngagedReason', [[name: 'Reason', type: 'STRING']]
     }
 }
 
@@ -130,6 +135,12 @@ void initialize() {
     }
     if (device.currentValue('lockedEnabled') == null) {
         sendEvent(name: 'lockedEnabled', value: 'off')
+    }
+    if (device.currentValue('lastActivityReason') == null) {
+        sendEvent(name: 'lastActivityReason', value: '')
+    }
+    if (device.currentValue('engagedReason') == null) {
+        sendEvent(name: 'engagedReason', value: '')
     }
     if (device.currentValue('presenceActivity') == null) {
         sendEvent(name: 'presenceActivity', value: 0)
@@ -329,6 +340,10 @@ void setLightingIntent(String value) {
 }
 
 void recordPresenceActivity(String epochMs) {
+    recordPresenceActivityDetail(epochMs, '')
+}
+
+void recordPresenceActivityDetail(String epochMs, String reason) {
     Long epoch = 0L
     try {
         epoch = epochMs as Long
@@ -339,6 +354,26 @@ void recordPresenceActivity(String epochMs) {
     String formatted = new Date(epoch).format('yyyy-MM-dd HH:mm:ss', location.timeZone)
     sendEvent(name: 'presenceActivity', value: epoch, unit: 'ms', isStateChange: true)
     sendEvent(name: 'lastPresenceActivity', value: formatted, isStateChange: true)
+    if (reason) {
+        sendEvent(name: 'lastActivityReason', value: reason, isStateChange: true)
+    }
+}
+
+void recordActivityDetail(String epochMs, String reason) {
+    Long epoch = 0L
+    try {
+        epoch = epochMs as Long
+    } catch (Exception ignored) {
+        epoch = now()
+    }
+
+    String formatted = new Date(epoch).format('yyyy-MM-dd HH:mm:ss', location.timeZone)
+    sendEvent(name: 'lastPresenceActivity', value: formatted, isStateChange: true)
+    sendEvent(name: 'lastActivityReason', value: reason ?: '', isStateChange: true)
+}
+
+void setEngagedReason(String reason) {
+    sendEvent(name: 'engagedReason', value: reason ?: '', isStateChange: true)
 }
 
 private Integer normalizeLevel(value) {

@@ -897,6 +897,7 @@ def engagedEnabledHandler(evt) {
         setEngaged("engaged switch on")
     } else {
         state.engaged = false
+        clearEngagedReason()
         scheduleOccupiedTimeout("engaged turned off")
         recomputeAndPublish()
     }
@@ -944,7 +945,7 @@ def circadianReferenceHandler(evt) {
 
 def motionActiveHandler(evt) {
     debug "Motion active: ${evt.displayName}"
-    recordPresenceActivity("motion active")
+    recordPresenceActivity("motion active: ${evt.displayName}")
 }
 
 def recordPresenceActivity(String reason) {
@@ -1030,28 +1031,30 @@ def doorOpenHandler(evt) {
     debug "Door open: ${evt.displayName}"
 
     if (state.locked) {
-        recordLatentActivity("door opened while locked")
+        recordLatentActivity("door opened while locked: ${evt.displayName}")
         return
     }
 
     if (engageOnMotionWithDoorsClosed && state.engaged) {
         debug "Clearing engaged because a door opened"
         state.engaged = false
+        state.engagedReason = null
         componentSwitchOff("Engaged")
+        publishEngagedReason("")
     }
 
-    setOccupied("door opened")
+    setOccupied("door opened: ${evt.displayName}")
 }
 
 def doorClosedHandler(evt) {
     debug "Door closed: ${evt.displayName}"
 
     if (state.locked) {
-        debug "Ignoring door closed because room is locked"
+        recordLatentActivity("door closed while locked: ${evt.displayName}")
         return
     }
 
-    // Door closing is not treated as occupancy by itself.
+    setOccupied("door closed: ${evt.displayName}")
 }
 
 def activitySwitchOnHandler(evt) {
@@ -1062,7 +1065,7 @@ def activitySwitchOnHandler(evt) {
         return
     }
 
-    recordPresenceActivity("activity switch on")
+    recordPresenceActivity("activity switch on: ${evt.displayName}")
 }
 
 def activityButtonPushedHandler(evt) {
@@ -1074,7 +1077,7 @@ def activityButtonPushedHandler(evt) {
         return
     }
 
-    recordPresenceActivity("activity button pushed")
+    recordPresenceActivity("activity button pushed ${buttonNumber ?: 'unknown'}: ${evt.displayName}")
 }
 
 def activityButtonHeldHandler(evt) {
@@ -1132,18 +1135,22 @@ def externalLockHandler(evt) {
 // -------------------- State Actions --------------------
 
 private void recordActivity(String reason) {
+    reason = activityReason(reason, "activity")
     Long timestamp = now()
     state.lastActivityAt = timestamp
     state.lastInactiveAt = timestamp
+    state.lastActivityReason = reason
     publishPresenceActivity(timestamp, reason)
     debug "Activity recorded at ${timestamp}: ${reason}"
     scheduleOccupiedTimeout(reason)
 }
 
 private void recordLatentActivity(String reason) {
+    reason = activityReason(reason, "latent activity")
     Long timestamp = now()
     state.lastActivityAt = timestamp
     state.lastInactiveAt = timestamp
+    state.lastActivityReason = reason
     publishPresenceActivity(timestamp, reason)
     debug "Latent activity recorded at ${timestamp}: ${reason}"
 }
@@ -1153,10 +1160,40 @@ private void publishPresenceActivity(Long timestamp, String reason = "") {
     if (!dev || !timestamp) return
 
     try {
-        dev.recordPresenceActivity("${timestamp}")
+        dev.recordPresenceActivityDetail("${timestamp}", reason)
     } catch (Exception e) {
         log.warn "${roomDeviceLabel()}: Could not publish presence activity (${reason}): ${e.message}"
     }
+}
+
+private void publishActivityDetail(Long timestamp, String reason) {
+    def dev = roomDevice()
+    if (!dev || !timestamp) return
+
+    reason = activityReason(reason, "activity")
+    state.lastActivityReason = reason
+
+    try {
+        dev.recordActivityDetail("${timestamp}", reason)
+    } catch (Exception e) {
+        log.warn "${roomDeviceLabel()}: Could not publish activity detail (${reason}): ${e.message}"
+    }
+}
+
+private void publishEngagedReason(String reason) {
+    def dev = roomDevice()
+    if (!dev) return
+
+    try {
+        dev.setEngagedReason(reason ?: "")
+    } catch (Exception e) {
+        log.warn "${roomDeviceLabel()}: Could not publish engaged reason (${reason}): ${e.message}"
+    }
+}
+
+private void clearEngagedReason() {
+    state.engagedReason = null
+    publishEngagedReason("")
 }
 
 private void publishNightLighting(Boolean active, Integer timeoutMinutes) {
@@ -1193,15 +1230,18 @@ private void setOccupied(String reason) {
 }
 
 private void setEngaged(String reason) {
+    reason = activityReason(reason, "engagement activity")
     debug "Engaged true: ${reason}"
     unschedule(clearEngagedIfStillInactive)
     state.lastEngagedInactiveAt = now()
+    state.engagedReason = reason
 
     recordActivity(reason)
 
     state.occupied = true
     state.engaged = true
     componentSwitchOn("Engaged")
+    publishEngagedReason(reason)
 
     scheduleEngagedTimeout("engaged on")
     recomputeAndPublish()
@@ -1217,6 +1257,7 @@ private void setAsleep(Boolean asleep, String reason) {
         state.asleepStartedAt = now()
         state.occupied = false
         state.engaged = false
+        clearEngagedReason()
         state.nightActive = false
         componentSwitchOff("Engaged")
         componentSwitchOn("Asleep")
@@ -1306,6 +1347,7 @@ private void setLocked(Boolean locked, String reason, Boolean clearAsleepOnUnloc
             } else {
                 state.occupied = false
                 state.engaged = false
+                clearEngagedReason()
                 componentSwitchOff("Engaged")
                 state.lastInactiveAt = null
                 state.lastActivityAt = null
@@ -1330,6 +1372,7 @@ private void clearRoomStateFromRoomSwitch() {
 
     state.occupied = false
     state.engaged = false
+    clearEngagedReason()
     state.asleep = false
     state.asleepStartedAt = null
     state.nightActive = false
@@ -1539,6 +1582,7 @@ def clearEngagedIfStillInactive() {
 
     state.lastEngagedInactiveAt = null
     state.engaged = false
+    clearEngagedReason()
     componentSwitchOff("Engaged")
     scheduleOccupiedTimeout("engaged cleared")
     recomputeAndPublish()
@@ -1668,6 +1712,7 @@ private void refreshAsleepState() {
     unschedule(clearEngagedIfStillInactive)
     state.occupied = false
     state.engaged = false
+    clearEngagedReason()
     state.nightActive = false
     componentSwitchOff("Engaged")
     componentSwitchOn("Asleep")
