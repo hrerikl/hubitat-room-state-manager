@@ -33,8 +33,9 @@ preferences {
         }
 
         section("House mode") {
-            if (modeManagerChildApps()) {
-                paragraph "Mode Manager is already configured."
+            def modeManager = modeManagerChildApp()
+            if (modeManager) {
+                renderChildConfigureLink("configureModeManager", "Configure Mode Manager", modeManager, "Simple Mode Manager")
             } else {
                 app(
                     name: "modeApps",
@@ -60,6 +61,7 @@ preferences {
             input "defaultCircadianReferenceBulb", "capability.colorTemperature", title: "House reference bulb", multiple: false, required: false
             input "useHouseIntentVirtualRoom", "bool", title: "Use House Intent Virtual Room", defaultValue: false, required: true
             paragraph houseIntentSummaryText()
+            renderHouseIntentRoomLink()
             renderHouseIntentLightingLink()
             app(
                 name: "circadianApps",
@@ -142,6 +144,13 @@ String houseIntentSummaryText() {
     return "${referenceText}\n${childText}"
 }
 
+private void renderHouseIntentRoomLink() {
+    def child = houseIntentChildApp()
+    if (!child) return
+
+    renderChildConfigureLink("configureHouseIntentRoom", "Configure House Intent Room", child, "Room House Intent")
+}
+
 private void renderHouseIntentLightingLink() {
     def lighting = houseIntentLightingChildApp()
     if (!lighting) {
@@ -149,16 +158,20 @@ private void renderHouseIntentLightingLink() {
         return
     }
 
+    renderChildConfigureLink("configureHouseIntentLighting", "Configure House Intent Lighting", lighting, "# House Intent Lighting")
+}
+
+private void renderChildConfigureLink(String name, String title, def child, String fallbackDescription) {
     href(
-        name: "configureHouseIntentLighting",
-        title: "Configure House Intent Lighting",
-        description: lighting.label ?: "# House Intent Lighting",
-        url: childConfigureUrl(lighting)
+        name: name,
+        title: title,
+        description: child.label ?: fallbackDescription,
+        url: childConfigureUrl(child)
     )
 }
 
 private String childConfigureUrl(def child) {
-    return "/installedapp/configure/${child.id}/"
+    return "/installedapp/configure/${child.id}"
 }
 
 private String profileLabel(String profile) {
@@ -423,6 +436,10 @@ private List modeManagerChildApps() {
     }
 
     return uniqueChildApps(configured + discovered)
+}
+
+private def modeManagerChildApp() {
+    return modeManagerChildApps().find { child -> child }
 }
 
 private List uniqueChildApps(List apps) {
