@@ -49,7 +49,6 @@ metadata {
         attribute 'lastPresenceActivity', 'string'
         attribute 'lastActivityReason', 'string'
         attribute 'stateReason', 'string'
-        attribute 'engagedReason', 'string'
 
         command 'setRoomState', [[name: 'Room State', type: 'ENUM', constraints: ['Off', 'Occupied', 'Engaged', 'Asleep', 'Locked']]]
         command 'setLightingIntent', [[name: 'Lighting Intent', type: 'ENUM', constraints: ['Off', 'Courtesy', 'Night', 'On']]]
@@ -77,7 +76,6 @@ metadata {
         command 'recordPresenceActivityDetail', [[name: 'Epoch milliseconds', type: 'STRING'], [name: 'Reason', type: 'STRING']]
         command 'recordActivityDetail', [[name: 'Epoch milliseconds', type: 'STRING'], [name: 'Reason', type: 'STRING']]
         command 'setStateReason', [[name: 'Reason', type: 'STRING']]
-        command 'setEngagedReason', [[name: 'Reason', type: 'STRING']]
     }
 }
 
@@ -143,9 +141,6 @@ void initialize() {
     }
     if (device.currentValue('stateReason') == null) {
         sendEvent(name: 'stateReason', value: '')
-    }
-    if (device.currentValue('engagedReason') == null) {
-        sendEvent(name: 'engagedReason', value: '')
     }
     if (device.currentValue('presenceActivity') == null) {
         sendEvent(name: 'presenceActivity', value: 0)
@@ -375,10 +370,6 @@ void recordActivityDetail(String epochMs, String reason) {
     String formatted = new Date(epoch).format('yyyy-MM-dd HH:mm:ss', location.timeZone)
     sendEvent(name: 'lastPresenceActivity', value: formatted, isStateChange: true)
     sendEvent(name: 'lastActivityReason', value: reason ?: '', isStateChange: true)
-}
-
-void setEngagedReason(String reason) {
-    sendEvent(name: 'engagedReason', value: reason ?: '', isStateChange: true)
 }
 
 void setStateReason(String reason) {
