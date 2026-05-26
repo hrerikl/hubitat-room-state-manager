@@ -73,6 +73,11 @@ def reinitializeFromParent() {
 
 def initialize() {
     updateAppLabel()
+    if (!houseIntentLightingAllowed()) {
+        log.error "${app.label}: Duplicate House Intent Lighting app. Delete this child app and keep the parent-created primary app."
+        return
+    }
+
     subscribe(picoRemotes, "pushed", "picoPushedHandler")
     subscribe(picoRemotes, "held", "picoHeldHandler")
     def recovery = recoveryDevice()
@@ -108,6 +113,15 @@ def getHouseIntentLightingAppName() {
 
 def getConfiguredRoomChildAppId() {
     return roomChildAppId
+}
+
+private Boolean houseIntentLightingAllowed() {
+    try {
+        return parent.houseIntentLightingAllowed(app.id) != false
+    } catch (Throwable e) {
+        log.warn "${app.label}: Could not validate House Intent Lighting uniqueness: ${e.message}"
+        return true
+    }
 }
 
 def recoverSimpleHomeHandler(evt) {

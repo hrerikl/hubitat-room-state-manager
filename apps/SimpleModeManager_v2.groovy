@@ -79,6 +79,11 @@ def reinitializeFromParent() {
 }
 
 def initialize() {
+    if (!modeManagerAllowed()) {
+        log.error "${app.label}: Duplicate Mode Manager app. Delete this child app and keep the primary Mode Manager."
+        return
+    }
+
     ensureParentArrivalDevice()
 
     subscribe(presenceSensors, "presence", presenceHandler)
@@ -93,6 +98,19 @@ def initialize() {
     scheduleNightStart()
 
     evaluatePresenceMode("initialize")
+}
+
+def getModeManagerAppName() {
+    return "Simple Mode Manager v2"
+}
+
+private Boolean modeManagerAllowed() {
+    try {
+        return parent.modeManagerAllowed(app.id) != false
+    } catch (Throwable e) {
+        log.warn "${app.label}: Could not validate Mode Manager uniqueness: ${e.message}"
+        return true
+    }
 }
 
 private void ensureParentArrivalDevice() {

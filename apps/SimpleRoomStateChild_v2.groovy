@@ -218,6 +218,11 @@ def reinitializeFromParent() {
 def initializeChild() {
     updateChildAppLabel()
 
+    if (!roomStateChildAllowed()) {
+        log.error "${app.label}: Duplicate House Intent room. Delete this child app and keep the parent-created House Intent room."
+        return
+    }
+
     if (createDevicesNow == null || createDevicesNow) {
         createOrUpdateChildDevices()
     }
@@ -627,6 +632,16 @@ def getConfiguredRoomName() {
 
 def getRoomProfile() {
     return settings?.roomProfile ?: "standard"
+}
+
+private Boolean roomStateChildAllowed() {
+    if (!houseIntentProfile()) return true
+    try {
+        return parent.houseIntentRoomAllowed(app.id) != false
+    } catch (Throwable e) {
+        log.warn "${app.label}: Could not validate House Intent room uniqueness: ${e.message}"
+        return true
+    }
 }
 
 def getCustomLightingOnText() {

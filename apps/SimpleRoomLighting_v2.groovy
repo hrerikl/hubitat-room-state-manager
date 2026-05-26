@@ -136,6 +136,11 @@ def reinitializeFromParent() {
 def initialize() {
     updateAppLabel()
 
+    if (!roomLightingAllowed()) {
+        log.error "${app.label}: Duplicate Room Lighting app for this room. Delete this child app or choose an unused room."
+        return
+    }
+
     def room = roomDevice()
     subscribe(room, "switch.off", roomSwitchOffHandler)
     subscribe(room, "metaLightSwitch", reassessHandler)
@@ -1431,6 +1436,15 @@ def getRoomLightingAppName() {
 
 def getConfiguredRoomChildAppId() {
     return roomChildAppId
+}
+
+private Boolean roomLightingAllowed() {
+    try {
+        return parent.roomLightingRoomAllowed(roomChildAppId, app.id) != false
+    } catch (Throwable e) {
+        log.warn "${app.label}: Could not validate Room Lighting uniqueness: ${e.message}"
+        return true
+    }
 }
 
 private void updateAppLabel() {

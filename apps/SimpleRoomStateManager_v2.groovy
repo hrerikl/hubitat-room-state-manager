@@ -365,7 +365,21 @@ private List simpleRoomLightingChildApps() {
 }
 
 private List modeManagerChildApps() {
-    return uniqueChildApps(modeApps ?: [])
+    List configured = modeApps ?: []
+    List discovered = []
+    try {
+        discovered = getChildApps()?.findAll { child ->
+            try {
+                return child?.getModeManagerAppName() == "Simple Mode Manager v2"
+            } catch (Throwable ignored) {
+                return child?.label == "Simple Mode Manager" || child?.label == "Simple Mode Manager v2"
+            }
+        } ?: []
+    } catch (Throwable ignored) {
+        discovered = []
+    }
+
+    return uniqueChildApps(configured + discovered)
 }
 
 private List uniqueChildApps(List apps) {
@@ -413,6 +427,50 @@ private void validateDefensiveAppCreation() {
             log.error "Simple Home: More than one Room Lighting app targets room child ${roomId}. Keep one and delete extras manually."
         }
     }
+}
+
+Boolean modeManagerAllowed(def requestingChildAppId) {
+    return primaryChildAllowed(modeManagerChildApps(), requestingChildAppId, "Mode Manager")
+}
+
+Boolean houseIntentRoomAllowed(def requestingChildAppId) {
+    return primaryChildAllowed(houseIntentChildApps(), requestingChildAppId, "House Intent room")
+}
+
+Boolean houseIntentLightingAllowed(def requestingChildAppId) {
+    return primaryChildAllowed(houseIntentLightingChildApps(), requestingChildAppId, "House Intent Lighting")
+}
+
+Boolean roomLightingRoomAllowed(def roomChildAppId, def requestingChildAppId) {
+    if (!roomChildAppId) return true
+
+    List matches = simpleRoomLightingChildApps().findAll { lighting ->
+        try {
+            return lighting.getConfiguredRoomChildAppId()?.toString() == "${roomChildAppId}"
+        } catch (Throwable ignored) {
+            return false
+        }
+    }
+
+    if (!matches) return true
+    def primary = matches[0]
+    Boolean allowed = primary?.id?.toString() == "${requestingChildAppId}"
+    if (!allowed) {
+        log.error "Simple Home: Refusing duplicate Room Lighting app ${requestingChildAppId} for room child ${roomChildAppId}. ${primary?.label ?: primary?.id} already owns that room."
+    }
+    return allowed
+}
+
+private Boolean primaryChildAllowed(List children, def requestingChildAppId, String childType) {
+    if (!requestingChildAppId) return true
+    if (!children) return true
+
+    def primary = children[0]
+    Boolean allowed = primary?.id?.toString() == "${requestingChildAppId}"
+    if (!allowed) {
+        log.error "Simple Home: Refusing duplicate ${childType} child ${requestingChildAppId}. ${primary?.label ?: primary?.id} is already the primary ${childType}."
+    }
+    return allowed
 }
 
 private Boolean sameDevice(def first, def second) {
