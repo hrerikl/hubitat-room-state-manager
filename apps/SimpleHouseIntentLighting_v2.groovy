@@ -104,7 +104,16 @@ def recoverSimpleHomeHandler(evt) {
 }
 
 def picoPushedHandler(evt) {
-    debug "Pico pushed ${evt?.value}: ${evt?.displayName}"
+    Integer button = eventIntegerValue(evt)
+    debug "Pico pushed ${button}: ${evt?.displayName}"
+
+    if (button == 2) {
+        adjustLevel(levelStepValue())
+    } else if (button == 4) {
+        adjustLevel(-levelStepValue())
+    } else {
+        debug "No House Intent Pico push action for button ${button}"
+    }
 }
 
 def commitPendingIntent() {
@@ -131,6 +140,17 @@ def commitPendingIntent() {
 }
 
 // -------------------- Helpers --------------------
+
+private void adjustLevel(Integer delta) {
+    ensurePendingFromRoom()
+    Integer level = normalizedLevel((state.pendingLevel ?: 50) as Integer + delta)
+    state.pendingLevel = level
+    state.pendingCustom = true
+    state.pendingSceneName = "Custom"
+
+    applyPreview("level adjusted")
+    scheduleCommit("level adjusted")
+}
 
 private void ensurePendingFromRoom() {
     if (state.pendingLevel == null) state.pendingLevel = currentRoomLevel()
@@ -209,6 +229,18 @@ private void updateAppLabel() {
     if (!desired) desired = "# House Intent Lighting"
     if (app.label != desired) {
         app.updateLabel(desired)
+    }
+}
+
+private Integer levelStepValue() {
+    return Math.max(safeInteger(levelStep, 10), 1)
+}
+
+private Integer eventIntegerValue(evt) {
+    try {
+        return evt.value as Integer
+    } catch (Exception ignored) {
+        return null
     }
 }
 
