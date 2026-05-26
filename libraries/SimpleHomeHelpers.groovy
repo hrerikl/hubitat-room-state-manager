@@ -132,6 +132,33 @@ private Boolean debugEnabled(Boolean localDebugSetting) {
     return localDebugSetting == true
 }
 
+private Boolean settingBool(String name, Boolean fallback) {
+    def value = settings[name]
+    if (value == null) return fallback
+    return value == true || value?.toString() == "true"
+}
+
+private Map roomOptions() {
+    def parentApp = parent
+    if (!parentApp) return [:]
+
+    try {
+        return parentApp.roomStateChildOptions(app?.id) ?: [:]
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not load room options: ${e.message}"
+        return [:]
+    }
+}
+
+private void markDuplicateForDelete(String duplicateType) {
+    String desired = "Duplicate-Delete ${duplicateType}"
+    try {
+        if (app.label != desired) app.updateLabel(desired)
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not rename duplicate app: ${e.message}"
+    }
+}
+
 def getSimpleHomeAppName() {
     try {
         return app?.name?.toString()

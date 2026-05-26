@@ -136,15 +136,6 @@ private Boolean houseIntentLightingAllowed() {
     }
 }
 
-private void markDuplicateForDelete(String duplicateType) {
-    String desired = "Duplicate-Delete ${duplicateType}"
-    try {
-        if (app.label != desired) app.updateLabel(desired)
-    } catch (Exception e) {
-        log.warn "${app.label}: Could not rename duplicate app: ${e.message}"
-    }
-}
-
 def recoverSimpleHomeHandler(evt) {
     state.commitReason = "Simple Home recovery"
     commitPendingIntent()
@@ -331,18 +322,6 @@ private def recoveryDevice() {
         return parentApp.recoveryDevice()
     } catch (Throwable ignored) {
         return null
-    }
-}
-
-private Map roomOptions() {
-    def parentApp = parent
-    if (!parentApp) return [:]
-
-    try {
-        return parentApp.roomStateChildOptions(app?.id) ?: [:]
-    } catch (Exception e) {
-        log.warn "${app.label}: Could not load room options: ${e.message}"
-        return [:]
     }
 }
 

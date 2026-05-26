@@ -1388,18 +1388,6 @@ private String eventDeviceId(evt) {
 
 // -------------------- Room / Parent --------------------
 
-private Map roomOptions() {
-    def parentApp = parent
-    if (!parentApp) return [:]
-
-    try {
-        return parentApp.roomStateChildOptions(app?.id) ?: [:]
-    } catch (Exception e) {
-        log.warn "${app.label}: Could not load room options: ${e.message}"
-        return [:]
-    }
-}
-
 private def roomDevice() {
     if (!roomChildAppId) return null
 
@@ -1443,15 +1431,6 @@ private Boolean roomLightingAllowed() {
     } catch (Throwable e) {
         log.warn "${app.label}: Could not validate Room Lighting uniqueness: ${e.message}"
         return true
-    }
-}
-
-private void markDuplicateForDelete(String duplicateType) {
-    String desired = "Duplicate-Delete ${duplicateType}"
-    try {
-        if (app.label != desired) app.updateLabel(desired)
-    } catch (Exception e) {
-        log.warn "${app.label}: Could not rename duplicate app: ${e.message}"
     }
 }
 
@@ -1596,12 +1575,6 @@ private Integer sceneNightExtensionMinutesForRoom() {
 
 private String contextKey(String value) {
     return value.replaceAll("[^A-Za-z0-9]", "_")
-}
-
-private Boolean settingBool(String name, Boolean fallback) {
-    def value = settings[name]
-    if (value == null) return fallback
-    return value == true || value?.toString() == "true"
 }
 
 private Integer normalizedUsableMinimum(value) {

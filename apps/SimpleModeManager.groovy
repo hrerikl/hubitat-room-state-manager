@@ -130,15 +130,6 @@ private Boolean modeManagerAllowed() {
     }
 }
 
-private void markDuplicateForDelete(String duplicateType) {
-    String desired = "Duplicate-Delete ${duplicateType}"
-    try {
-        if (app.label != desired) app.updateLabel(desired)
-    } catch (Exception e) {
-        log.warn "${app.label}: Could not rename duplicate app: ${e.message}"
-    }
-}
-
 private void ensureParentArrivalDevice() {
     try {
         parent.ensureArrivalDevice()
@@ -401,18 +392,6 @@ private List nightReadyRooms() {
     } catch (Exception e) {
         log.warn "${app.label}: Could not resolve night-ready rooms: ${e.message}"
         return []
-    }
-}
-
-private Map roomOptions() {
-    def parentApp = parent
-    if (!parentApp) return [:]
-
-    try {
-        return parentApp.roomStateChildOptions(app?.id) ?: [:]
-    } catch (Exception e) {
-        log.warn "${app.label}: Could not load room options: ${e.message}"
-        return [:]
     }
 }
 

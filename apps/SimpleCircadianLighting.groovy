@@ -129,15 +129,6 @@ private Boolean circadianLightingAllowed() {
     }
 }
 
-private void markDuplicateForDelete(String duplicateType) {
-    String desired = "Duplicate-Delete ${duplicateType}"
-    try {
-        if (app.label != desired) app.updateLabel(desired)
-    } catch (Exception e) {
-        log.warn "${app.label}: Could not rename duplicate app: ${e.message}"
-    }
-}
-
 // -------------------- Publishing --------------------
 
 def publishReference(String reason = 'schedule') {
