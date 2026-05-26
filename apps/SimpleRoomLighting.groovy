@@ -38,6 +38,8 @@ preferences {
         section("Room controls") {
             input "picoRemotes", "capability.pushableButton", title: "5-button Pico remotes", multiple: true, required: false, submitOnChange: true
             if (hasPicoRemotes()) {
+                input "picoPushesImplyPresenceActivity", "bool", title: "Pico button pushes imply room presence activity", defaultValue: true, required: true
+                input "picoButtonsOneToFourEngage", "bool", title: "Pico buttons 1-4 engage the room", defaultValue: false, required: true
                 input "sceneCycleSwitches", "capability.switch", title: "Button 3 scene switches/activators", multiple: true, required: false
             }
         }
@@ -276,11 +278,14 @@ def picoPushedHandler(evt) {
     def room = roomDevice()
     if (!room) return
 
+    recordPicoPresenceActivity(button, evt)
+    recordPicoEngagementActivity(button, evt)
+
     Integer step = normalizedLevel(picoStepSize, 10)
     if (step <= 0) step = 10
 
     if (button == 1) {
-        roomOnAndEngageIfUnlocked()
+        roomOnIfNeeded()
     } else if (button == 2) {
         allowNextLevelFollow()
         setRoomLevelAsCustom(adjustedRoomLevel(step))
@@ -348,7 +353,7 @@ def casetaPushedHandler(evt) {
     if (step <= 0) step = 10
 
     if (button == 1) {
-        roomOnAndEngageIfUnlocked()
+        roomOnIfNeeded()
     } else if (button == 2) {
         allowNextLevelFollow()
         setRoomLevelAsCustom(adjustedRoomLevel(step))
@@ -1293,7 +1298,7 @@ private void boostAsleepMetaLight(Integer level) {
     }
 }
 
-private void roomOnAndEngageIfUnlocked() {
+private void roomOnIfNeeded() {
     def room = roomDevice()
     if (!room) return
 
@@ -1302,16 +1307,36 @@ private void roomOnAndEngageIfUnlocked() {
     }
 
     room.on()
+}
 
-    if (room.currentValue("lock") == "locked" || room.currentValue("lockedEnabled") == "on") {
-        debug "Skipping engage because Room is locked"
-        return
-    }
+private void recordPicoPresenceActivity(Integer button, evt) {
+    if (picoPushesImplyPresenceActivity == false) return
+    recordRoomPresenceActivity("Pico button ${button ?: 'unknown'} pushed: ${evt?.displayName ?: 'unknown device'}")
+}
+
+private void recordPicoEngagementActivity(Integer button, evt) {
+    if (picoButtonsOneToFourEngage != true) return
+    if (!(button in [1, 2, 3, 4])) return
+    recordRoomEngagementActivity("Pico button ${button} pushed: ${evt?.displayName ?: 'unknown device'}")
+}
+
+private void recordRoomPresenceActivity(String reason) {
+    if (!roomChildAppId) return
 
     try {
-        room.setEngagedSwitchState("on")
+        parent.roomStateChildPresenceActivity(roomChildAppId, reason)
     } catch (Exception e) {
-        log.warn "${app.label}: Could not engage Room from remote button 1: ${e.message}"
+        log.warn "${app.label}: Could not record Room presence activity: ${e.message}"
+    }
+}
+
+private void recordRoomEngagementActivity(String reason) {
+    if (!roomChildAppId) return
+
+    try {
+        parent.roomStateChildEngagementActivity(roomChildAppId, reason)
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not record Room engagement activity: ${e.message}"
     }
 }
 

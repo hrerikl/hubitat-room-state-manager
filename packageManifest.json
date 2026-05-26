@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.102",
+  "version": "0.2.103",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-26",
-  "releaseNotes": "Keep the House Intent virtual room active so it continues following the raw circadian reference.",
+  "releaseNotes": "Let Room Lighting report Pico presence and engagement activity through Room State.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

@@ -1015,6 +1015,28 @@ def roomStateChildRoomDevice(def childAppId) {
     }
 }
 
+void roomStateChildPresenceActivity(def childAppId, String reason) {
+    def child = roomStateChildApps().find { it?.id?.toString() == "${childAppId}" }
+    if (!child) return
+
+    try {
+        child.recordPresenceActivity(reason)
+    } catch (Throwable e) {
+        log.warn "Simple Home: Could not record presence activity for room child ${childAppId}: ${e.message}"
+    }
+}
+
+void roomStateChildEngagementActivity(def childAppId, String reason) {
+    def child = roomStateChildApps().find { it?.id?.toString() == "${childAppId}" }
+    if (!child) return
+
+    try {
+        child.recordEngagementActivity(reason)
+    } catch (Throwable e) {
+        log.warn "Simple Home: Could not record engagement activity for room child ${childAppId}: ${e.message}"
+    }
+}
+
 List neighborRoomDevicesForChildIds(def selectedChildIds) {
     List ids = normalizeIdList(selectedChildIds)
     if (!ids) return []

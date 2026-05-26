@@ -102,8 +102,8 @@ preferences {
 
                 section("Advanced engagement") {
                     input "engagementSwitches", "capability.switch", title: "Switches that imply engaged state when turned on", multiple: true, required: false
-                    input "engageOnMotionWithDoorsClosed", "bool", title: "Engage on motion with doors closed", defaultValue: false, required: true
-                    paragraph "When enabled, motion marks the room Engaged if every configured door contact is closed. Opening any configured door clears Engaged and still counts as occupancy evidence."
+                    input "engageOnMotionWithDoorsClosed", "bool", title: "Engage on activity with doors closed", defaultValue: false, required: true
+                    paragraph "When enabled, activity marks the room Engaged if every configured door contact is closed. Door closing by itself is not activity. Opening any configured door clears Engaged and still counts as occupancy evidence."
                 }
 
                 section("Advanced courtesy") {
@@ -944,22 +944,48 @@ def circadianReferenceHandler(evt) {
 
 def motionActiveHandler(evt) {
     debug "Motion active: ${evt.displayName}"
+    recordPresenceActivity("motion active")
+}
+
+def recordPresenceActivity(String reason) {
+    reason = activityReason(reason, "presence activity")
 
     if (state.locked) {
-        recordLatentActivity("motion active while locked")
+        recordLatentActivity("${reason} while locked")
         return
     }
 
     if (state.asleep) {
-        debug "Ignoring normal motion activity while asleep"
+        debug "Ignoring normal activity while asleep: ${reason}"
         return
     }
 
     if (engageOnMotionWithDoorsClosed && allDoorsClosed()) {
-        setEngaged("motion active with all doors closed")
+        setEngaged("${reason} with all doors closed")
     } else {
-        setOccupied("motion active")
+        setOccupied(reason)
     }
+}
+
+def recordEngagementActivity(String reason) {
+    reason = activityReason(reason, "engagement activity")
+
+    if (state.locked) {
+        recordLatentActivity("${reason} while locked")
+        return
+    }
+
+    if (state.asleep) {
+        debug "Ignoring engagement activity while asleep: ${reason}"
+        return
+    }
+
+    setEngaged(reason)
+}
+
+private String activityReason(String reason, String fallback) {
+    String text = reason?.toString()?.trim()
+    return text ?: fallback
 }
 
 def motionInactiveHandler(evt) {
@@ -1036,12 +1062,7 @@ def activitySwitchOnHandler(evt) {
         return
     }
 
-    if (state.locked) {
-        recordLatentActivity("activity switch on while locked")
-        return
-    }
-
-    setOccupied("activity switch on")
+    recordPresenceActivity("activity switch on")
 }
 
 def activityButtonPushedHandler(evt) {
@@ -1053,12 +1074,7 @@ def activityButtonPushedHandler(evt) {
         return
     }
 
-    if (state.locked) {
-        recordLatentActivity("activity button pushed while locked")
-        return
-    }
-
-    setOccupied("activity button pushed")
+    recordPresenceActivity("activity button pushed")
 }
 
 def activityButtonHeldHandler(evt) {
