@@ -11,7 +11,6 @@ dependencies {
 }
 
 def generatedHubitatSources = layout.buildDirectory.dir('generated/hubitatGroovy')
-def hpmSources = layout.projectDirectory.dir('hpm')
 
 tasks.register('generateHubitatSources') {
     inputs.files fileTree('apps') { include '**/*.groovy' }
@@ -50,12 +49,6 @@ tasks.register('generateHubitatSources') {
             }
         }
     }
-}
-
-tasks.register('generateHpmSources', Copy) {
-    dependsOn tasks.named('generateHubitatSources')
-    from generatedHubitatSources.map { it.dir('apps') }
-    into hpmSources.dir('apps')
 }
 
 sourceSets {
