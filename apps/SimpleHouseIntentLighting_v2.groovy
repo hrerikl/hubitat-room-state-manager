@@ -75,7 +75,10 @@ def initialize() {
     updateAppLabel()
     subscribe(picoRemotes, "pushed", picoPushedHandler)
     subscribe(picoRemotes, "held", picoHeldHandler)
-    subscribe(parent.recoveryDevice(), "switch.on", recoverSimpleHomeHandler)
+    def recovery = recoveryDevice()
+    if (recovery) {
+        subscribe(recovery, "switch.on", recoverSimpleHomeHandler)
+    }
     ensurePendingFromRoom()
 }
 
@@ -254,7 +257,19 @@ private Integer currentRoomCt() {
 
 private def roomDevice() {
     try {
-        return parent.roomStateChildRoomDevice(roomChildAppId)
+        def parentApp = parent
+        if (!parentApp) return null
+        return parentApp.roomStateChildRoomDevice(roomChildAppId)
+    } catch (Throwable ignored) {
+        return null
+    }
+}
+
+private def recoveryDevice() {
+    try {
+        def parentApp = parent
+        if (!parentApp) return null
+        return parentApp.recoveryDevice()
     } catch (Throwable ignored) {
         return null
     }
