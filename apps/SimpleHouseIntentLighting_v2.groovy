@@ -5,14 +5,14 @@
  *   Name: Simple House Intent Lighting
  *   Namespace: lundby
  *
- * Minimal installable shell for House Intent lighting controls.
+ * Controls a House Intent room reference with scene, level, and CT inputs.
  *****************************************************************************************/
 
 definition(
     name: "Simple House Intent Lighting",
     namespace: "lundby",
     author: "Erik Lundby / ChatGPT",
-    description: "House-level lighting intent controls.",
+    description: "House-level lighting intent controls with delayed commit and preview feedback.",
     category: "Convenience",
     parent: "lundby:Simple Home",
     singleInstance: false,
@@ -36,6 +36,12 @@ preferences {
             input "picoRemotes", "capability.pushableButton", title: "House Intent Pico remotes", multiple: true, required: false
             input "levelStep", "number", title: "Level step", defaultValue: 10, required: true
             input "colorTemperatureStep", "number", title: "Color temperature step", defaultValue: 250, required: true
+        }
+
+        section("Speech") {
+            input "speechDevices", "capability.speechSynthesis", title: "Speech devices for scene names", multiple: true, required: false
+            input "announceScenes", "bool", title: "Announce scene names", defaultValue: true, required: true
+            input "announceManualAdjustments", "bool", title: "Announce manual level and color temperature changes", defaultValue: true, required: true
         }
 
         section("Debug") {
@@ -68,6 +74,7 @@ def reinitializeFromParent() {
 def initialize() {
     updateAppLabel()
     subscribe(picoRemotes, "pushed", "picoPushedHandler")
+    subscribe(picoRemotes, "held", "picoHeldHandler")
     def recovery = recoveryDevice()
     if (recovery) {
         subscribe(recovery, "switch.on", recoverSimpleHomeHandler)
@@ -106,14 +113,30 @@ def recoverSimpleHomeHandler(evt) {
 def picoPushedHandler(evt) {
     Integer button = eventIntegerValue(evt)
     Integer step = levelStepValue()
+    Integer ctStepValue = colorTemperatureStepValue()
     debug "Pico pushed ${button}: ${evt?.displayName}"
 
-    if (button == 2) {
+    if (button == 1) {
+        adjustColorTemperature(0 - ctStepValue)
+    } else if (button == 2) {
         adjustLevel(step)
+    } else if (button == 3) {
+        cycleScene()
     } else if (button == 4) {
         adjustLevel(0 - step)
+    } else if (button == 5) {
+        adjustColorTemperature(ctStepValue)
     } else {
         debug "No House Intent Pico push action for button ${button}"
+    }
+}
+
+def picoHeldHandler(evt) {
+    Integer button = eventIntegerValue(evt)
+    debug "Pico held ${button}: ${evt?.displayName}"
+
+    if (button == 3) {
+        returnToHouseReference()
     }
 }
 
@@ -142,6 +165,25 @@ def commitPendingIntent() {
 
 // -------------------- Helpers --------------------
 
+private void cycleScene() {
+    List scenes = builtInScenes()
+    Integer currentIndex = safeInteger(state.sceneIndex, -1)
+    Integer index = currentIndex + 1
+    if (index >= scenes.size()) index = 0
+
+    Map scene = scenes[index]
+    state.sceneIndex = index
+    state.pendingLevel = safeInteger(scene.level, 50)
+    state.pendingCt = safeInteger(scene.ct, 2700)
+    state.pendingSceneName = scene.name
+    state.pendingCustom = true
+
+    String sceneName = scene.name as String
+    applyPreview(sceneName)
+    announceScene(sceneName)
+    scheduleCommit("scene ${sceneName}")
+}
+
 private void adjustLevel(Integer delta) {
     ensurePendingFromRoom()
     Integer current = safeInteger(state.pendingLevel, 50)
@@ -150,8 +192,35 @@ private void adjustLevel(Integer delta) {
     state.pendingCustom = true
     state.pendingSceneName = "Custom"
 
-    applyPreview("level adjusted")
+    applyPreview("Custom")
+    announceManualAdjustment("House Lighting set to ${level}%.")
     scheduleCommit("level adjusted")
+}
+
+private void adjustColorTemperature(Integer delta) {
+    ensurePendingFromRoom()
+    Integer current = safeInteger(state.pendingCt, 2700)
+    Integer ct = normalizedColorTemperature(current + delta)
+    state.pendingCt = ct
+    state.pendingCustom = true
+    state.pendingSceneName = "Custom"
+
+    applyPreview("Custom")
+    announceManualAdjustment("House Color Temperature set to ${colorTemperatureName(ct)}.")
+    scheduleCommit("color temperature adjusted")
+}
+
+private void returnToHouseReference() {
+    state.pendingCustom = false
+    state.pendingSceneName = "Follow House"
+    try {
+        roomDevice()?.clearCustomLighting()
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not return House Intent to automatic reference: ${e.message}"
+        return
+    }
+    announceScene("Follow House")
+    debug "Returned House Intent to automatic reference"
 }
 
 private void ensurePendingFromRoom() {
@@ -183,6 +252,17 @@ private void scheduleCommit(String reason) {
     state.commitReason = reason
     debug "Scheduling House Intent commit in ${seconds} seconds: ${reason}"
     runIn(seconds, "commitPendingIntent", [overwrite: true])
+}
+
+private List builtInScenes() {
+    return [
+        [name: "Calm", level: 35, ct: 2400],
+        [name: "Reading", level: 65, ct: 3000],
+        [name: "Bright", level: 85, ct: 4000],
+        [name: "Cleaning", level: 100, ct: 5000],
+        [name: "Party", level: 55, ct: 2700],
+        [name: "Night", level: 10, ct: 2200]
+    ]
 }
 
 private Integer currentRoomLevel() {
@@ -238,6 +318,10 @@ private Integer levelStepValue() {
     return Math.max(safeInteger(levelStep, 10), 1)
 }
 
+private Integer colorTemperatureStepValue() {
+    return Math.max(safeInteger(colorTemperatureStep, 250), 1)
+}
+
 private Integer eventIntegerValue(evt) {
     try {
         return evt.value as Integer
@@ -258,6 +342,45 @@ private Integer normalizedColorTemperature(value) {
         ct = 2700
     }
     return Math.max(Math.min(ct, 10000), 1500)
+}
+
+private void announceScene(String sceneName) {
+    if (announceScenes == false || !sceneName) return
+    asList(speechDevices).each { dev ->
+        try {
+            dev.speak(sceneName)
+        } catch (Exception e) {
+            log.warn "${app.label}: Could not announce ${sceneName} on ${dev.displayName}: ${e.message}"
+        }
+    }
+}
+
+private void announceManualAdjustment(String message) {
+    if (announceManualAdjustments == false || !message) return
+    asList(speechDevices).each { dev ->
+        try {
+            dev.speak(message)
+        } catch (Exception e) {
+            log.warn "${app.label}: Could not announce manual House Intent adjustment on ${dev.displayName}: ${e.message}"
+        }
+    }
+}
+
+private String colorTemperatureName(Integer ct) {
+    Integer value = normalizedColorTemperature(ct)
+    if (value <= 2300) return "Warm Night"
+    if (value <= 2700) return "Warm"
+    if (value <= 3200) return "Soft White"
+    if (value <= 4200) return "Neutral"
+    if (value <= 5200) return "Daylight"
+    if (value <= 6500) return "Cool Daylight"
+    return "${value} kelvin"
+}
+
+private List asList(value) {
+    if (value == null) return []
+    if (value instanceof List) return value
+    return [value]
 }
 
 private Integer safeInteger(value, Integer fallback) {
