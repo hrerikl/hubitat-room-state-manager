@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.87",
+  "version": "0.2.88",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-25",
-  "releaseNotes": "Add a parent helper to create and configure a new Open-Meteo reference device.",
+  "releaseNotes": "Add Hubitat include helpers and dedupe shared app helper methods.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
@@ -75,6 +75,18 @@
       "primary": false,
       "category": "Convenience",
       "description": "Publishes a circadian reference level and color temperature from an outdoor light sensor."
+    }
+  ],
+  "files": [
+    {
+      "id": "542c4c6c-650a-48e0-8e8b-00fd97fd6425",
+      "name": "SimpleHomeHelpers",
+      "namespace": "lundby",
+      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/libraries/SimpleHomeHelpers.groovy",
+      "required": true,
+      "oauth": false,
+      "category": "Convenience",
+      "description": "Hubitat include library with shared helper methods for Simple Home apps."
     }
   ],
   "drivers": [

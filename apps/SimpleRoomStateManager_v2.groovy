@@ -19,6 +19,8 @@ definition(
     iconX2Url: ""
 )
 
+#include lundby.SimpleHomeHelpers
+
 preferences {
     page(name: "mainPage", title: "Simple Home", install: true, uninstall: true) {
         section("Rooms") {
@@ -597,11 +599,6 @@ private Boolean primaryChildAllowed(List children, def requestingChildAppId, Str
     return allowed
 }
 
-private Boolean sameDevice(def first, def second) {
-    if (!first || !second) return false
-    return first.id?.toString() == second.id?.toString()
-}
-
 def reinitializeChildApps() {
     createOrUpdateSharedDevices()
 
@@ -1026,20 +1023,4 @@ private String childAppId(def child) {
     if (!child) return null
 
     return child.id?.toString()
-}
-
-private List normalizeIdList(def rawIds) {
-    if (!rawIds) return []
-
-    List ids = rawIds instanceof List ? rawIds : [rawIds]
-    return ids
-        .collectMany { raw ->
-            String text = "${raw}".trim()
-            if (text.startsWith("[") && text.endsWith("]")) {
-                return text.substring(1, text.length() - 1).split(",").collect { it.trim() }
-            }
-            return [text]
-        }
-        .findAll { it }
-        .unique()
 }

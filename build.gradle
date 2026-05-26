@@ -10,10 +10,51 @@ dependencies {
     testImplementation 'org.spockframework:spock-core'
 }
 
+def generatedHubitatSources = layout.buildDirectory.dir('generated/hubitatGroovy')
+
+tasks.register('generateHubitatSources') {
+    inputs.files fileTree('apps') { include '**/*.groovy' }
+    inputs.files fileTree('drivers') { include '**/*.groovy' }
+    inputs.files fileTree('src/main/groovy') { include '**/*.groovy' }
+    inputs.files fileTree('libraries') { include '**/*.groovy' }
+    outputs.dir generatedHubitatSources
+
+    doLast {
+        def outputDir = generatedHubitatSources.get().asFile
+        delete outputDir
+
+        def librarySource = file('libraries/SimpleHomeHelpers.groovy')
+        def libraryBody = ''
+        if (librarySource.exists()) {
+            libraryBody = librarySource.text.replaceFirst(/(?s)^\s*library\s*\(.*?\)\s*/, '')
+        }
+
+        def expandIncludes = { String text ->
+            text.readLines().collect { line ->
+                line == '#include lundby.SimpleHomeHelpers' ? libraryBody : line
+            }.join(System.lineSeparator()) + System.lineSeparator()
+        }
+
+        [
+            [dir: file('apps'), prefix: 'apps'],
+            [dir: file('drivers'), prefix: 'drivers'],
+            [dir: file('src/main/groovy'), prefix: 'src/main/groovy']
+        ].each { sourceRoot ->
+            if (!sourceRoot.dir.exists()) return
+            fileTree(sourceRoot.dir) { include '**/*.groovy' }.each { sourceFile ->
+                def relativePath = sourceRoot.dir.toPath().relativize(sourceFile.toPath()).toString()
+                def targetFile = new File(outputDir, "${sourceRoot.prefix}/${relativePath}")
+                targetFile.parentFile.mkdirs()
+                targetFile.text = expandIncludes(sourceFile.text)
+            }
+        }
+    }
+}
+
 sourceSets {
     main {
         groovy {
-            srcDirs = ['apps', 'drivers', 'src/main/groovy']
+            srcDirs = [generatedHubitatSources]
         }
     }
     test {
@@ -25,6 +66,14 @@ sourceSets {
 
 test {
     useJUnitPlatform()
+}
+
+tasks.named('compileGroovy') {
+    dependsOn tasks.named('generateHubitatSources')
+}
+
+tasks.named('codenarcMain') {
+    dependsOn tasks.named('generateHubitatSources')
 }
 
 codenarc {

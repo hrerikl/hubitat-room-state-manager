@@ -20,6 +20,8 @@ definition(
     iconX2Url: ""
 )
 
+#include lundby.SimpleHomeHelpers
+
 preferences {
     page(name: "mainPage", title: "Simple House Intent Lighting", install: true, uninstall: true) {
         section("House Intent") {
@@ -375,28 +377,6 @@ private Integer colorTemperatureStepValue() {
     return Math.max(safeInteger(colorTemperatureStep, 250), 1)
 }
 
-private Integer eventIntegerValue(evt) {
-    try {
-        return evt.value as Integer
-    } catch (Exception ignored) {
-        return null
-    }
-}
-
-private Integer normalizedLevel(value) {
-    return Math.max(Math.min(safeInteger(value, 50), 100), 0)
-}
-
-private Integer normalizedColorTemperature(value) {
-    Integer ct = 2700
-    try {
-        ct = (value == null ? 2700 : value) as Integer
-    } catch (Exception ignored) {
-        ct = 2700
-    }
-    return Math.max(Math.min(ct, 10000), 1500)
-}
-
 private void announceScene(String sceneName) {
     if (announceScenes == false || !sceneName) return
     asList(speechDevices).each { dev ->
@@ -428,20 +408,6 @@ private String colorTemperatureName(Integer ct) {
     if (value <= 5200) return "Daylight"
     if (value <= 6500) return "Cool Daylight"
     return "${value} kelvin"
-}
-
-private List asList(value) {
-    if (value == null) return []
-    if (value instanceof List) return value
-    return [value]
-}
-
-private Integer safeInteger(value, Integer fallback) {
-    try {
-        return value == null ? fallback : value as Integer
-    } catch (Exception ignored) {
-        return fallback
-    }
 }
 
 private void debug(String message) {

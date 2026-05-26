@@ -21,6 +21,8 @@ definition(
     iconX2Url: ""
 )
 
+#include lundby.SimpleHomeHelpers
+
 preferences {
     page(name: "mainPage", title: "Simple Mode Manager", install: true, uninstall: true) {
         section("Modes") {
@@ -467,11 +469,6 @@ private String currentModeName() {
 private String formatTime(Long epochMs) {
     if (!epochMs) return "unknown"
     return new Date(epochMs).format("yyyy-MM-dd HH:mm:ss", location.timeZone)
-}
-
-private List asList(def value) {
-    if (!value) return []
-    return value instanceof List ? value : [value]
 }
 
 private void debug(String msg) {

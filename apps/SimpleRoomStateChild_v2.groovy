@@ -44,6 +44,8 @@ definition(
     iconX2Url: ""
 )
 
+#include lundby.SimpleHomeHelpers
+
 preferences {
     page(name: "childMainPage", title: "Room State", install: true, uninstall: true) {
         section("Room") {
@@ -1616,11 +1618,6 @@ private String activeMotionLabels(List activeMotion) {
     return activeMotion.collect { it?.displayName ?: it?.name ?: it?.id }.join(", ")
 }
 
-private List asList(def value) {
-    if (!value) return []
-    return value instanceof List ? value : [value]
-}
-
 private Boolean allDoorsClosed() {
     if (!doorContactSensors) {
         debug "allDoorsClosed is false because no door contact sensors are configured"
@@ -1760,30 +1757,9 @@ private Boolean buttonNumberMatches(Integer actual, def expected) {
     }
 }
 
-private Boolean sameDevice(def first, def second) {
-    if (!first || !second) return false
-    return first.id?.toString() == second.id?.toString()
-}
-
-private Integer eventIntegerValue(evt) {
-    try {
-        return evt.value as Integer
-    } catch (Exception ignored) {
-        return null
-    }
-}
-
 private Boolean isPhysicalEvent(evt) { return eventType(evt) == "physical" }
 
 private Boolean isDigitalEvent(evt) { return eventType(evt) == "digital" }
-
-private String eventType(evt) {
-    try {
-        return evt.type?.toString() ?: ""
-    } catch (Throwable ignored) {
-        return ""
-    }
-}
 
 // -------------------- State Computation and Output --------------------
 
@@ -1952,52 +1928,6 @@ private String currentLocationModeName() {
         return location?.mode?.toString()
     } catch (Exception ignored) {
         return null
-    }
-}
-
-private Integer normalizedPercent(value, Integer fallback) {
-    Integer percent = fallback
-    try {
-        percent = (value == null ? fallback : value) as Integer
-    } catch (Exception ignored) {
-        percent = fallback
-    }
-    return Math.max(Math.min(percent, 100), 0)
-}
-
-private Integer normalizedOffset(value, Integer fallback) {
-    Integer offset = fallback
-    try {
-        offset = (value == null ? fallback : value) as Integer
-    } catch (Exception ignored) {
-        offset = fallback
-    }
-    return Math.max(Math.min(offset, 100), -100)
-}
-
-private Integer normalizedColorTemperature(value, Integer fallback) {
-    Integer ct = fallback
-    try {
-        ct = (value == null ? fallback : value) as Integer
-    } catch (Exception ignored) {
-        ct = fallback
-    }
-    return Math.max(Math.min(ct, 10000), 1500)
-}
-
-private Integer safeInteger(value, Integer fallback) {
-    try {
-        return value == null ? fallback : value as Integer
-    } catch (Exception ignored) {
-        return fallback
-    }
-}
-
-private Long safeLong(value, Long fallback) {
-    try {
-        return value == null ? fallback : value as Long
-    } catch (Exception ignored) {
-        return fallback
     }
 }
 

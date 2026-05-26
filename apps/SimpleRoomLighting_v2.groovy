@@ -22,6 +22,8 @@ definition(
     iconX2Url: ""
 )
 
+#include lundby.SimpleHomeHelpers
+
 preferences {
     page(name: "mainPage", title: "Simple Room Lighting", install: true, uninstall: true) {
         section("Room") {
@@ -1355,14 +1357,6 @@ private Boolean shouldAcceptControlEvent(evt) {
     return false
 }
 
-private String eventType(evt) {
-    try {
-        return evt.type?.toString() ?: ""
-    } catch (Throwable ignored) {
-        return ""
-    }
-}
-
 private void suppressControlFeedback(def dev) {
     String deviceId = dev?.id?.toString()
     if (!deviceId) return
@@ -1632,22 +1626,6 @@ private Integer sceneNightExtensionMinutesForRoom() {
     return Math.max(minutes, 1)
 }
 
-private Integer safeInteger(value, Integer fallback) {
-    try {
-        return value == null ? fallback : value as Integer
-    } catch (Exception ignored) {
-        return fallback
-    }
-}
-
-private Long safeLong(value, Long fallback) {
-    try {
-        return value == null ? fallback : value as Long
-    } catch (Exception ignored) {
-        return fallback
-    }
-}
-
 private String currentLocationModeName() {
     try {
         return location?.mode?.toString()
@@ -1674,41 +1652,6 @@ private String htmlEscape(value) {
         .replace('"', "&quot;")
 }
 
-private List asList(def value) {
-    if (!value) return []
-    return value instanceof List ? value : [value]
-}
-
-private Integer normalizedLevel(value, Integer fallback) {
-    Integer level = fallback == null ? 0 : fallback
-    try {
-        level = value == null ? level : value as Integer
-    } catch (Exception ignored) {
-        level = fallback == null ? 0 : fallback
-    }
-    return Math.max(Math.min(level, 100), 0)
-}
-
-private Integer normalizedPercent(value, Integer fallback) {
-    Integer percent = fallback
-    try {
-        percent = (value == null ? fallback : value) as Integer
-    } catch (Exception ignored) {
-        percent = fallback
-    }
-    return Math.max(Math.min(percent, 100), 0)
-}
-
-private Integer normalizedOffset(value, Integer fallback) {
-    Integer offset = fallback
-    try {
-        offset = (value == null ? fallback : value) as Integer
-    } catch (Exception ignored) {
-        offset = fallback
-    }
-    return Math.max(Math.min(offset, 100), -100)
-}
-
 private Integer normalizedUsableMinimum(value) {
     Integer minimum = 1
     try {
@@ -1719,27 +1662,9 @@ private Integer normalizedUsableMinimum(value) {
     return Math.max(Math.min(minimum, 99), 1)
 }
 
-private Integer normalizedColorTemperature(value, Integer fallback) {
-    Integer ct = fallback == null ? 2700 : fallback
-    try {
-        ct = (value == null ? ct : value) as Integer
-    } catch (Exception ignored) {
-        ct = fallback == null ? 2700 : fallback
-    }
-    return Math.max(Math.min(ct, 10000), 1500)
-}
-
 private Integer adjustedRoomLevel(Integer delta) {
     Integer current = normalizedLevel(roomDevice()?.currentValue("level"), 0)
     return normalizedLevel(current + delta, current)
-}
-
-private Integer eventIntegerValue(evt) {
-    try {
-        return evt.value as Integer
-    } catch (Exception ignored) {
-        return null
-    }
 }
 
 private void debug(String msg) {
