@@ -1,3 +1,4 @@
+@SuppressWarnings('UnusedPrivateMethod')
 library(
     base: "app",
     author: "Erik Lundby / ChatGPT",
