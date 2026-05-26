@@ -48,6 +48,7 @@ metadata {
         attribute 'presenceActivity', 'number'
         attribute 'lastPresenceActivity', 'string'
         attribute 'lastActivityReason', 'string'
+        attribute 'stateReason', 'string'
         attribute 'engagedReason', 'string'
 
         command 'setRoomState', [[name: 'Room State', type: 'ENUM', constraints: ['Off', 'Occupied', 'Engaged', 'Asleep', 'Locked']]]
@@ -75,6 +76,7 @@ metadata {
         command 'recordPresenceActivity', [[name: 'Epoch milliseconds', type: 'STRING']]
         command 'recordPresenceActivityDetail', [[name: 'Epoch milliseconds', type: 'STRING'], [name: 'Reason', type: 'STRING']]
         command 'recordActivityDetail', [[name: 'Epoch milliseconds', type: 'STRING'], [name: 'Reason', type: 'STRING']]
+        command 'setStateReason', [[name: 'Reason', type: 'STRING']]
         command 'setEngagedReason', [[name: 'Reason', type: 'STRING']]
     }
 }
@@ -138,6 +140,9 @@ void initialize() {
     }
     if (device.currentValue('lastActivityReason') == null) {
         sendEvent(name: 'lastActivityReason', value: '')
+    }
+    if (device.currentValue('stateReason') == null) {
+        sendEvent(name: 'stateReason', value: '')
     }
     if (device.currentValue('engagedReason') == null) {
         sendEvent(name: 'engagedReason', value: '')
@@ -374,6 +379,10 @@ void recordActivityDetail(String epochMs, String reason) {
 
 void setEngagedReason(String reason) {
     sendEvent(name: 'engagedReason', value: reason ?: '', isStateChange: true)
+}
+
+void setStateReason(String reason) {
+    sendEvent(name: 'stateReason', value: reason ?: '', isStateChange: true)
 }
 
 private Integer normalizeLevel(value) {
