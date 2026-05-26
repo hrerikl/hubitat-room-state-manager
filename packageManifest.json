@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.71",
+  "version": "0.2.72",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-25",
-  "releaseNotes": "Add House Intent Lighting recovery, preview, and delayed commit path back after install-shell recovery.",
+  "releaseNotes": "Add House Intent Lighting Pico manual level and color temperature controls.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
