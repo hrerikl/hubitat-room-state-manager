@@ -439,13 +439,7 @@ private List roomStateChildApps() {
     List discovered = []
     try {
         discovered = getChildApps()?.findAll { child ->
-            if (simpleHomeChildTypeIs(child, "roomState")) return true
-            try {
-                return child?.getRoomStateAppName() == "Simple Room State"
-            } catch (Throwable ignored) {
-                String label = child?.label?.toString()
-                return label == "Simple Room State" || label?.startsWith("Room ")
-            }
+            return simpleHomeChildTypeIs(child, "roomState")
         } ?: []
     } catch (Throwable ignored) {
         discovered = []
@@ -463,12 +457,7 @@ private List houseIntentLightingChildApps() {
     List discovered = []
     try {
         discovered = getChildApps()?.findAll { child ->
-            if (simpleHomeChildTypeIs(child, "houseIntentLighting")) return true
-            try {
-                return child?.getHouseIntentLightingAppName() == "Simple House Intent Lighting"
-            } catch (Throwable ignored) {
-                return child?.label == "# House Intent Lighting" || child?.label == "Simple House Intent Lighting"
-            }
+            return simpleHomeChildTypeIs(child, "houseIntentLighting")
         } ?: []
     } catch (Throwable ignored) {
         discovered = []
@@ -487,19 +476,7 @@ private List simpleRoomLightingChildApps() {
     try {
         discovered = getChildApps()?.findAll { child ->
             if (simpleHomeChildTypeIs(child, "houseIntentLighting")) return false
-            if (simpleHomeChildTypeIs(child, "roomLighting")) return true
-            try {
-                if (child?.getHouseIntentLightingAppName() == "Simple House Intent Lighting") return false
-            } catch (Throwable ignored) {
-                // Continue probing for room lighting identity.
-            }
-
-            try {
-                return ["Simple Room Lighting", "Simple Room Lighting v2"].contains(child?.getRoomLightingAppName())
-            } catch (Throwable ignored) {
-                String label = child?.label?.toString()
-                return label == "Simple Room Lighting" || (label?.endsWith(" Lighting") && label != "# House Intent Lighting")
-            }
+            return simpleHomeChildTypeIs(child, "roomLighting")
         } ?: []
     } catch (Throwable ignored) {
         discovered = []
@@ -513,12 +490,7 @@ private List modeManagerChildApps() {
     List discovered = []
     try {
         discovered = getChildApps()?.findAll { child ->
-            if (simpleHomeChildTypeIs(child, "modeManager")) return true
-            try {
-                return ["Simple Mode Manager", "Simple Mode Manager v2"].contains(child?.getModeManagerAppName())
-            } catch (Throwable ignored) {
-                return child?.label == "Simple Mode Manager" || child?.label == "Simple Mode Manager v2"
-            }
+            return simpleHomeChildTypeIs(child, "modeManager")
         } ?: []
     } catch (Throwable ignored) {
         discovered = []
@@ -536,12 +508,7 @@ private List circadianLightingChildApps() {
     List discovered = []
     try {
         discovered = getChildApps()?.findAll { child ->
-            if (simpleHomeChildTypeIs(child, "circadianLighting")) return true
-            try {
-                return ["Simple Circadian Lighting", "Simple Circadian Lighting v2"].contains(child?.getCircadianLightingAppName())
-            } catch (Throwable ignored) {
-                return child?.label == "Simple Circadian Lighting" || child?.label == "Simple Circadian Lighting v2"
-            }
+            return simpleHomeChildTypeIs(child, "circadianLighting")
         } ?: []
     } catch (Throwable ignored) {
         discovered = []
@@ -985,23 +952,13 @@ private Map managedRoomOptions(def requestingChildAppId, Boolean includeHouseInt
 private Boolean houseIntentLightingRequester(def requestingChildAppId) {
     def requester = childAppById(requestingChildAppId)
     if (!requester) return false
-    if (simpleHomeChildTypeIs(requester, "houseIntentLighting")) return true
-    try {
-        return requester.getHouseIntentLightingAppName() == "Simple House Intent Lighting"
-    } catch (Throwable ignored) {
-        return false
-    }
+    return simpleHomeChildTypeIs(requester, "houseIntentLighting")
 }
 
 private Boolean roomLightingRequester(def requestingChildAppId) {
     def requester = childAppById(requestingChildAppId)
     if (!requester) return false
-    if (simpleHomeChildTypeIs(requester, "roomLighting")) return true
-    try {
-        return ["Simple Room Lighting", "Simple Room Lighting v2"].contains(requester.getRoomLightingAppName())
-    } catch (Throwable ignored) {
-        return false
-    }
+    return simpleHomeChildTypeIs(requester, "roomLighting")
 }
 
 private List roomLightingRoomChildIds(def requestingChildAppId) {

@@ -105,28 +105,8 @@ def initialize() {
     evaluateNight("initialize")
 }
 
-def getModeManagerAppName() {
-    return "Simple Mode Manager"
-}
-
 def getSimpleHomeAppType() {
     return "modeManager"
-}
-
-def getRoomStateAppName() {
-    return null
-}
-
-def getRoomLightingAppName() {
-    return null
-}
-
-def getHouseIntentLightingAppName() {
-    return null
-}
-
-def getCircadianLightingAppName() {
-    return null
 }
 
 def getRoomProfile() {
@@ -231,7 +211,7 @@ def presenceHandler(evt) {
 def stillUpHandler(evt) {
     debug "StillUp activated: ${evt.displayName}"
 
-    if (currentModeName() == nightModeName) {
+    if (currentLocationModeName() == nightModeName) {
         setModeIfNeeded(eveningModeName, "StillUp during Night")
     }
 
@@ -264,7 +244,7 @@ private void evaluatePresenceMode(String reason) {
 }
 
 private void returnHomeFromAway(String reason) {
-    if (!(currentModeName() in [awayModeName, vacationModeName])) {
+    if (!(currentLocationModeName() in [awayModeName, vacationModeName])) {
         debug "Arrival did not change mode because current mode is already home-like: ${reason}"
         return
     }
@@ -436,22 +416,10 @@ private Map roomOptions() {
     }
 }
 
-private Map locationModeOptions() {
-    try {
-        return location?.modes?.collectEntries { mode ->
-            String name = mode?.name?.toString() ?: mode?.toString()
-            [(name): name]
-        } ?: [:]
-    } catch (Exception e) {
-        log.warn "${app.label}: Could not load Location Modes: ${e.message}"
-        return [:]
-    }
-}
-
 private void setModeIfNeeded(String modeName, String reason) {
     if (!modeName) return
 
-    if (currentModeName() == modeName) {
+    if (currentLocationModeName() == modeName) {
         debug "Location Mode already ${modeName}: ${reason}"
         return
     }
@@ -462,19 +430,6 @@ private void setModeIfNeeded(String modeName, String reason) {
     } catch (Exception e) {
         log.warn "${app.label}: Could not set Location Mode to ${modeName}: ${e.message}"
     }
-}
-
-private String currentModeName() {
-    try {
-        return location?.mode?.toString()
-    } catch (Exception ignored) {
-        return null
-    }
-}
-
-private String formatTime(Long epochMs) {
-    if (!epochMs) return "unknown"
-    return new Date(epochMs).format("yyyy-MM-dd HH:mm:ss", location.timeZone)
 }
 
 private void debug(String msg) {

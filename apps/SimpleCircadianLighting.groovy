@@ -108,26 +108,6 @@ def getSimpleHomeAppType() {
     return 'circadianLighting'
 }
 
-def getRoomStateAppName() {
-    return null
-}
-
-def getRoomLightingAppName() {
-    return null
-}
-
-def getHouseIntentLightingAppName() {
-    return null
-}
-
-def getModeManagerAppName() {
-    return null
-}
-
-def getCircadianLightingAppName() {
-    return 'Simple Circadian Lighting'
-}
-
 def getRoomProfile() {
     return null
 }
@@ -232,7 +212,7 @@ private void setOutdoorLightingSwitch(String target, String currentSwitch, Integ
 }
 
 private Integer referenceLevel(Integer outdoorLux) {
-    if (currentModeName() == (nightModeName ?: 'Night').toString()) {
+    if (currentLocationModeName() == (nightModeName ?: 'Night').toString()) {
         return clampInteger(settingInteger(nightReferenceLevel, 5), 1, 100)
     }
 
@@ -298,26 +278,10 @@ private Integer outdoorDisableLux(Integer enableLux) {
 }
 
 private Integer modeMinimumLevel() {
-    if (currentModeName() == (eveningModeName ?: 'Evening').toString()) {
+    if (currentLocationModeName() == (eveningModeName ?: 'Evening').toString()) {
         return clampInteger(settingInteger(eveningMinimumLevel, 20), 1, 100)
     }
     return clampInteger(settingInteger(dayMinimumLevel, 35), 1, 100)
-}
-
-private String currentModeName() {
-    return location?.mode?.toString()
-}
-
-private Map locationModeOptions() {
-    try {
-        return location?.modes?.collectEntries { mode ->
-            String name = mode?.name?.toString() ?: mode?.toString()
-            [(name): name]
-        } ?: [:]
-    } catch (Exception e) {
-        log.warn "${app.label}: Could not load Location Modes: ${e.message}"
-        return [:]
-    }
 }
 
 private Integer settingInteger(value, Integer fallback) {

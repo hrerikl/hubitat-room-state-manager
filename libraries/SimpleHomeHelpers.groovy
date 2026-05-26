@@ -99,6 +99,14 @@ private String eventType(evt) {
     }
 }
 
+private Boolean isPhysicalEvent(evt) {
+    return eventType(evt) == "physical"
+}
+
+private Boolean isDigitalEvent(evt) {
+    return eventType(evt) == "digital"
+}
+
 private List normalizeIdList(def rawIds) {
     if (!rawIds) return []
 
@@ -130,4 +138,42 @@ def getSimpleHomeAppName() {
     } catch (Throwable ignored) {
         return null
     }
+}
+
+private Map locationModeOptions() {
+    try {
+        return location?.modes?.collectEntries { mode ->
+            String name = mode?.name?.toString() ?: mode?.toString()
+            [(name): name]
+        } ?: [:]
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not load Location Modes: ${e.message}"
+        return [:]
+    }
+}
+
+private String currentLocationModeName() {
+    try {
+        return location?.mode?.toString()
+    } catch (Exception ignored) {
+        return null
+    }
+}
+
+private String formatTime(Long epochMs) {
+    if (!epochMs) return "unknown"
+    return new Date(epochMs).format("yyyy-MM-dd HH:mm:ss", location.timeZone)
+}
+
+private Integer minutesRoundedUp(Integer seconds) {
+    return Math.max(Math.ceil((seconds ?: 0) / 60.0) as Integer, 1)
+}
+
+private String htmlEscape(value) {
+    return "${value ?: ''}"
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#39;")
 }

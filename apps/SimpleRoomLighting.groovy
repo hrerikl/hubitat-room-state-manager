@@ -1425,31 +1425,11 @@ def getSimpleHomeAppType() {
     return "roomLighting"
 }
 
-def getRoomStateAppName() {
-    return null
-}
-
 def getRoomProfile() {
     return null
 }
 
 def getConfiguredRoomName() {
-    return null
-}
-
-def getRoomLightingAppName() {
-    return "Simple Room Lighting"
-}
-
-def getHouseIntentLightingAppName() {
-    return null
-}
-
-def getModeManagerAppName() {
-    return null
-}
-
-def getCircadianLightingAppName() {
     return null
 }
 
@@ -1599,18 +1579,6 @@ private List selectedMatrixModes() {
     return matrixModes instanceof List ? matrixModes.collect { it.toString() } : [matrixModes.toString()]
 }
 
-private Map locationModeOptions() {
-    try {
-        return location?.modes?.collectEntries { mode ->
-            String name = mode?.name?.toString() ?: mode?.toString()
-            [(name): name]
-        } ?: [:]
-    } catch (Exception e) {
-        log.warn "${app.label}: Could not load Location Modes: ${e.message}"
-        return [:]
-    }
-}
-
 private Map roomInfo() {
     if (!roomChildAppId) return [:]
     try {
@@ -1626,14 +1594,6 @@ private Integer sceneNightExtensionMinutesForRoom() {
     return Math.max(minutes, 1)
 }
 
-private String currentLocationModeName() {
-    try {
-        return location?.mode?.toString()
-    } catch (Exception ignored) {
-        return null
-    }
-}
-
 private String contextKey(String value) {
     return value.replaceAll("[^A-Za-z0-9]", "_")
 }
@@ -1642,14 +1602,6 @@ private Boolean settingBool(String name, Boolean fallback) {
     def value = settings[name]
     if (value == null) return fallback
     return value == true || value?.toString() == "true"
-}
-
-private String htmlEscape(value) {
-    return "${value ?: ''}"
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
 }
 
 private Integer normalizedUsableMinimum(value) {

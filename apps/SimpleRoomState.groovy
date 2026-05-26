@@ -607,26 +607,6 @@ def getSimpleHomeAppType() {
     return "roomState"
 }
 
-def getRoomStateAppName() {
-    return "Simple Room State"
-}
-
-def getRoomLightingAppName() {
-    return null
-}
-
-def getHouseIntentLightingAppName() {
-    return null
-}
-
-def getModeManagerAppName() {
-    return null
-}
-
-def getCircadianLightingAppName() {
-    return null
-}
-
 def getManagedMetaLightDevice() {
     def room = roomDevice()
     if (!room) return null
@@ -1423,12 +1403,6 @@ private Integer positiveSeconds(value, Integer defaultSeconds) {
     return seconds > 0 ? seconds : 1
 }
 
-private Integer minutesRoundedUp(Integer seconds) {
-    Integer safeSeconds = positiveSeconds(seconds, 60)
-    Integer wholeMinutes = (safeSeconds / 60) as Integer
-    return safeSeconds % 60 == 0 ? wholeMinutes : wholeMinutes + 1
-}
-
 private void scheduleOccupiedTimeout(String reason) {
     Long lastActivity = (state.lastActivityAt ?: state.lastInactiveAt ?: now()) as Long
     Long targetTime = lastActivity + (occupiedTimeoutSeconds() * 1000L)
@@ -1762,10 +1736,6 @@ private Boolean buttonNumberMatches(Integer actual, def expected) {
     }
 }
 
-private Boolean isPhysicalEvent(evt) { return eventType(evt) == "physical" }
-
-private Boolean isDigitalEvent(evt) { return eventType(evt) == "digital" }
-
 // -------------------- State Computation and Output --------------------
 
 private String computeRoomState() {
@@ -1926,14 +1896,6 @@ private Integer modeBasedLightingLevel(String prefix) {
     def value = settings[modeLevelSettingName(prefix, modeName)]
     if (value == null || "${value}".trim() == "") return null
     return normalizedPercent(value, prefix == "occupiedLightingLevel" ? 100 : 20)
-}
-
-private String currentLocationModeName() {
-    try {
-        return location?.mode?.toString()
-    } catch (Exception ignored) {
-        return null
-    }
 }
 
 private void recomputeAndPublish() {

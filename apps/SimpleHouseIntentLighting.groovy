@@ -115,31 +115,11 @@ def getSimpleHomeAppType() {
     return "houseIntentLighting"
 }
 
-def getRoomStateAppName() {
-    return null
-}
-
-def getRoomLightingAppName() {
-    return null
-}
-
 def getRoomProfile() {
     return null
 }
 
 def getConfiguredRoomName() {
-    return null
-}
-
-def getHouseIntentLightingAppName() {
-    return "Simple House Intent Lighting"
-}
-
-def getModeManagerAppName() {
-    return null
-}
-
-def getCircadianLightingAppName() {
     return null
 }
 
