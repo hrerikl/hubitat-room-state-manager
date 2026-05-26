@@ -23,7 +23,7 @@ definition(
 preferences {
     page(name: "mainPage", title: "Simple House Intent Lighting", install: true, uninstall: true) {
         section("House Intent") {
-            input "roomChildAppId", "enum", title: "House Intent room", options: roomOptions(), required: true, submitOnChange: true
+            input "roomChildAppId", "enum", title: "House Intent room", options: roomOptions(), required: false, submitOnChange: true
             input "lightingName", "text", title: "Lighting app name override, optional", required: false
         }
 
@@ -99,7 +99,8 @@ def configureHouseIntentLightingFromParent(def houseIntentChildAppId) {
 }
 
 def recoverSimpleHomeHandler(evt) {
-    commitPendingIntent("Simple Home recovery")
+    state.commitReason = "Simple Home recovery"
+    commitPendingIntent()
 }
 
 // -------------------- Pico Controls --------------------
@@ -205,10 +206,12 @@ private void applyPreview(String sceneName) {
 private void scheduleCommit(String reason) {
     Integer seconds = Math.max(safeInteger(commitDelaySeconds, 10), 1)
     debug "Scheduling House Intent commit in ${seconds} seconds: ${reason}"
-    runIn(seconds, commitPendingIntent, [overwrite: true])
+    state.commitReason = reason
+    runIn(seconds, "commitPendingIntent", [overwrite: true])
 }
 
-def commitPendingIntent(String reason = "scheduled") {
+def commitPendingIntent() {
+    String reason = state.commitReason ?: "scheduled"
     def room = roomDevice()
     if (!room) {
         log.warn "${app.label}: Cannot commit House Intent because no room is selected."
@@ -224,6 +227,7 @@ def commitPendingIntent(String reason = "scheduled") {
         room.setMetaLightColorTemperature(ct)
         room.setMetaLightLevel(level)
         debug "Committed House Intent level=${level}, ct=${ct}: ${reason}"
+        state.remove("commitReason")
     } catch (Exception e) {
         log.warn "${app.label}: Could not commit House Intent level=${level}, ct=${ct}: ${e.message}"
     }
