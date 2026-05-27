@@ -1,10 +1,10 @@
 {
   "packageName": "Simple Room State Manager",
   "author": "Erik Lundby",
-  "version": "0.2.109",
+  "version": "0.2.110",
   "minimumHEVersion": "2.3.0",
   "dateReleased": "2026-05-26",
-  "releaseNotes": "Preserve original engagement reasons by ignoring app-published Engaged switch echoes.",
+  "releaseNotes": "Clear current room presence when entering configured Away/Vacation-style modes.",
   "category": "Convenience",
   "tags": "Lights & Switches, Presence & Location",
   "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

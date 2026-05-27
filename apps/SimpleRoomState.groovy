@@ -95,6 +95,7 @@ preferences {
                     input "activitySwitchesPhysicalOnly", "bool", title: "Only physical activity switch events imply room activity", defaultValue: false, required: true
                     input "activityButtons", "capability.pushableButton", title: "Buttons that imply room activity when pushed", multiple: true, required: false
                     input "activityButtonNumbers", "text", title: "Activity button numbers, comma separated. Blank means any pushed button.", required: false
+                    input "clearPresenceModeNames", "enum", title: "Modes that clear current room presence", options: locationModeOptions(), multiple: true, defaultValue: defaultClearPresenceModeNames(), required: false
                     input "lockHeldButtonNumber", "number", title: "Held button number that locks this room. Blank disables.", required: false
                     input "unlockHeldButtonNumber", "number", title: "Held button number that unlocks this room. Blank disables.", required: false
                     input "staleActiveMotionMinutes", "number", title: "Ignore active motion sensor after no motion/device activity for this many minutes. Blank or 0 disables.", defaultValue: 60, required: false
@@ -384,6 +385,10 @@ private Boolean defaultFollowCircadianReference() {
 
 private Boolean followCircadianReferenceSettingEnabled() {
     return houseIntentProfile() || followCircadianReference == true
+}
+
+private List defaultClearPresenceModeNames() {
+    return locationModeNames().findAll { modeName -> modeName in ["Away", "Vacation"] }
 }
 
 private List locationModeNames() {
@@ -920,6 +925,12 @@ def lockedEnabledHandler(evt) {
 
 def locationModeHandler(evt) {
     debug "Location Mode changed to ${evt.value}"
+
+    if (presenceClearingMode(evt.value)) {
+        clearPresenceFromLocationMode(evt.value?.toString())
+        return
+    }
+
     if (!useModeBasedLightingLevels || !changeLightingLevelOnModeChange) {
         debug "Ignoring Location Mode level update because mode-change level adjustment is disabled"
         return
@@ -928,6 +939,15 @@ def locationModeHandler(evt) {
     state.forceModeLightingLevel = true
     recomputeAndPublish()
     state.forceModeLightingLevel = false
+}
+
+private Boolean presenceClearingMode(def modeName) {
+    if (houseIntentProfile()) return false
+    String currentMode = modeName?.toString()
+    if (!currentMode) return false
+    def configuredModes = settings?.clearPresenceModeNames
+    if (configuredModes == null) configuredModes = defaultClearPresenceModeNames()
+    return asList(configuredModes).collect { it?.toString() }.contains(currentMode)
 }
 
 def circadianReferenceHandler(evt) {
@@ -1215,6 +1235,7 @@ private Boolean hasRecentActivityWithinOccupiedTimeout() {
 
 private void setOccupied(String reason) {
     debug "Occupied true: ${reason}"
+    state.offReason = null
     recordActivity(reason)
     state.roomLevel = currentRoomControlLevel()
     state.occupied = true
@@ -1223,6 +1244,7 @@ private void setOccupied(String reason) {
 
 private void setEngaged(String reason) {
     reason = activityReason(reason, "engagement activity")
+    state.offReason = null
 
     if (state.asleep) {
         debug "Ignoring Engaged while asleep: ${reason}"
@@ -1378,6 +1400,32 @@ private void clearRoomStateFromRoomSwitch() {
     publishNightLighting(false, 0)
 
     refreshCourtesyState()
+    recomputeAndPublish()
+}
+
+private void clearPresenceFromLocationMode(String modeName) {
+    String reason = "Location Mode ${modeName}"
+    debug "Clearing room presence from ${reason}"
+
+    unschedule(clearOccupiedIfStillInactive)
+    unschedule(clearEngagedIfStillInactive)
+    unschedule(clearNightLightingIfStillAsleep)
+
+    state.occupied = false
+    state.engaged = false
+    state.asleep = false
+    state.asleepStartedAt = null
+    state.nightActive = false
+    state.courtesy = false
+    state.courtesyReason = null
+    state.offReason = "Off from ${reason}"
+    state.lastInactiveAt = now()
+    state.lastEngagedInactiveAt = null
+
+    componentSwitchOff("Engaged")
+    componentSwitchOff("Asleep")
+    publishNightLighting(false, 0)
+
     recomputeAndPublish()
 }
 
@@ -2012,7 +2060,7 @@ private String computeStateReason(String roomState, String lightingIntent) {
     if (roomState == "Engaged") return "Engaged from ${state.lastActivityReason ?: 'activity'}"
     if (roomState == "Occupied") return "Occupied from ${state.lastActivityReason ?: 'activity'}"
     if (lightingIntent == "Courtesy") return "Courtesy from ${state.courtesyReason ?: 'neighboring room'}"
-    return "Off"
+    return state.offReason ?: "Off"
 }
 
 private void publishRoomDevice(Boolean switchOn, String roomState, String lightingIntent, Integer lightingLevel, String stateReason) {
