@@ -66,6 +66,7 @@ preferences {
             paragraph "Matched components: ${matchedComponentCount()}"
             paragraph state.lastUpdateStatus ?: "No update run yet."
             paragraph state.lastUpdateDetail ?: ""
+            paragraph state.lastPostUpdateStatus ?: ""
         }
 
         section("Debug") {
@@ -141,10 +142,30 @@ private Map updateSimpleHome(String reason) {
         return updateResult(false, "Simple Home update failed.", reason, manifestUpdateResult.detail?.toString())
     }
 
-    Map reinitializeResult = reinitializeAfterUpdate == true ? reinitializeSimpleHomeParent() : [success: true, detail: "Reinitialize skipped."]
-    Boolean success = reinitializeResult.success == true
-    String detail = "${manifestUpdateResult.detail}\n${reinitializeResult.detail}"
-    return updateResult(success, success ? "Simple Home manifest update completed." : "Simple Home manifest update completed with reinitialize failure.", reason, detail)
+    String postUpdateDetail = schedulePostUpdateActions()
+    String detail = "${manifestUpdateResult.detail}\n${postUpdateDetail}"
+    return updateResult(true, "Simple Home manifest update completed.", reason, detail)
+}
+
+def runPostUpdateActions() {
+    Map result = reinitializeAfterUpdate == true ? reinitializeSimpleHomeParent() : [success: true, detail: "Reinitialize skipped."]
+    state.lastPostUpdateStatus = result.success == true ? "Success: ${result.detail}" : "Failed: ${result.detail}"
+    if (result.success == true) {
+        log.info "${app.label}: ${result.detail}"
+    } else {
+        log.warn "${app.label}: ${result.detail}"
+    }
+}
+
+private String schedulePostUpdateActions() {
+    if (reinitializeAfterUpdate != true) {
+        state.lastPostUpdateStatus = "Skipped: reinitialize after update is disabled."
+        return "Post-update actions skipped."
+    }
+
+    state.lastPostUpdateStatus = "Scheduled post-update actions."
+    runIn(5, "runPostUpdateActions", [overwrite: true])
+    return "Scheduled post-update reinitialize in 5 seconds."
 }
 
 private Map matchSimpleHome(String reason) {
