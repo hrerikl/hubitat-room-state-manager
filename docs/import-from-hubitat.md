@@ -37,11 +37,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\gradle.ps1 check
 
 ## Local To Hubitat Workflow
 
-For now, the safest deployment loop is still manual:
+Normal deployment now goes through HPM and the generated package manifest:
 
 1. Edit locally.
 2. Run `check`.
-3. Copy the changed file back into the matching Hubitat **Apps Code** or **Drivers Code** editor.
-4. Save.
+3. Run `releaseHubitatPackage` with the next version and release notes.
+4. Commit and push.
+5. Run HPM update on the hub.
 
-Once the code is safely in Git, a future step can add a scripted uploader that talks to your hub's editor endpoints. That is convenient, but it is worth doing after the first local import so we have a known-good baseline.
+The shared helper library is included in `packageManifest.json` and the package ZIP, so it no longer needs a manual copy/paste update before HPM.

@@ -1,10 +1,10 @@
 {
     "packageName": "Simple Room State Manager",
     "author": "Erik Lundby",
-    "version": "0.2.111",
+    "version": "0.2.112",
     "minimumHEVersion": "2.3.0",
     "dateReleased": "2026-05-27",
-    "releaseNotes": "Added Hubitat package export task and updated package metadata for HPM release.",
+    "releaseNotes": "Add Hubitat release packaging task.",
     "category": "Convenience",
     "tags": "Lights & Switches, Presence & Location",
     "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

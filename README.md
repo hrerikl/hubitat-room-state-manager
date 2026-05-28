@@ -70,6 +70,14 @@ powershell -ExecutionPolicy Bypass -File .\scripts\gradle.ps1 packageHubitat
 
 This creates the package artifact under `build/hubitatPackage/SimpleHome.zip` and includes the shared library source from `libraries/SimpleHomeHelpers.groovy`.
 
+Prepare a release:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\gradle.ps1 releaseHubitatPackage "-PreleaseVersion=0.2.112" "-PreleaseNotes=Describe the release."
+```
+
+This updates `packageManifest.json`, runs `check`, builds the package ZIP, and verifies the package contains the shared helper library.
+
 In VS Code, use **Terminal > Run Task** and pick `Hubitat: check`, `Hubitat: test`, or `Hubitat: lint`.
 
 ## Hubitat Workflow

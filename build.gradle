@@ -12,6 +12,31 @@ dependencies {
 
 def generatedHubitatSources = layout.buildDirectory.dir('generated/hubitatGroovy')
 
+tasks.register('updateReleaseMetadata') {
+    outputs.file('packageManifest.json')
+
+    doLast {
+        def releaseVersion = project.findProperty('releaseVersion')?.toString()?.trim()
+        if (!releaseVersion) {
+            throw new GradleException('releaseVersion is required. Example: -PreleaseVersion=0.2.112')
+        }
+
+        def manifestFile = file('packageManifest.json')
+        def manifest = manifestFile.exists() ? new groovy.json.JsonSlurper().parseText(manifestFile.text) : [:]
+        manifest.version = releaseVersion
+        manifest.dateReleased = project.findProperty('releaseDate')?.toString()?.trim() ?: new Date().format('yyyy-MM-dd')
+
+        def releaseNotes = project.findProperty('releaseNotes')?.toString()?.trim()
+        if (releaseNotes) {
+            manifest.releaseNotes = releaseNotes
+        } else if (!manifest.releaseNotes) {
+            manifest.releaseNotes = "Release ${releaseVersion}."
+        }
+
+        manifestFile.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(manifest)) + System.lineSeparator()
+    }
+}
+
 tasks.register('generatePackageManifest') {
     inputs.files fileTree('apps') { include '**/*.groovy' }
     inputs.files fileTree('drivers') { include '**/*.groovy' }
@@ -145,6 +170,70 @@ tasks.register('packageHubitat', Zip) {
     from('apps') { include '**/*.groovy'; into('apps') }
     from('drivers') { include '**/*.groovy'; into('drivers') }
     from('libraries') { include '**/*.groovy'; into('libraries') }
+}
+
+tasks.register('verifyHubitatPackage') {
+    dependsOn tasks.named('packageHubitat')
+
+    doLast {
+        def manifestFile = file('packageManifest.json')
+        def manifest = new groovy.json.JsonSlurper().parseText(manifestFile.text)
+        def entries = (manifest.apps ?: []) + (manifest.files ?: []) + (manifest.drivers ?: [])
+        def duplicateIds = entries.groupBy { it.id }.findAll { id, matches -> matches.size() > 1 }.keySet()
+        if (duplicateIds) {
+            throw new GradleException("Duplicate HPM component IDs: ${duplicateIds.join(', ')}")
+        }
+
+        def helperEntry = (manifest.files ?: []).find { it.name == 'SimpleHomeHelpers' && it.location?.endsWith('/libraries/SimpleHomeHelpers.groovy') }
+        if (!helperEntry) {
+            throw new GradleException('SimpleHomeHelpers library is missing from packageManifest.json files.')
+        }
+
+        def zipFile = layout.buildDirectory.file('hubitatPackage/SimpleHome.zip').get().asFile
+        if (!zipFile.exists()) {
+            throw new GradleException("Package ZIP not found: ${zipFile}")
+        }
+
+        def zip = new java.util.zip.ZipFile(zipFile)
+        try {
+            [
+                'packageManifest.json',
+                'libraries/SimpleHomeHelpers.groovy',
+                'apps/SimpleHome.groovy',
+                'apps/SimpleRoomState.groovy',
+                'apps/SimpleRoomLighting.groovy',
+                'drivers/SimpleRoomMetaDevice.groovy'
+            ].each { path ->
+                if (!zip.getEntry(path)) {
+                    throw new GradleException("Package ZIP is missing ${path}")
+                }
+            }
+        } finally {
+            zip.close()
+        }
+    }
+}
+
+tasks.register('releaseHubitatPackage') {
+    dependsOn tasks.named('updateReleaseMetadata')
+    dependsOn tasks.named('check')
+    dependsOn tasks.named('verifyHubitatPackage')
+}
+
+tasks.named('generatePackageManifest') {
+    mustRunAfter tasks.named('updateReleaseMetadata')
+}
+
+tasks.named('check') {
+    mustRunAfter tasks.named('updateReleaseMetadata')
+}
+
+tasks.named('packageHubitat') {
+    mustRunAfter tasks.named('check')
+}
+
+tasks.named('verifyHubitatPackage') {
+    mustRunAfter tasks.named('packageHubitat')
 }
 
 sourceSets {
