@@ -1,123 +1,139 @@
 {
-  "packageName": "Simple Room State Manager",
-  "author": "Erik Lundby",
-  "version": "0.2.110",
-  "minimumHEVersion": "2.3.0",
-  "dateReleased": "2026-05-26",
-  "releaseNotes": "Clear current room presence when entering configured Away/Vacation-style modes.",
-  "category": "Convenience",
-  "tags": "Lights & Switches, Presence & Location",
-  "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
-  "communityLink": "https://github.com/hrerikl/hubitat-room-state-manager",
-  "apps": [
-    {
-      "id": "b7af26b8-9787-46d7-857e-ea8c85b920e0",
-      "name": "Simple Home",
-      "namespace": "lundby",
-      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleHome.groovy",
-      "required": true,
-      "oauth": false,
-      "primary": true,
-      "category": "Convenience",
-      "description": "Parent app for lightweight room state, mode, and lighting child apps."
-    },
-    {
-      "id": "14661fd7-420a-40f0-bbca-fbf77ce7aa39",
-      "name": "Simple Room State",
-      "namespace": "lundby",
-      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleRoomState.groovy",
-      "required": true,
-      "oauth": false,
-      "primary": false,
-      "category": "Convenience",
-      "description": "Room state child app that manages occupancy, courtesy, lock, sleep, and room meta-device output."
-    },
-    {
-      "id": "5d6a0a37-9201-42b6-9655-729fdc506d2d",
-      "name": "Simple Mode Manager",
-      "namespace": "lundby",
-      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleModeManager.groovy",
-      "required": true,
-      "oauth": false,
-      "primary": false,
-      "category": "Convenience",
-      "description": "Simple mode manager for home, away, vacation, day, evening, and night transitions."
-    },
-    {
-      "id": "80f6efa1-1ba6-42e2-845f-a5b92161f85f",
-      "name": "Simple Room Lighting",
-      "namespace": "lundby",
-      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleRoomLighting.groovy",
-      "required": true,
-      "oauth": false,
-      "primary": false,
-      "category": "Convenience",
-      "description": "Room-centric lighting adapter for MetaLight output, physical lights, scenes, remotes, and mode or intent matrices."
-    },
-    {
-      "id": "297b24d4-7f07-4f9d-930d-96067a03a8a7",
-      "name": "Simple House Intent Lighting",
-      "namespace": "lundby",
-      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleHouseIntentLighting.groovy",
-      "required": false,
-      "oauth": false,
-      "primary": false,
-      "category": "Convenience",
-      "description": "House Intent lighting controls for scene, level, color temperature, speech, and delayed preview commit."
-    },
-    {
-      "id": "e8a46264-a0f2-4d7f-9b3f-a6b05b2fe2a0",
-      "name": "Simple Circadian Lighting",
-      "namespace": "lundby",
-      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleCircadianLighting.groovy",
-      "required": true,
-      "oauth": false,
-      "primary": false,
-      "category": "Convenience",
-      "description": "Publishes a circadian reference level and color temperature from an outdoor light sensor."
-    }
-  ],
-  "files": [],
-  "drivers": [
-    {
-      "id": "6f05522a-f03d-4bd6-b7fe-9298ac70242d",
-      "name": "Simple Room Meta Device",
-      "namespace": "lundby",
-      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/drivers/SimpleRoomMetaDevice.groovy",
-      "required": true,
-      "oauth": false,
-      "category": "Convenience",
-      "description": "Public room device exposing switch, level, lock, room state, lighting intent, and component child controls."
-    },
-    {
-      "id": "f3edda6e-1a13-4f15-b4b1-79d3d07b6eca",
-      "name": "Simple Room Meta Light Device",
-      "namespace": "lundby",
-      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/drivers/SimpleRoomMetaLightDevice.groovy",
-      "required": true,
-      "oauth": false,
-      "category": "Convenience",
-      "description": "Automation-facing effective room light component device."
-    },
-    {
-      "id": "ff90bef0-f629-4762-9dcc-ae166cfbc065",
-      "name": "Simple Room Child Switch Device",
-      "namespace": "lundby",
-      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/drivers/SimpleRoomChildSwitchDevice.groovy",
-      "required": true,
-      "oauth": false,
-      "category": "Convenience",
-      "description": "Reusable component switch for Simple Room controls such as Courtesy, Engaged, Asleep, Locked, and recovery."
-    },
-    {
-      "id": "9cd84d59-77cc-4ff6-8b7d-0865ebf90345",
-      "name": "Simple Open-Meteo Outdoor Light Device",
-      "namespace": "lundby",
-      "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/drivers/SimpleOpenMeteoOutdoorLightDevice.groovy",
-      "required": true,
-      "oauth": false,
-      "category": "Convenience",
-      "description": "Outdoor light context driver that publishes lux, color temperature, cloud cover, and sky condition from Open-Meteo."
-    }
-  ]
+    "packageName": "Simple Room State Manager",
+    "author": "Erik Lundby",
+    "version": "0.2.111",
+    "minimumHEVersion": "2.3.0",
+    "dateReleased": "2026-05-27",
+    "releaseNotes": "Added Hubitat package export task and updated package metadata for HPM release.",
+    "category": "Convenience",
+    "tags": "Lights & Switches, Presence & Location",
+    "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",
+    "communityLink": "https://github.com/hrerikl/hubitat-room-state-manager",
+    "apps": [
+        {
+            "id": "e8a46264-a0f2-4d7f-9b3f-a6b05b2fe2a0",
+            "name": "Simple Circadian Lighting",
+            "namespace": "lundby",
+            "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleCircadianLighting.groovy",
+            "required": true,
+            "oauth": false,
+            "primary": false,
+            "category": "Convenience",
+            "description": "Publishes a circadian reference level and color temperature."
+        },
+        {
+            "id": "b7af26b8-9787-46d7-857e-ea8c85b920e0",
+            "name": "Simple Home",
+            "namespace": "lundby",
+            "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleHome.groovy",
+            "required": true,
+            "oauth": false,
+            "primary": true,
+            "category": "Convenience",
+            "description": "Parent app for lightweight room state child apps."
+        },
+        {
+            "id": "297b24d4-7f07-4f9d-930d-96067a03a8a7",
+            "name": "Simple House Intent Lighting",
+            "namespace": "lundby",
+            "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleHouseIntentLighting.groovy",
+            "required": false,
+            "oauth": false,
+            "primary": false,
+            "category": "Convenience",
+            "description": "House-level lighting intent controls with delayed commit and preview feedback."
+        },
+        {
+            "id": "5d6a0a37-9201-42b6-9655-729fdc506d2d",
+            "name": "Simple Mode Manager",
+            "namespace": "lundby",
+            "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleModeManager.groovy",
+            "required": true,
+            "oauth": false,
+            "primary": false,
+            "category": "Convenience",
+            "description": "Lightweight Location Mode manager for Simple Room State."
+        },
+        {
+            "id": "80f6efa1-1ba6-42e2-845f-a5b92161f85f",
+            "name": "Simple Room Lighting",
+            "namespace": "lundby",
+            "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleRoomLighting.groovy",
+            "required": true,
+            "oauth": false,
+            "primary": false,
+            "category": "Convenience",
+            "description": "Simple room-centric lighting adapter for Room MetaLight output and physical controls."
+        },
+        {
+            "id": "14661fd7-420a-40f0-bbca-fbf77ce7aa39",
+            "name": "Simple Room State",
+            "namespace": "lundby",
+            "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleRoomState.groovy",
+            "required": true,
+            "oauth": false,
+            "primary": false,
+            "category": "Convenience",
+            "description": "Reusable room state child app with Room meta-device, Engaged, Locked, and LightingIntent output."
+        }
+    ],
+    "files": [
+        {
+            "id": "68aa9872-a552-48c7-8524-4dfb9ccc1853",
+            "name": "SimpleHomeHelpers",
+            "namespace": "lundby",
+            "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/libraries/SimpleHomeHelpers.groovy",
+            "required": true,
+            "oauth": false,
+            "primary": false,
+            "category": "Convenience",
+            "description": "Shared helper methods for Simple Home apps."
+        }
+    ],
+    "drivers": [
+        {
+            "id": "9cd84d59-77cc-4ff6-8b7d-0865ebf90345",
+            "name": "Simple Open-Meteo Outdoor Light Device",
+            "namespace": "lundby",
+            "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/drivers/SimpleOpenMeteoOutdoorLightDevice.groovy",
+            "required": true,
+            "oauth": false,
+            "primary": false,
+            "category": "Convenience",
+            "description": "Simple Open-Meteo Outdoor Light Device (drivers)"
+        },
+        {
+            "id": "ff90bef0-f629-4762-9dcc-ae166cfbc065",
+            "name": "Simple Room Child Switch Device",
+            "namespace": "lundby",
+            "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/drivers/SimpleRoomChildSwitchDevice.groovy",
+            "required": true,
+            "oauth": false,
+            "primary": false,
+            "category": "Convenience",
+            "description": "Simple Room Child Switch Device (drivers)"
+        },
+        {
+            "id": "6f05522a-f03d-4bd6-b7fe-9298ac70242d",
+            "name": "Simple Room Meta Device",
+            "namespace": "lundby",
+            "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/drivers/SimpleRoomMetaDevice.groovy",
+            "required": true,
+            "oauth": false,
+            "primary": false,
+            "category": "Convenience",
+            "description": "Simple Room Meta Device (drivers)"
+        },
+        {
+            "id": "f3edda6e-1a13-4f15-b4b1-79d3d07b6eca",
+            "name": "Simple Room Meta Light Device",
+            "namespace": "lundby",
+            "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/drivers/SimpleRoomMetaLightDevice.groovy",
+            "required": true,
+            "oauth": false,
+            "primary": false,
+            "category": "Convenience",
+            "description": "Simple Room Meta Light Device (drivers)"
+        }
+    ]
 }

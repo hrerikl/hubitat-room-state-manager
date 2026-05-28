@@ -12,6 +12,92 @@ dependencies {
 
 def generatedHubitatSources = layout.buildDirectory.dir('generated/hubitatGroovy')
 
+tasks.register('generatePackageManifest') {
+    inputs.files fileTree('apps') { include '**/*.groovy' }
+    inputs.files fileTree('drivers') { include '**/*.groovy' }
+    inputs.files fileTree('libraries') { include '**/*.groovy' }
+    outputs.file('packageManifest.json')
+
+    doLast {
+        def manifestFile = file('packageManifest.json')
+        def currentManifest = manifestFile.exists() ? new groovy.json.JsonSlurper().parseText(manifestFile.text) : [:]
+        def repoRoot = 'https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/'
+        def stableComponentIds = [
+            'apps/SimpleHome.groovy'                       : 'b7af26b8-9787-46d7-857e-ea8c85b920e0',
+            'apps/SimpleRoomState.groovy'                  : '14661fd7-420a-40f0-bbca-fbf77ce7aa39',
+            'apps/SimpleModeManager.groovy'                : '5d6a0a37-9201-42b6-9655-729fdc506d2d',
+            'apps/SimpleRoomLighting.groovy'               : '80f6efa1-1ba6-42e2-845f-a5b92161f85f',
+            'apps/SimpleHouseIntentLighting.groovy'        : '297b24d4-7f07-4f9d-930d-96067a03a8a7',
+            'apps/SimpleCircadianLighting.groovy'          : 'e8a46264-a0f2-4d7f-9b3f-a6b05b2fe2a0',
+            'drivers/SimpleRoomMetaDevice.groovy'          : '6f05522a-f03d-4bd6-b7fe-9298ac70242d',
+            'drivers/SimpleRoomMetaLightDevice.groovy'     : 'f3edda6e-1a13-4f15-b4b1-79d3d07b6eca',
+            'drivers/SimpleRoomChildSwitchDevice.groovy'   : 'ff90bef0-f629-4762-9dcc-ae166cfbc065',
+            'drivers/SimpleOpenMeteoOutdoorLightDevice.groovy': '9cd84d59-77cc-4ff6-8b7d-0865ebf90345',
+            'libraries/SimpleHomeHelpers.groovy'            : '68aa9872-a552-48c7-8524-4dfb9ccc1853'
+        ]
+        def stableRequired = [
+            'apps/SimpleHouseIntentLighting.groovy': false
+        ]
+
+        def parseDefinitionValue = { String text, String key ->
+            def matcher = text =~ /${key}\s*:\s*['\"]([^'\"]+)['\"]/
+            return matcher.find() ? matcher[0][1] : null
+        }
+
+        def currentEntries = ((currentManifest.apps ?: []) + (currentManifest.drivers ?: []) + (currentManifest.files ?: []))
+        def existingEntryFor = { String location ->
+            currentEntries.find { entry -> entry.location == location }
+        }
+
+        def entryFor = { File sourceFile, String kind ->
+            def text = sourceFile.text
+            def name = parseDefinitionValue(text, 'name') ?: sourceFile.name.replaceAll(/\.groovy$/, '')
+            def namespace = parseDefinitionValue(text, 'namespace') ?: 'lundby'
+            def relativePath = "${kind}/${sourceFile.name}".toString()
+            def location = "${repoRoot}${relativePath}"
+            def existing = existingEntryFor(location)
+            def description = existing?.description ?: parseDefinitionValue(text, 'description') ?: "${name} (${kind})"
+            def category = existing?.category ?: parseDefinitionValue(text, 'category') ?: 'Convenience'
+            def primary = sourceFile.name == 'SimpleHome.groovy'
+            def deterministicId = UUID.nameUUIDFromBytes("lundby:${relativePath}".bytes).toString()
+
+            return [
+                id: stableComponentIds[relativePath] ?: existing?.id ?: deterministicId,
+                name: name,
+                namespace: namespace,
+                location: location,
+                required: stableRequired.containsKey(relativePath) ? stableRequired[relativePath] : (existing?.required == null ? true : existing.required),
+                oauth: existing?.oauth == null ? false : existing.oauth,
+                primary: primary,
+                category: category,
+                description: description
+            ]
+        }
+
+        def apps = file('apps').listFiles()?.findAll { it.name.endsWith('.groovy') }?.sort { it.name }?.collect { entryFor(it, 'apps') }
+        def drivers = file('drivers').listFiles()?.findAll { it.name.endsWith('.groovy') }?.sort { it.name }?.collect { entryFor(it, 'drivers') }
+        def files = file('libraries').listFiles()?.findAll { it.name.endsWith('.groovy') }?.sort { it.name }?.collect { entryFor(it, 'libraries') }
+
+        def generatedManifest = [
+            packageName: currentManifest.packageName ?: 'Simple Room State Manager',
+            author: currentManifest.author ?: 'Erik Lundby',
+            version: currentManifest.version ?: '0.0.0',
+            minimumHEVersion: currentManifest.minimumHEVersion ?: '2.3.0',
+            dateReleased: currentManifest.dateReleased ?: new Date().format('yyyy-MM-dd'),
+            releaseNotes: currentManifest.releaseNotes ?: 'Generated from app and driver source files.',
+            category: currentManifest.category ?: 'Convenience',
+            tags: currentManifest.tags ?: 'Lights & Switches, Presence & Location',
+            documentationLink: currentManifest.documentationLink ?: 'https://github.com/hrerikl/hubitat-room-state-manager',
+            communityLink: currentManifest.communityLink ?: 'https://github.com/hrerikl/hubitat-room-state-manager',
+            apps: apps ?: [],
+            files: files ?: currentManifest.files ?: [],
+            drivers: drivers ?: []
+        ]
+
+        manifestFile.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(generatedManifest)) + System.lineSeparator()
+    }
+}
+
 tasks.register('generateHubitatSources') {
     inputs.files fileTree('apps') { include '**/*.groovy' }
     inputs.files fileTree('drivers') { include '**/*.groovy' }
@@ -49,6 +135,16 @@ tasks.register('generateHubitatSources') {
             }
         }
     }
+}
+
+tasks.register('packageHubitat', Zip) {
+    dependsOn tasks.named('generatePackageManifest')
+    archiveBaseName.set('SimpleHome')
+    destinationDirectory.set(layout.buildDirectory.dir('hubitatPackage'))
+    from('packageManifest.json')
+    from('apps') { include '**/*.groovy'; into('apps') }
+    from('drivers') { include '**/*.groovy'; into('drivers') }
+    from('libraries') { include '**/*.groovy'; into('libraries') }
 }
 
 sourceSets {

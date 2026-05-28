@@ -62,6 +62,14 @@ Run everything:
 powershell -ExecutionPolicy Bypass -File .\scripts\gradle.ps1 check
 ```
 
+Generate the Hubitat package ZIP:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\gradle.ps1 packageHubitat
+```
+
+This creates the package artifact under `build/hubitatPackage/SimpleHome.zip` and includes the shared library source from `libraries/SimpleHomeHelpers.groovy`.
+
 In VS Code, use **Terminal > Run Task** and pick `Hubitat: check`, `Hubitat: test`, or `Hubitat: lint`.
 
 ## Hubitat Workflow
