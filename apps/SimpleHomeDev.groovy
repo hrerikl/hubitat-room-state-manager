@@ -17,6 +17,8 @@ definition(
     description: "Developer-only Simple Home update and diagnostics surface.",
     category: "Convenience",
     importUrl: "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleHomeDev.groovy",
+    iconUrl: "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/assets/simple-home-dev.png",
+    iconX2Url: "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/assets/simple-home-dev.png",
     oauth: true,
     singleInstance: true
 )
