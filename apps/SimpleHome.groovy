@@ -133,6 +133,7 @@ def initialize() {
         dewireHouseIntentVirtualRoomIfNeeded()
     }
     subscribe(recoveryDevice(), "switch.on", recoverySwitchOnHandler)
+    subscribe(maintenanceDevice(), "switch.on", maintenanceSwitchOnHandler)
 }
 
 def getSimpleHomeAppType() {
@@ -682,6 +683,10 @@ def componentOn(childDevice) {
     if (childDevice?.deviceNetworkId == recoveryDeviceNetworkId()) {
         log.info "Simple Home: Recover Simple Home requested."
         runIn(1, resetRecoverySwitch, [overwrite: true])
+    } else if (childDevice?.deviceNetworkId == maintenanceDeviceNetworkId()) {
+        log.info "Simple Home: Reinitialize Simple Home requested."
+        reinitializeChildApps()
+        runIn(1, resetMaintenanceSwitch, [overwrite: true])
     } else if (childDevice?.deviceNetworkId == arrivalDeviceNetworkId()) {
         log.info "Simple Home: Someone Arrived activated."
         runIn(30, resetArrivalSwitch, [overwrite: true])
@@ -702,11 +707,25 @@ def recoverySwitchOnHandler(evt) {
     runIn(1, resetRecoverySwitch, [overwrite: true])
 }
 
+def maintenanceSwitchOnHandler(evt) {
+    log.info "Simple Home: Reinitialize Simple Home switch event received."
+    reinitializeChildApps()
+    runIn(1, resetMaintenanceSwitch, [overwrite: true])
+}
+
 def resetRecoverySwitch() {
     try {
         recoveryDevice()?.setSwitchState("off")
     } catch (Exception e) {
         log.warn "Simple Home: Could not reset Recover Simple Home switch: ${e.message}"
+    }
+}
+
+def resetMaintenanceSwitch() {
+    try {
+        maintenanceDevice()?.setSwitchState("off")
+    } catch (Exception e) {
+        log.warn "Simple Home: Could not reset Reinitialize Simple Home switch: ${e.message}"
     }
 }
 
@@ -731,6 +750,10 @@ def resetArrivalSwitch() {
 
 def recoveryDevice() {
     return getChildDevice(recoveryDeviceNetworkId())
+}
+
+def maintenanceDevice() {
+    return getChildDevice(maintenanceDeviceNetworkId())
 }
 
 def arrivalDevice() {
@@ -788,7 +811,36 @@ private void createOrUpdateRecoveryDevice() {
 
 private void createOrUpdateSharedDevices() {
     createOrUpdateRecoveryDevice()
+    createOrUpdateMaintenanceDevice()
     createOrUpdateArrivalDevice()
+}
+
+private void createOrUpdateMaintenanceDevice() {
+    String dni = maintenanceDeviceNetworkId()
+    String label = "Reinitialize Simple Home"
+    def child = getChildDevice(dni)
+
+    if (!child) {
+        try {
+            child = addChildDevice("lundby", "Simple Room Child Switch Device", dni, [
+                label      : label,
+                name       : label,
+                isComponent: true
+            ])
+        } catch (Exception e) {
+            log.warn "Simple Home: Could not create Reinitialize Simple Home switch: ${e.message}"
+            return
+        }
+    }
+
+    try {
+        if (child.displayName != label) {
+            child.setLabel(label)
+        }
+        child.initialize()
+    } catch (Exception e) {
+        log.warn "Simple Home: Could not initialize Reinitialize Simple Home switch: ${e.message}"
+    }
 }
 
 private void createOpenMeteoReferenceDevice() {
@@ -861,6 +913,10 @@ private void createOrUpdateArrivalDevice() {
 
 private String recoveryDeviceNetworkId() {
     return "simple-home-recovery-${app.id}"
+}
+
+private String maintenanceDeviceNetworkId() {
+    return "simple-home-maintenance-reinitialize-${app.id}"
 }
 
 private String arrivalDeviceNetworkId() {

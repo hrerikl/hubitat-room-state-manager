@@ -30,10 +30,10 @@ preferences {
 
         section("Update") {
             input "manifestUrl", "text", title: "Simple Home package manifest URL", defaultValue: "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/packageManifest.json", required: true
-            input "simpleHomeParentAppId", "enum", title: "Simple Home parent app", options: simpleHomeParentAppOptions(), required: false
-            input "simpleHomeParentAppIdOverride", "text", title: "Simple Home parent app ID override", required: false
             input "reinitializeAfterUpdate", "bool", title: "Reinitialize Simple Home and child apps after update", defaultValue: false, required: true
-            paragraph simpleHomeParentAppStatusText()
+            if (reinitializeAfterUpdate == true) {
+                input "reinitializeSimpleHomeSwitch", "capability.switch", title: "Reinitialize Simple Home switch", required: true
+            }
             input "matchNow", "button", title: "Match Installed Simple Home Code"
             input "updateNow", "button", title: "Update Simple Home"
             input "retryAttempts", "number", title: "Source availability attempts", defaultValue: 5, required: true
@@ -387,63 +387,17 @@ private Map updateFromManifest(Map manifest, Map matches) {
 }
 
 private Map reinitializeSimpleHomeParent() {
-    def parentApp = simpleHomeParentApp()
-    if (!parentApp) {
-        return [success: false, detail: "Reinitialize failed: no Simple Home parent app selected or detected."]
+    def dev = reinitializeSimpleHomeSwitch
+    if (!dev) {
+        return [success: false, detail: "Reinitialize failed: no Reinitialize Simple Home switch selected."]
     }
 
     try {
-        parentApp.initialize()
-        def result = parentApp.reinitializeChildApps()
-        String summary = result?.summary?.toString()
-        String detail = summary ? "Reinitialized ${summary}." : "Reinitialized Simple Home parent ${parentApp.label ?: parentApp.id} and child apps."
-        return [success: true, detail: detail]
+        dev.on()
+        return [success: true, detail: "Triggered ${dev.displayName ?: 'Reinitialize Simple Home switch'}."]
     } catch (Throwable e) {
-        log.warn "${app.label}: Could not reinitialize Simple Home parent ${parentApp?.label ?: parentApp?.id}: ${e.message}"
+        log.warn "${app.label}: Could not trigger Reinitialize Simple Home switch ${dev?.displayName ?: dev?.id}: ${e.message}"
         return [success: false, detail: "Reinitialize failed: ${e.message}"]
-    }
-}
-
-private def simpleHomeParentApp() {
-    String selectedId = configuredSimpleHomeParentAppId()
-    List apps = installedSimpleHomeParentApps()
-    if (selectedId) return apps.find { it.id?.toString() == selectedId }
-    return apps.size() == 1 ? apps[0] : null
-}
-
-private String configuredSimpleHomeParentAppId() {
-    String override = simpleHomeParentAppIdOverride?.toString()?.trim()
-    if (override) return override
-    return simpleHomeParentAppId?.toString()
-}
-
-private String simpleHomeParentAppStatusText() {
-    List apps = installedSimpleHomeParentApps()
-    String configured = configuredSimpleHomeParentAppId()
-    if (configured) return "Configured Simple Home parent app ID: ${configured}. Discovered ${apps.size()} candidate(s)."
-    if (apps.size() == 1) return "Detected Simple Home parent app ID: ${apps[0]?.id}."
-    return "Discovered ${apps.size()} Simple Home parent app candidate(s). Use the override if the selector is empty."
-}
-
-private Map simpleHomeParentAppOptions() {
-    Map opts = [:]
-    installedSimpleHomeParentApps().each { installedApp ->
-        String id = installedApp?.id?.toString()
-        String label = installedApp?.label?.toString() ?: installedApp?.name?.toString()
-        if (id && label) opts[id] = label
-    }
-    return opts.sort { it.value }
-}
-
-private List installedSimpleHomeParentApps() {
-    try {
-        return asList(getAllInstalledApps()).findAll { installedApp ->
-            installedApp?.name?.toString() == "Simple Home" &&
-                installedApp?.namespace?.toString() == "lundby"
-        }
-    } catch (Throwable e) {
-        debug "Could not inspect installed Simple Home parent apps: ${e.message}"
-        return []
     }
 }
 
