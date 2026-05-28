@@ -31,7 +31,9 @@ preferences {
         section("Update") {
             input "manifestUrl", "text", title: "Simple Home package manifest URL", defaultValue: "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/packageManifest.json", required: true
             input "simpleHomeParentAppId", "enum", title: "Simple Home parent app", options: simpleHomeParentAppOptions(), required: false
+            input "simpleHomeParentAppIdOverride", "text", title: "Simple Home parent app ID override", required: false
             input "reinitializeAfterUpdate", "bool", title: "Reinitialize Simple Home and child apps after update", defaultValue: false, required: true
+            paragraph simpleHomeParentAppStatusText()
             input "matchNow", "button", title: "Match Installed Simple Home Code"
             input "updateNow", "button", title: "Update Simple Home"
             input "retryAttempts", "number", title: "Source availability attempts", defaultValue: 5, required: true
@@ -403,10 +405,24 @@ private Map reinitializeSimpleHomeParent() {
 }
 
 private def simpleHomeParentApp() {
-    String selectedId = simpleHomeParentAppId?.toString()
+    String selectedId = configuredSimpleHomeParentAppId()
     List apps = installedSimpleHomeParentApps()
     if (selectedId) return apps.find { it.id?.toString() == selectedId }
     return apps.size() == 1 ? apps[0] : null
+}
+
+private String configuredSimpleHomeParentAppId() {
+    String override = simpleHomeParentAppIdOverride?.toString()?.trim()
+    if (override) return override
+    return simpleHomeParentAppId?.toString()
+}
+
+private String simpleHomeParentAppStatusText() {
+    List apps = installedSimpleHomeParentApps()
+    String configured = configuredSimpleHomeParentAppId()
+    if (configured) return "Configured Simple Home parent app ID: ${configured}. Discovered ${apps.size()} candidate(s)."
+    if (apps.size() == 1) return "Detected Simple Home parent app ID: ${apps[0]?.id}."
+    return "Discovered ${apps.size()} Simple Home parent app candidate(s). Use the override if the selector is empty."
 }
 
 private Map simpleHomeParentAppOptions() {
