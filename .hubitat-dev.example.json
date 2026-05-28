@@ -1,0 +1,4 @@
+{
+    "simpleHomeDevUpdateUrl": "http://hubitat.local/apps/api/123/update?access_token=replace-me",
+    "rawAvailabilityDelaySeconds": 10
+}

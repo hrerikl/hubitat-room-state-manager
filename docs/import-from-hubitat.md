@@ -46,3 +46,13 @@ Normal deployment now goes through HPM and the generated package manifest:
 5. Run HPM update on the hub.
 
 The shared helper library is included in `packageManifest.json` and the package ZIP, so it no longer needs a manual copy/paste update before HPM.
+
+Developer deployment can go through `Simple Home Dev` instead of HPM:
+
+1. Enable OAuth for the `Simple Home Dev` app.
+2. Copy `.hubitat-dev.example.json` to `.hubitat-dev.json`.
+3. Paste the app's update endpoint into `simpleHomeDevUpdateUrl`.
+4. Commit local changes.
+5. Run `powershell -ExecutionPolicy Bypass -File .\scripts\deploy-dev.ps1`.
+
+The script verifies the build, requires a clean working tree, pushes `main`, waits briefly for raw GitHub availability, and calls the `Simple Home Dev` update endpoint.

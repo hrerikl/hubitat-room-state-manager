@@ -78,6 +78,15 @@ powershell -ExecutionPolicy Bypass -File .\scripts\gradle.ps1 releaseHubitatPack
 
 This updates `packageManifest.json`, runs `check`, builds the package ZIP, and verifies the package contains the shared helper library.
 
+Deploy to a dev hub with `Simple Home Dev`:
+
+```powershell
+Copy-Item .hubitat-dev.example.json .hubitat-dev.json
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy-dev.ps1
+```
+
+Set `simpleHomeDevUpdateUrl` in `.hubitat-dev.json` to the endpoint shown by the `Simple Home Dev` app. The local config is ignored by Git.
+
 In VS Code, use **Terminal > Run Task** and pick `Hubitat: check`, `Hubitat: test`, or `Hubitat: lint`.
 
 ## Hubitat Workflow
