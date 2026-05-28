@@ -39,7 +39,7 @@ try {
         Start-Sleep -Seconds $delaySeconds
     }
 
-    $response = Invoke-RestMethod -Method Post -Uri $updateUrl -TimeoutSec 600
+    $response = Invoke-RestMethod -Method Get -Uri $updateUrl -TimeoutSec 600
     $response | ConvertTo-Json -Depth 10
 
     if ($response.success -ne $true) {
