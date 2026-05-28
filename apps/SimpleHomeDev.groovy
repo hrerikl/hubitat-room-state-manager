@@ -426,20 +426,55 @@ private Map installedCodeByKey(String kind) {
 }
 
 private List installedCodeList(String kind) {
-    String methodName = "get${kind.capitalize()}CodeList"
-    try {
-        def result = this."${methodName}"()
-        return asList(result)
-    } catch (Throwable e) {
-        debug "Could not call ${methodName}: ${e.message}"
-        return []
-    }
+    if (kind == "app") return getAppList()
+    if (kind == "driver") return getDriverList()
+    if (kind == "library") return getLibraryList()
+    return []
 }
 
 private String componentKey(def item) {
     String namespace = item?.namespace?.toString()?.trim()
-    String name = item?.name?.toString()?.trim()
+    String name = item?.name?.toString()?.trim() ?: item?.title?.toString()?.trim()
     return namespace && name ? "${namespace}:${name}" : null
+}
+
+private List getAppList() {
+    return hub2CodeList("/hub2/userAppTypes", "installed apps")
+}
+
+private List getDriverList() {
+    return hub2CodeList("/hub2/userDeviceTypes", "installed drivers")
+}
+
+private List getLibraryList() {
+    return hub2CodeList("/hub2/userLibraryTypes", "installed libraries")
+}
+
+private List hub2CodeList(String path, String description) {
+    try {
+        List result = []
+        httpGet([
+            uri             : baseUrl(),
+            path            : path,
+            headers         : ["Cookie": state.cookie],
+            timeout         : 300,
+            ignoreSSLIssues : true
+        ]) { resp ->
+            asList(resp?.data).each { item ->
+                result << [
+                    id       : item?.id?.toString(),
+                    title    : item?.name?.toString(),
+                    name     : item?.name?.toString(),
+                    namespace: item?.namespace?.toString()
+                ]
+            }
+        }
+        debug "Loaded ${result.size()} ${description}."
+        return result
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not retrieve ${description}: ${e.message}"
+        return []
+    }
 }
 
 private Boolean updateDriverCode(String codeId, String source) {
