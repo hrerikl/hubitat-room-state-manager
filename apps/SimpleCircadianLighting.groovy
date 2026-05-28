@@ -140,6 +140,7 @@ def publishReference(String reason = 'schedule') {
     debug "Publishing reference for ${reason}: outdoorLux=${outdoorLux}, outdoorCT=${outdoorCT}, level=${targetLevel}, ct=${targetCT}"
     publishToReferenceBulb(targetCT, targetLevel)
     publishOutdoorLightingEnabled(outdoorLux)
+    publishToHouseStatus(targetLevel, targetCT, outdoorLux)
 }
 
 private void publishToReferenceBulb(Integer ct, Integer level) {
@@ -287,6 +288,35 @@ private BigDecimal clampDecimal(BigDecimal value, BigDecimal min, BigDecimal max
     if (safeValue < min) return min
     if (safeValue > max) return max
     return safeValue
+}
+
+private void publishToHouseStatus(Integer level, Integer ct, Integer outdoorLux) {
+    try {
+        Integer enableLux = outdoorEnableLux()
+        Integer disableLux = outdoorDisableLux(enableLux)
+        String outdoorEnabled = outdoorLightingEnabledSwitch?.currentValue('switch')?.toString() ?: (outdoorLux <= enableLux ? 'on' : 'off')
+        String skyCondition = currentString(outdoorLightSensor, 'skyCondition', 'Unknown')
+        String lastUpdated = currentString(outdoorLightSensor, 'lastUpdated', 'Never')
+
+        parent.updateStatusFromCircadian([
+            level                 : level,
+            ct                    : ct,
+            outdoorLightingEnabled: outdoorEnabled,
+            skyCondition          : skyCondition,
+            circadianLastUpdated  : lastUpdated
+        ])
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not publish to house status device: ${e.message}"
+    }
+}
+
+private String currentString(def sensor, String attributeName, String fallback) {
+    try {
+        def value = sensor?.currentValue(attributeName)
+        return value == null ? fallback : value.toString()
+    } catch (Exception ignored) {
+        return fallback
+    }
 }
 
 private void debug(String message) {

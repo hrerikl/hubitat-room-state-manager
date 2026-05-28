@@ -134,6 +134,8 @@ def initialize() {
     }
     subscribe(recoveryDevice(), "switch.on", recoverySwitchOnHandler)
     subscribe(maintenanceDevice(), "switch.on", maintenanceSwitchOnHandler)
+    subscribe(location, "mode", houseStatusModeHandler)
+    publishCurrentHouseStatus()
 }
 
 def getSimpleHomeAppType() {
@@ -813,6 +815,7 @@ private void createOrUpdateSharedDevices() {
     createOrUpdateRecoveryDevice()
     createOrUpdateMaintenanceDevice()
     createOrUpdateArrivalDevice()
+    createOrUpdateStatusDevice()
 }
 
 private void createOrUpdateMaintenanceDevice() {
@@ -925,6 +928,68 @@ private String arrivalDeviceNetworkId() {
 
 private String openMeteoReferenceDeviceNetworkId() {
     return "simple-home-open-meteo-reference-${app.id}"
+}
+
+private String statusDeviceNetworkId() {
+    return "simple-home-status-${app.id}"
+}
+
+private void createOrUpdateStatusDevice() {
+    String dni = statusDeviceNetworkId()
+    String label = "Simple Home Status"
+    def child = getChildDevice(dni)
+
+    if (!child) {
+        try {
+            child = addChildDevice("lundby", "Simple Home Status Device", dni, [
+                label      : label,
+                name       : label,
+                isComponent: false
+            ])
+            log.info "Simple Home: Created house status device."
+        } catch (Exception e) {
+            log.warn "Simple Home: Could not create house status device: ${e.message}"
+            return
+        }
+    }
+
+    try {
+        if (child.displayName != label) child.setLabel(label)
+        child.initialize()
+    } catch (Exception e) {
+        log.warn "Simple Home: Could not initialize house status device: ${e.message}"
+    }
+}
+
+def statusDevice() {
+    return getChildDevice(statusDeviceNetworkId())
+}
+
+def houseStatusModeHandler(evt) {
+    try {
+        statusDevice()?.setLocationMode(evt.value?.toString())
+    } catch (Exception e) {
+        log.warn "Simple Home: Could not publish location mode to status device: ${e.message}"
+    }
+}
+
+void updateStatusFromCircadian(Map data) {
+    def dev = statusDevice()
+    if (!dev || !data) return
+
+    try { if (data.level != null) dev.setCircadianLevel(data.level as Integer) } catch (Exception ignored) {}
+    try { if (data.ct != null) dev.setCircadianCT(data.ct as Integer) } catch (Exception ignored) {}
+    try { if (data.outdoorLightingEnabled != null) dev.setOutdoorLightingEnabled(data.outdoorLightingEnabled as String) } catch (Exception ignored) {}
+    try { if (data.skyCondition != null) dev.setSkyCondition(data.skyCondition as String) } catch (Exception ignored) {}
+    try { if (data.circadianLastUpdated != null) dev.setCircadianLastUpdated(data.circadianLastUpdated as String) } catch (Exception ignored) {}
+}
+
+private void publishCurrentHouseStatus() {
+    try {
+        statusDevice()?.setLocationMode(location.mode?.toString())
+    } catch (Exception e) {
+        log.warn "Simple Home: Could not publish current house status: ${e.message}"
+    }
 }
 
 private List allManagedChildren() {
