@@ -49,6 +49,9 @@ metadata {
         attribute 'lastPresenceActivity', 'string'
         attribute 'lastActivityReason', 'string'
         attribute 'stateReason', 'string'
+        attribute 'sceneRequest', 'number'
+        attribute 'activeScene', 'string'
+        attribute 'lastLightingAction', 'string'
 
         command 'setRoomState', [[name: 'Room State', type: 'ENUM', constraints: ['Off', 'Occupied', 'Engaged', 'Asleep', 'Locked']]]
         command 'setLightingIntent', [[name: 'Lighting Intent', type: 'ENUM', constraints: ['Off', 'Courtesy', 'Night', 'On']]]
@@ -76,6 +79,9 @@ metadata {
         command 'recordPresenceActivityDetail', [[name: 'Epoch milliseconds', type: 'STRING'], [name: 'Reason', type: 'STRING']]
         command 'recordActivityDetail', [[name: 'Epoch milliseconds', type: 'STRING'], [name: 'Reason', type: 'STRING']]
         command 'setStateReason', [[name: 'Reason', type: 'STRING']]
+        command 'cycleScene'
+        command 'setActiveScene', [[name: 'Scene Name', type: 'STRING']]
+        command 'setLastLightingAction', [[name: 'Action', type: 'STRING']]
     }
 }
 
@@ -141,6 +147,15 @@ void initialize() {
     }
     if (device.currentValue('stateReason') == null) {
         sendEvent(name: 'stateReason', value: '')
+    }
+    if (device.currentValue('sceneRequest') == null) {
+        sendEvent(name: 'sceneRequest', value: 0)
+    }
+    if (device.currentValue('activeScene') == null) {
+        sendEvent(name: 'activeScene', value: 'Automatic')
+    }
+    if (device.currentValue('lastLightingAction') == null) {
+        sendEvent(name: 'lastLightingAction', value: '')
     }
     if (device.currentValue('presenceActivity') == null) {
         sendEvent(name: 'presenceActivity', value: 0)
@@ -374,6 +389,22 @@ void recordActivityDetail(String epochMs, String reason) {
 
 void setStateReason(String reason) {
     sendEvent(name: 'stateReason', value: reason ?: '', isStateChange: true)
+}
+
+void cycleScene() {
+    Integer current = (device.currentValue('sceneRequest') ?: 0) as Integer
+    sendEvent(name: 'sceneRequest', value: current + 1, isStateChange: true)
+}
+
+void setActiveScene(String scene) {
+    String value = scene?.trim() ?: 'Automatic'
+    if (device.currentValue('activeScene') != value) {
+        sendEvent(name: 'activeScene', value: value)
+    }
+}
+
+void setLastLightingAction(String action) {
+    sendEvent(name: 'lastLightingAction', value: action?.trim() ?: '', isStateChange: true)
 }
 
 private Integer normalizeLevel(value) {

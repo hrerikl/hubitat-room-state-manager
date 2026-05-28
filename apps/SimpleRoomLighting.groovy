@@ -156,6 +156,7 @@ def initialize() {
     subscribe(room, "lockedEnabled", roomControlAnnouncementHandler)
     subscribe(room, "asleepEnabled", roomControlAnnouncementHandler)
     subscribe(room, "customLighting", roomControlAnnouncementHandler)
+    subscribe(room, "sceneRequest", sceneRequestHandler)
     subscribe(location, "mode", locationModeHandler)
 
     subscribe(controlDimmers, "switch", controlSwitchHandler)
@@ -224,6 +225,11 @@ def overrideSwitchHandler(evt) {
         return
     }
     reassessLighting("override switch changed")
+}
+
+def sceneRequestHandler(evt) {
+    debug "Scene cycle requested from room device"
+    cycleSceneSwitch()
 }
 
 def recoverSimpleHomeHandler(evt) {
@@ -434,6 +440,9 @@ private void reassessLighting(String reason) {
     state.lastActiveMatrixContext = context
     state.lastActiveMatrixIntent = intentBucket
     applyIntentRows(context, intentBucket, metaLevel, metaCt, levelChangeOnly, colorTemperatureOnly, reason)
+    if (!levelChangeOnly && !colorTemperatureOnly) {
+        publishLastLightingAction("${intentBucket} ${metaLevel}% ${metaCt}K")
+    }
 }
 
 private void applyIntentRows(String context, String intentBucket, Integer metaLevel, Integer metaCt, Boolean levelChangeOnly = false, Boolean colorTemperatureOnly = false, String reason = "") {
@@ -518,6 +527,7 @@ private void applyOffCondition(String reason) {
     String intentBucket = activeIntentBucket(state.lastActiveMatrixIntent ?: roomDevice()?.currentValue("lightingIntent")?.toString())
     debug "Applying off condition context=${context} intent=${intentBucket}: ${reason}"
     applyOffRows(context, intentBucket, reason)
+    publishLastLightingAction("Off")
 }
 
 private void applyInactiveOnRowOffCondition(String reason) {
@@ -1171,6 +1181,7 @@ private void cycleSceneSwitch() {
         log.warn "${app.label}: Could not activate scene ${scene?.displayName}: ${e.message}"
     }
 
+    publishActiveScene(sceneName)
     if (asleep) {
         Integer minutes = sceneNightExtensionMinutesForRoom()
         debug "Extending Night lighting for ${minutes} minutes from button 3 asleep scene"
@@ -1193,6 +1204,7 @@ private void cycleShadowScene(Boolean asleep) {
     debug "Activating ${asleep ? 'asleep shadow scene' : 'shadow scene'} ${nextIndex + 1}/${shadowScenes.size()}: ${shadowScene.name}, level=${shadowScene.level}, ct=${shadowScene.ct}"
     setCustomLighting(true)
     applyShadowScene(shadowScene)
+    publishActiveScene(shadowScene.name as String)
 
     if (asleep) {
         Integer minutes = sceneNightExtensionMinutesForRoom()
@@ -1264,6 +1276,7 @@ private void returnToAutomaticLighting() {
     state.shadowSceneIndex = -1
     state.asleepShadowSceneIndex = -1
     setCustomLighting(false)
+    publishActiveScene("Automatic")
     debug "Returning to automatic room-defined lighting"
     runIn(1, "reapplyAutomaticLighting", [overwrite: true])
 }
@@ -1627,6 +1640,22 @@ private Integer normalizedUsableMinimum(value) {
 private Integer adjustedRoomLevel(Integer delta) {
     Integer current = normalizedLevel(roomDevice()?.currentValue("level"), 0)
     return normalizedLevel(current + delta, current)
+}
+
+private void publishActiveScene(String scene) {
+    try {
+        roomDevice()?.setActiveScene(scene)
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not publish active scene ${scene}: ${e.message}"
+    }
+}
+
+private void publishLastLightingAction(String action) {
+    try {
+        roomDevice()?.setLastLightingAction(action)
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not publish last lighting action: ${e.message}"
+    }
 }
 
 private void debug(String msg) {

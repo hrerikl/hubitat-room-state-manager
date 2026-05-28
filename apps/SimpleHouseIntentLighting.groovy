@@ -353,7 +353,7 @@ private Map roomLightingOptions() {
 private void suppressPreviewFeedback() {
     if (!previewDevice || !previewSuppressRoomLightingChildAppId) return
     try {
-        parent.suppressRoomLightingFeedback(previewSuppressRoomLightingChildAppId, previewDevice?.id, commitDelaySecondsValue() + 5)
+        parent.suppressRoomLightingFeedback(previewSuppressRoomLightingChildAppId, previewDevice?.id, safeInteger(commitDelaySeconds, 10) + 5)
     } catch (Throwable e) {
         log.warn "${app.label}: Could not suppress preview feedback for ${previewDevice?.displayName}: ${e.message}"
     }
