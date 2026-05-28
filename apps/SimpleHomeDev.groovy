@@ -30,6 +30,8 @@ preferences {
 
         section("Update") {
             input "manifestUrl", "text", title: "Simple Home package manifest URL", defaultValue: "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/packageManifest.json", required: true
+            input "simpleHomeParentAppId", "enum", title: "Simple Home parent app", options: simpleHomeParentAppOptions(), required: false
+            input "reinitializeAfterUpdate", "bool", title: "Reinitialize Simple Home and child apps after update", defaultValue: false, required: true
             input "matchNow", "button", title: "Match Installed Simple Home Code"
             input "updateNow", "button", title: "Update Simple Home"
             input "retryAttempts", "number", title: "Source availability attempts", defaultValue: 5, required: true
@@ -137,7 +139,10 @@ private Map updateSimpleHome(String reason) {
         return updateResult(false, "Simple Home update failed.", reason, manifestUpdateResult.detail?.toString())
     }
 
-    return updateResult(true, "Simple Home manifest update completed.", reason, manifestUpdateResult.detail?.toString())
+    Map reinitializeResult = reinitializeAfterUpdate == true ? reinitializeSimpleHomeParent() : [success: true, detail: "Reinitialize skipped."]
+    Boolean success = reinitializeResult.success == true
+    String detail = "${manifestUpdateResult.detail}\n${reinitializeResult.detail}"
+    return updateResult(success, success ? "Simple Home manifest update completed." : "Simple Home manifest update completed with reinitialize failure.", reason, detail)
 }
 
 private Map matchSimpleHome(String reason) {
@@ -377,6 +382,53 @@ private Map updateFromManifest(Map manifest, Map matches) {
     }
 
     return [success: true, detail: "Updated ${updated.size()} component(s): ${updated.join(', ')}"]
+}
+
+private Map reinitializeSimpleHomeParent() {
+    def parentApp = simpleHomeParentApp()
+    if (!parentApp) {
+        return [success: false, detail: "Reinitialize failed: no Simple Home parent app selected or detected."]
+    }
+
+    try {
+        parentApp.initialize()
+        def result = parentApp.reinitializeChildApps()
+        String summary = result?.summary?.toString()
+        String detail = summary ? "Reinitialized ${summary}." : "Reinitialized Simple Home parent ${parentApp.label ?: parentApp.id} and child apps."
+        return [success: true, detail: detail]
+    } catch (Throwable e) {
+        log.warn "${app.label}: Could not reinitialize Simple Home parent ${parentApp?.label ?: parentApp?.id}: ${e.message}"
+        return [success: false, detail: "Reinitialize failed: ${e.message}"]
+    }
+}
+
+private def simpleHomeParentApp() {
+    String selectedId = simpleHomeParentAppId?.toString()
+    List apps = installedSimpleHomeParentApps()
+    if (selectedId) return apps.find { it.id?.toString() == selectedId }
+    return apps.size() == 1 ? apps[0] : null
+}
+
+private Map simpleHomeParentAppOptions() {
+    Map opts = [:]
+    installedSimpleHomeParentApps().each { installedApp ->
+        String id = installedApp?.id?.toString()
+        String label = installedApp?.label?.toString() ?: installedApp?.name?.toString()
+        if (id && label) opts[id] = label
+    }
+    return opts.sort { it.value }
+}
+
+private List installedSimpleHomeParentApps() {
+    try {
+        return asList(getAllInstalledApps()).findAll { installedApp ->
+            installedApp?.name?.toString() == "Simple Home" &&
+                installedApp?.namespace?.toString() == "lundby"
+        }
+    } catch (Throwable e) {
+        debug "Could not inspect installed Simple Home parent apps: ${e.message}"
+        return []
+    }
 }
 
 private void updateManifestItem(String kind, Map item, Map matchMap, List updated, List failed) {

@@ -638,18 +638,44 @@ def reinitializeChildApps() {
 
     Integer attempted = 0
     Integer succeeded = 0
+    Map counts = [:].withDefault { 0 }
 
     allManagedChildren().each { child ->
         attempted++
         try {
             child.reinitializeFromParent()
             succeeded++
+            String type = childTypeName(child)
+            counts[type] = (counts[type] ?: 0) + 1
         } catch (Throwable e) {
             log.warn "Simple Home: Could not reinitialize child ${child?.label ?: child?.id}: ${e.message}"
         }
     }
 
-    log.info "Simple Home: Reinitialized ${succeeded} of ${attempted} child app(s)."
+    String summary = childReinitializeSummary(counts)
+    log.info "Simple Home: Reinitialized ${succeeded} of ${attempted} child app(s)${summary ? ": ${summary}" : "."}"
+    return [attempted: attempted, succeeded: succeeded, counts: counts, summary: summary]
+}
+
+private String childTypeName(def child) {
+    try {
+        String type = child.getSimpleHomeAppType()?.toString()
+        if (type == "roomState") return "Rooms"
+        if (type == "roomLighting") return "Room Lighting"
+        if (type == "modeManager") return "Mode Managers"
+        if (type == "circadianLighting") return "Circadian Lighting"
+        if (type == "houseIntentLighting") return "House Intent Lighting"
+        return type ?: "Other"
+    } catch (Throwable ignored) {
+        return "Other"
+    }
+}
+
+private String childReinitializeSummary(Map counts) {
+    if (!counts) return ""
+    return counts.findAll { key, value -> value > 0 }
+        .collect { key, value -> "${value} ${key}" }
+        .join(", ")
 }
 
 def componentOn(childDevice) {
