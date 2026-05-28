@@ -31,10 +31,17 @@ preferences {
 
         section("Update") {
             input "manifestUrl", "text", title: "Simple Home package manifest URL", defaultValue: "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/packageManifest.json", required: true
-            input "bundleUrl", "text", title: "Simple Home bundle ZIP URL", required: true
+            input "bundleUrl", "text", title: "Simple Home bundle ZIP URL", defaultValue: "https://github.com/hrerikl/hubitat-room-state-manager/releases/latest/download/SimpleHome.zip", required: true
             input "updateNow", "button", title: "Update Simple Home"
             input "retryAttempts", "number", title: "Bundle availability attempts", defaultValue: 5, required: true
             input "retryDelaySeconds", "number", title: "Seconds between availability attempts", defaultValue: 10, required: true
+        }
+
+        section("Self Update") {
+            input "devAppSourceUrl", "text", title: "Simple Home Dev source URL", defaultValue: "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleHomeDev.groovy", required: true
+            input "devAppCodeId", "text", title: "Simple Home Dev App Code ID", required: false
+            input "updateDevAppNow", "button", title: "Update Simple Home Dev"
+            paragraph "Self-update requires the Apps Code ID for this app, not the installed app instance ID."
         }
 
         section("Hub Access") {
@@ -90,6 +97,10 @@ def appButtonHandler(String buttonName) {
         Map result = updateSimpleHome("app button")
         log.info "${app.label}: ${result.message}"
     }
+    if (buttonName == "updateDevAppNow") {
+        Map result = updateSimpleHomeDev("app button")
+        log.info "${app.label}: ${result.message}"
+    }
 }
 
 def apiUpdate() {
@@ -123,6 +134,34 @@ private Map updateSimpleHome(String reason) {
     }
 
     return updateResult(true, "Simple Home bundle update completed.", reason)
+}
+
+private Map updateSimpleHomeDev(String reason) {
+    String codeId = devAppCodeId?.toString()?.trim()
+    if (!codeId) {
+        return updateResult(false, "Simple Home Dev App Code ID is not configured.", reason)
+    }
+
+    String sourceUrl = devAppSourceUrl?.toString()?.trim()
+    if (!sourceUrl) {
+        return updateResult(false, "Simple Home Dev source URL is not configured.", reason)
+    }
+
+    String source = loadTextWithRetry(sourceUrl, "Simple Home Dev source")
+    if (!source) {
+        return updateResult(false, "Simple Home Dev source was not available after ${availabilityAttempts()} attempts.", reason)
+    }
+
+    if (!login()) {
+        return updateResult(false, "Hub security login failed.", reason)
+    }
+
+    Boolean updated = updateAppCode(codeId, source)
+    if (!updated) {
+        return updateResult(false, "Simple Home Dev app code update failed.", reason)
+    }
+
+    return updateResult(true, "Simple Home Dev app code updated. Reopen the app before continuing.", reason)
 }
 
 private Boolean waitForBundleAvailability(String url) {
@@ -159,6 +198,41 @@ private Map loadPackageManifest() {
     return null
 }
 
+private String loadTextWithRetry(String url, String description) {
+    Integer attempts = availabilityAttempts()
+    Integer delaySeconds = availabilityDelaySeconds()
+
+    for (Integer attempt = 1; attempt <= attempts; attempt++) {
+        String text = textAvailable(url, description, attempt)
+        if (text) return text
+        if (attempt < attempts) {
+            debug "${description} not available yet; retrying in ${delaySeconds} seconds."
+            pauseExecution(delaySeconds * 1000)
+        }
+    }
+
+    return null
+}
+
+private String textAvailable(String url, String description, Integer attempt) {
+    try {
+        String result = null
+        httpGet([uri: url, timeout: 30, textParser: true, ignoreSSLIssues: true]) { resp ->
+            if (resp?.status >= 200 && resp?.status < 300) {
+                result = resp?.data?.text?.toString()
+            }
+        }
+        if (result) {
+            debug "${description} available on attempt ${attempt}: ${url}"
+            return result
+        }
+    } catch (Exception e) {
+        debug "${description} check failed on attempt ${attempt}: ${e.message}"
+    }
+
+    return null
+}
+
 private Map packageManifestAvailable(String url, Integer attempt) {
     try {
         Map result = null
@@ -178,6 +252,48 @@ private Map packageManifestAvailable(String url, Integer attempt) {
     }
 
     return null
+}
+
+private Boolean updateAppCode(String codeId, String source) {
+    try {
+        Boolean result = false
+        httpPost([
+            uri                 : baseUrl(),
+            path                : "/app/ajax/update",
+            requestContentType  : "application/x-www-form-urlencoded",
+            headers             : ["Connection": "keep-alive", "Cookie": state.cookie],
+            body                : [id: codeId, version: appCodeVersion(codeId), source: source],
+            timeout             : 420,
+            ignoreSSLIssues     : true
+        ]) { resp ->
+            result = resp?.data?.status == "success"
+        }
+        return result
+    } catch (Exception e) {
+        log.warn "${app.label}: App code update failed: ${e.message}"
+        return false
+    }
+}
+
+private String appCodeVersion(String codeId) {
+    try {
+        String result = ""
+        httpGet([
+            uri                 : baseUrl(),
+            path                : "/app/ajax/code",
+            requestContentType  : "application/x-www-form-urlencoded",
+            headers             : ["Cookie": state.cookie],
+            query               : [id: codeId],
+            timeout             : 300,
+            ignoreSSLIssues     : true
+        ]) { resp ->
+            result = resp?.data?.version?.toString() ?: ""
+        }
+        return result
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not load app code version for ${codeId}: ${e.message}"
+        return ""
+    }
 }
 
 private Boolean bundleUrlAvailable(String url, Integer attempt) {
