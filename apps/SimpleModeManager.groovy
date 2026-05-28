@@ -122,12 +122,7 @@ def getManagedRoomDeviceLabel() {
 }
 
 private Boolean modeManagerAllowed() {
-    try {
-        return parent.modeManagerAllowed(app.id) != false
-    } catch (Throwable e) {
-        log.warn "${app.label}: Could not validate Mode Manager uniqueness: ${e.message}"
-        return true
-    }
+    return validateChildUniqueness("Mode Manager") { parent.modeManagerAllowed(app.id) }
 }
 
 private void ensureParentArrivalDevice() {

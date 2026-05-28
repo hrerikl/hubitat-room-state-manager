@@ -128,12 +128,7 @@ def getConfiguredRoomChildAppId() {
 }
 
 private Boolean houseIntentLightingAllowed() {
-    try {
-        return parent.houseIntentLightingAllowed(app.id) != false
-    } catch (Throwable e) {
-        log.warn "${app.label}: Could not validate House Intent Lighting uniqueness: ${e.message}"
-        return true
-    }
+    return validateChildUniqueness("House Intent Lighting") { parent.houseIntentLightingAllowed(app.id) }
 }
 
 def recoverSimpleHomeHandler(evt) {

@@ -1451,12 +1451,7 @@ def getConfiguredRoomChildAppId() {
 }
 
 private Boolean roomLightingAllowed() {
-    try {
-        return parent.roomLightingRoomAllowed(roomChildAppId, app.id) != false
-    } catch (Throwable e) {
-        log.warn "${app.label}: Could not validate Room Lighting uniqueness: ${e.message}"
-        return true
-    }
+    return validateChildUniqueness("Room Lighting") { parent.roomLightingRoomAllowed(roomChildAppId, app.id) }
 }
 
 private void updateAppLabel() {

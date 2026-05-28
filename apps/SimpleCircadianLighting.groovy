@@ -121,12 +121,7 @@ def getManagedRoomDeviceLabel() {
 }
 
 private Boolean circadianLightingAllowed() {
-    try {
-        return parent.circadianLightingAllowed(app.id) != false
-    } catch (Throwable e) {
-        log.warn "${app.label}: Could not validate Circadian Lighting uniqueness: ${e.message}"
-        return true
-    }
+    return validateChildUniqueness("Circadian Lighting") { parent.circadianLightingAllowed(app.id) }
 }
 
 // -------------------- Publishing --------------------

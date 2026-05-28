@@ -159,6 +159,15 @@ private void markDuplicateForDelete(String duplicateType) {
     }
 }
 
+private Boolean validateChildUniqueness(String childType, Closure validator) {
+    try {
+        return validator() != false
+    } catch (Throwable e) {
+        log.warn "${app.label}: Could not validate ${childType} uniqueness: ${e.message}"
+        return true
+    }
+}
+
 def getSimpleHomeAppName() {
     try {
         return app?.name?.toString()

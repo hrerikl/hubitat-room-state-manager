@@ -649,12 +649,7 @@ def getRoomProfile() {
 
 private Boolean roomStateChildAllowed() {
     if (!houseIntentProfile()) return true
-    try {
-        return parent.houseIntentRoomAllowed(app.id) != false
-    } catch (Throwable e) {
-        log.warn "${app.label}: Could not validate House Intent room uniqueness: ${e.message}"
-        return true
-    }
+    return validateChildUniqueness("House Intent room") { parent.houseIntentRoomAllowed(app.id) }
 }
 
 def getCustomLightingOnText() {
