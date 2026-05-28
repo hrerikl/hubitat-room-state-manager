@@ -128,12 +128,12 @@ private Map updateSimpleHome(String reason) {
         return updateResult(false, "Bundle URL was not available after ${availabilityAttempts()} attempts.", reason)
     }
 
-    Boolean installed = installBundle(url)
-    if (!installed) {
-        return updateResult(false, "Bundle install failed.", reason)
+    Map installResult = installBundle(url)
+    if (installResult?.success != true) {
+        return updateResult(false, "Bundle install failed.", reason, installResult?.detail?.toString())
     }
 
-    return updateResult(true, "Simple Home bundle update completed.", reason)
+    return updateResult(true, "Simple Home bundle update completed.", reason, installResult?.detail?.toString())
 }
 
 private Map updateSimpleHomeDev(String reason) {
@@ -314,28 +314,37 @@ private Boolean bundleUrlAvailable(String url, Integer attempt) {
     return false
 }
 
-private Boolean installBundle(String url) {
+private Map installBundle(String url) {
     if (location.hub.firmwareVersionString >= "2.3.8.108") {
         try {
             String encodedUrl = URLEncoder.encode(url, "UTF-8")
             Boolean result = false
+            Integer statusCode = 0
+            String responseText = ""
             httpGet([
                 uri             : "${baseUrl()}/bundle2/uploadZipFromUrl?url=${encodedUrl}&pwd=&private=false",
                 headers         : ["Connection": "keep-alive", "Cookie": state.cookie],
                 timeout         : 420,
                 ignoreSSLIssues : true
             ]) { resp ->
+                statusCode = safeInteger(resp?.status, 0)
+                responseText = limitedText(resp?.data)
                 result = resp?.data?.success == true
             }
-            return result
+            return [
+                success: result,
+                detail : "Bundle endpoint /bundle2/uploadZipFromUrl returned HTTP ${statusCode}: ${responseText}"
+            ]
         } catch (Exception e) {
             log.warn "${app.label}: Bundle install failed: ${e.message}"
-            return false
+            return [success: false, detail: "Bundle endpoint exception: ${e.message}"]
         }
     }
 
     try {
         Boolean result = false
+        Integer statusCode = 0
+        String responseText = ""
         httpPost([
             uri             : baseUrl(),
             path            : "/bundle/uploadZipFromUrl",
@@ -349,12 +358,17 @@ private Boolean installBundle(String url) {
             timeout         : 420,
             ignoreSSLIssues : true
         ]) { resp ->
+            statusCode = safeInteger(resp?.status, 0)
+            responseText = limitedText(resp?.data)
             result = resp?.status >= 200 && resp?.status < 300
         }
-        return result
+        return [
+            success: result,
+            detail : "Legacy bundle endpoint /bundle/uploadZipFromUrl returned HTTP ${statusCode}: ${responseText}"
+        ]
     } catch (Exception e) {
         log.warn "${app.label}: Legacy bundle install failed: ${e.message}"
-        return false
+        return [success: false, detail: "Legacy bundle endpoint exception: ${e.message}"]
     }
 }
 
@@ -409,17 +423,17 @@ private void ensureAccessToken() {
     }
 }
 
-private Map updateResult(Boolean success, String message, String reason) {
+private Map updateResult(Boolean success, String message, String reason, String detail = null) {
     String status = success ? "Success" : "Failed"
     String timestamp = new Date().format("yyyy-MM-dd h:mm:ss a", location.timeZone)
     state.lastUpdateStatus = "${status}: ${message}"
-    state.lastUpdateDetail = "Last run ${timestamp} from ${reason}."
+    state.lastUpdateDetail = "Last run ${timestamp} from ${reason}.${detail ? "\n${detail}" : ""}"
     if (success) {
         log.info "${app.label}: ${message}"
     } else {
         log.warn "${app.label}: ${message}"
     }
-    return [success: success, message: message, reason: reason, timestamp: timestamp]
+    return [success: success, message: message, reason: reason, timestamp: timestamp, detail: detail]
 }
 
 private Integer availabilityAttempts() {
@@ -436,6 +450,11 @@ private Integer safeInteger(def value, Integer fallback) {
     } catch (Exception ignored) {
         return fallback
     }
+}
+
+private String limitedText(def value) {
+    String text = value?.toString() ?: ""
+    return text.size() > 500 ? text.substring(0, 500) : text
 }
 
 private void debug(String message) {
