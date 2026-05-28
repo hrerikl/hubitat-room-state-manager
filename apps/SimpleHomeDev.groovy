@@ -132,6 +132,12 @@ private Map updateSimpleHome(String reason) {
     if (!matchesValidForManifest(matches, manifest)) {
         Map matchResult = matchManifest(manifest)
         if (matchResult.success != true) {
+            List installed = installMissingComponents(manifest, currentMatches())
+            if (installed) {
+                matchResult = matchManifest(manifest)
+            }
+        }
+        if (matchResult.success != true) {
             return updateResult(false, "Simple Home match failed.", reason, matchResult.detail?.toString())
         }
         matches = currentMatches()
@@ -179,6 +185,12 @@ private Map matchSimpleHome(String reason) {
     }
 
     Map matchResult = matchManifest(manifest)
+    if (matchResult.success != true) {
+        List installed = installMissingComponents(manifest, currentMatches())
+        if (installed) {
+            matchResult = matchManifest(manifest)
+        }
+    }
     if (matchResult.success != true) {
         return updateResult(false, "Simple Home match failed.", reason, matchResult.detail?.toString())
     }
@@ -419,6 +431,60 @@ private Map reinitializeSimpleHomeParent() {
     } catch (Throwable e) {
         log.warn "${app.label}: Could not trigger Reinitialize Simple Home switch ${dev?.displayName ?: dev?.id}: ${e.message}"
         return [success: false, detail: "Reinitialize failed: ${e.message}"]
+    }
+}
+
+private List installMissingComponents(Map manifest, Map matches) {
+    List installed = []
+
+    asList(manifest.files).each { item ->
+        if (!matches.files[item.id?.toString()]) {
+            if (installComponent("library", item)) installed << "library ${item.name}"
+        }
+    }
+    asList(manifest.drivers).each { item ->
+        if (!matches.drivers[item.id?.toString()]) {
+            if (installComponent("driver", item)) installed << "driver ${item.name}"
+        }
+    }
+    asList(manifest.apps).each { item ->
+        if (!matches.apps[item.id?.toString()]) {
+            if (installComponent("app", item)) installed << "app ${item.name}"
+        }
+    }
+
+    if (installed) {
+        log.info "${app.label}: Installed new component(s): ${installed.join(', ')}"
+    }
+    return installed
+}
+
+private Boolean installComponent(String kind, Map item) {
+    String label = "${kind} ${item.namespace}.${item.name}"
+    String source = loadTextWithRetry(item.location?.toString(), label)
+    if (!source) {
+        log.warn "${app.label}: Could not fetch source for new ${label}"
+        return false
+    }
+
+    String path = kind == "library" ? "/library/save" : "/${kind}/save"
+    try {
+        httpPost([
+            uri               : baseUrl(),
+            path              : path,
+            requestContentType: "application/x-www-form-urlencoded",
+            headers           : ["Connection": "keep-alive", "Cookie": state.cookie],
+            body              : [source: source],
+            timeout           : 420,
+            ignoreSSLIssues   : true
+        ]) { resp ->
+            debug "Install ${label}: HTTP ${resp?.status}"
+        }
+        log.info "${app.label}: Installed new ${label}"
+        return true
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not install ${label}: ${e.message}"
+        return false
     }
 }
 
