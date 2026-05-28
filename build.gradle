@@ -172,6 +172,12 @@ tasks.register('packageHubitat', Zip) {
     from('libraries') { include '**/*.groovy'; into('libraries') }
 }
 
+tasks.register('stageDevHubitatPackage', Copy) {
+    dependsOn tasks.named('packageHubitat')
+    from(layout.buildDirectory.file('hubitatPackage/SimpleHome.zip'))
+    into(file('dev'))
+}
+
 tasks.register('verifyHubitatPackage') {
     dependsOn tasks.named('packageHubitat')
 
@@ -217,6 +223,7 @@ tasks.register('verifyHubitatPackage') {
 tasks.register('releaseHubitatPackage') {
     dependsOn tasks.named('updateReleaseMetadata')
     dependsOn tasks.named('check')
+    dependsOn tasks.named('stageDevHubitatPackage')
     dependsOn tasks.named('verifyHubitatPackage')
 }
 
@@ -234,6 +241,10 @@ tasks.named('packageHubitat') {
 
 tasks.named('verifyHubitatPackage') {
     mustRunAfter tasks.named('packageHubitat')
+}
+
+tasks.named('stageDevHubitatPackage') {
+    mustRunAfter tasks.named('verifyHubitatPackage')
 }
 
 sourceSets {

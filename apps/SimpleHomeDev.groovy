@@ -31,7 +31,7 @@ preferences {
 
         section("Update") {
             input "manifestUrl", "text", title: "Simple Home package manifest URL", defaultValue: "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/packageManifest.json", required: true
-            input "bundleUrl", "text", title: "Simple Home bundle ZIP URL", defaultValue: "https://github.com/hrerikl/hubitat-room-state-manager/releases/latest/download/SimpleHome.zip", required: true
+            input "bundleUrl", "text", title: "Simple Home bundle ZIP URL", defaultValue: "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/dev/SimpleHome.zip", required: true
             input "updateNow", "button", title: "Update Simple Home"
             input "retryAttempts", "number", title: "Bundle availability attempts", defaultValue: 5, required: true
             input "retryDelaySeconds", "number", title: "Seconds between availability attempts", defaultValue: 10, required: true
