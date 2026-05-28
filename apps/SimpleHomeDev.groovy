@@ -40,7 +40,8 @@ preferences {
             input "devAppSourceUrl", "text", title: "Simple Home Dev source URL", defaultValue: "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/apps/SimpleHomeDev.groovy", required: true
             input "devAppCodeId", "text", title: "Simple Home Dev App Code ID", required: false
             input "updateDevAppNow", "button", title: "Update Simple Home Dev"
-            paragraph "Self-update requires the Apps Code ID for this app, not the installed app instance ID."
+            paragraph "Detected Simple Home Dev App Code ID: ${detectedDevAppCodeId() ?: 'not found'}"
+            paragraph "The manual App Code ID is an override. Leave it blank to use the detected ID."
         }
 
         section("Hub Access") {
@@ -131,12 +132,12 @@ private Map updateSimpleHome(String reason) {
         matches = currentMatches()
     }
 
-    Map updateResult = updateFromManifest(manifest, matches)
-    if (updateResult.success != true) {
-        return updateResult(false, "Simple Home update failed.", reason, updateResult.detail?.toString())
+    Map manifestUpdateResult = updateFromManifest(manifest, matches)
+    if (manifestUpdateResult.success != true) {
+        return updateResult(false, "Simple Home update failed.", reason, manifestUpdateResult.detail?.toString())
     }
 
-    return updateResult(true, "Simple Home manifest update completed.", reason, updateResult.detail?.toString())
+    return updateResult(true, "Simple Home manifest update completed.", reason, manifestUpdateResult.detail?.toString())
 }
 
 private Map matchSimpleHome(String reason) {
@@ -158,9 +159,9 @@ private Map matchSimpleHome(String reason) {
 }
 
 private Map updateSimpleHomeDev(String reason) {
-    String codeId = devAppCodeId?.toString()?.trim()
+    String codeId = configuredDevAppCodeId()
     if (!codeId) {
-        return updateResult(false, "Simple Home Dev App Code ID is not configured.", reason)
+        return updateResult(false, "Simple Home Dev App Code ID was not configured or detected.", reason)
     }
 
     String sourceUrl = devAppSourceUrl?.toString()?.trim()
@@ -183,6 +184,16 @@ private Map updateSimpleHomeDev(String reason) {
     }
 
     return updateResult(true, "Simple Home Dev app code updated. Reopen the app before continuing.", reason)
+}
+
+private String configuredDevAppCodeId() {
+    String manual = devAppCodeId?.toString()?.trim()
+    return manual ?: detectedDevAppCodeId()
+}
+
+private String detectedDevAppCodeId() {
+    Map apps = installedCodeByKey("app")
+    return apps["lundby:Simple Home Dev"]?.toString() ?: apps["name:Simple Home Dev"]?.toString()
 }
 
 private Map loadPackageManifest() {
