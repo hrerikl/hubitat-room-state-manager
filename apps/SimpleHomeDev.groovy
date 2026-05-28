@@ -331,7 +331,7 @@ private Map matchManifest(Map manifest) {
 
     asList(manifest.files).each { item ->
         String key = componentKey(item)
-        String id = libraryCode[key]
+        String id = libraryCode[key] ?: libraryCode[nameKey(item)]
         if (id) {
             matches.files[item.id?.toString()] = id
         } else {
@@ -419,8 +419,10 @@ private Map installedCodeByKey(String kind) {
     Map results = [:]
     entries.each { item ->
         String key = componentKey(item)
+        String nameOnlyKey = nameKey(item)
         String id = item.id?.toString()
         if (key && id && !results[key]) results[key] = id
+        if (nameOnlyKey && id && !results[nameOnlyKey]) results[nameOnlyKey] = id
     }
     return results
 }
@@ -438,6 +440,11 @@ private String componentKey(def item) {
     return namespace && name ? "${namespace}:${name}" : null
 }
 
+private String nameKey(def item) {
+    String name = item?.name?.toString()?.trim() ?: item?.title?.toString()?.trim()
+    return name ? "name:${name}" : null
+}
+
 private List getAppList() {
     return hub2CodeList("/hub2/userAppTypes", "installed apps")
 }
@@ -447,7 +454,13 @@ private List getDriverList() {
 }
 
 private List getLibraryList() {
-    return hub2CodeList("/hub2/userLibraryTypes", "installed libraries")
+    List libraries = hub2CodeList("/hub2/userLibraryTypes", "installed libraries")
+    if (libraries) return libraries
+
+    libraries = hub2CodeList("/hub2/userLibraries", "installed libraries")
+    if (libraries) return libraries
+
+    return hub2CodeList("/hub2/userLibTypes", "installed libraries")
 }
 
 private List hub2CodeList(String path, String description) {
@@ -462,19 +475,27 @@ private List hub2CodeList(String path, String description) {
         ]) { resp ->
             asList(resp?.data).each { item ->
                 result << [
-                    id       : item?.id?.toString(),
-                    title    : item?.name?.toString(),
-                    name     : item?.name?.toString(),
-                    namespace: item?.namespace?.toString()
+                    id       : firstText(item?.id, item?.typeId, item?.libraryTypeId, item?.appTypeId, item?.deviceTypeId),
+                    title    : firstText(item?.name, item?.title),
+                    name     : firstText(item?.name, item?.title),
+                    namespace: firstText(item?.namespace, item?.nameSpace)
                 ]
             }
         }
-        debug "Loaded ${result.size()} ${description}."
+        debug "Loaded ${result.size()} ${description} from ${path}${result ? ": ${result.take(3)}" : ""}."
         return result
     } catch (Exception e) {
         log.warn "${app.label}: Could not retrieve ${description}: ${e.message}"
         return []
     }
+}
+
+private String firstText(Object... values) {
+    for (Object value : values) {
+        String text = value?.toString()?.trim()
+        if (text) return text
+    }
+    return null
 }
 
 private Boolean updateDriverCode(String codeId, String source) {
