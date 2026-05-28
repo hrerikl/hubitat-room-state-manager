@@ -92,6 +92,17 @@
     ],
     "drivers": [
         {
+            "id": "b3e10945-f399-3a30-8b74-76237e76cd8a",
+            "name": "Simple Home Status Device",
+            "namespace": "lundby",
+            "location": "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/drivers/SimpleHomeStatusDevice.groovy",
+            "required": true,
+            "oauth": false,
+            "primary": false,
+            "category": "Convenience",
+            "description": "Simple Home Status Device (drivers)"
+        },
+        {
             "id": "9cd84d59-77cc-4ff6-8b7d-0865ebf90345",
             "name": "Simple Open-Meteo Outdoor Light Device",
             "namespace": "lundby",
