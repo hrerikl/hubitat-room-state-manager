@@ -31,6 +31,7 @@ preferences {
 
         section("Preview") {
             input "previewDevice", "capability.colorTemperature", title: "Preview/feedback device", multiple: false, required: false
+            input "previewSuppressRoomLightingChildAppId", "enum", title: "Suppress feedback in Room Lighting while previewing", options: roomLightingOptions(), required: false
             input "commitDelaySeconds", "number", title: "Commit after inactivity seconds", defaultValue: 10, required: true
         }
 
@@ -178,6 +179,7 @@ def commitPendingIntent() {
     Integer ct = normalizedColorTemperature(state.pendingCt ?: currentRoomCt())
 
     try {
+        clearPreviewFeedbackSuppression()
         room.activateCustomLighting()
         room.setMetaLightSwitchState(level > 0 ? "on" : "off")
         room.setMetaLightColorTemperature(ct)
@@ -262,10 +264,13 @@ private void applyPreview(String reason) {
     Integer ct = normalizedColorTemperature(state.pendingCt ?: currentRoomCt())
 
     try {
+        suppressPreviewFeedback()
         dev.setColorTemperature(ct, level)
     } catch (Exception ignored) {
         try {
+            suppressPreviewFeedback()
             dev.setColorTemperature(ct)
+            suppressPreviewFeedback()
             dev.setLevel(level)
         } catch (Exception e) {
             log.warn "${app.label}: Could not apply preview for ${reason}: ${e.message}"
@@ -334,6 +339,33 @@ private Integer levelStepValue() {
 
 private Integer colorTemperatureStepValue() {
     return Math.max(safeInteger(colorTemperatureStep, 250), 1)
+}
+
+private Map roomLightingOptions() {
+    try {
+        return parent.roomLightingChildOptions(app.id)
+    } catch (Throwable e) {
+        log.warn "${app.label}: Could not load Room Lighting options: ${e.message}"
+        return [:]
+    }
+}
+
+private void suppressPreviewFeedback() {
+    if (!previewDevice || !previewSuppressRoomLightingChildAppId) return
+    try {
+        parent.suppressRoomLightingFeedback(previewSuppressRoomLightingChildAppId, previewDevice?.id, commitDelaySecondsValue() + 5)
+    } catch (Throwable e) {
+        log.warn "${app.label}: Could not suppress preview feedback for ${previewDevice?.displayName}: ${e.message}"
+    }
+}
+
+private void clearPreviewFeedbackSuppression() {
+    if (!previewDevice || !previewSuppressRoomLightingChildAppId) return
+    try {
+        parent.clearRoomLightingFeedbackSuppression(previewSuppressRoomLightingChildAppId, previewDevice?.id)
+    } catch (Throwable e) {
+        log.warn "${app.label}: Could not clear preview feedback suppression for ${previewDevice?.displayName}: ${e.message}"
+    }
 }
 
 private void announceScene(String sceneName) {

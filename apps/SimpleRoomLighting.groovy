@@ -1378,14 +1378,31 @@ private Boolean shouldAcceptControlEvent(evt) {
     return false
 }
 
+def suppressControlFeedbackForDeviceId(def deviceId, Integer seconds = 5) {
+    suppressControlFeedbackDeviceId(deviceId, seconds)
+}
+
+def clearControlFeedbackForDeviceId(def deviceId) {
+    String normalizedDeviceId = deviceId?.toString()
+    if (!normalizedDeviceId) return
+
+    Map suppressions = state.suppressControlFeedbackUntil instanceof Map ? state.suppressControlFeedbackUntil : [:]
+    suppressions.remove(normalizedDeviceId)
+    state.suppressControlFeedbackUntil = suppressions
+}
+
 private void suppressControlFeedback(def dev) {
-    String deviceId = dev?.id?.toString()
-    if (!deviceId) return
+    suppressControlFeedbackDeviceId(dev?.id, 5)
+}
+
+private void suppressControlFeedbackDeviceId(def deviceId, Integer seconds) {
+    String normalizedDeviceId = deviceId?.toString()
+    if (!normalizedDeviceId) return
 
     Map suppressions = state.suppressControlFeedbackUntil instanceof Map ? state.suppressControlFeedbackUntil : [:]
     Long current = now()
     suppressions = suppressions.findAll { key, value -> safeLong(value, 0L) >= current }
-    suppressions[deviceId] = current + 5000
+    suppressions[normalizedDeviceId] = current + (Math.max(safeInteger(seconds, 5), 1) * 1000)
     state.suppressControlFeedbackUntil = suppressions
 }
 

@@ -1,10 +1,10 @@
 {
     "packageName": "Simple Room State Manager",
     "author": "Erik Lundby",
-    "version": "0.2.113",
+    "version": "0.2.114",
     "minimumHEVersion": "2.3.0",
-    "dateReleased": "2026-05-27",
-    "releaseNotes": "Move child uniqueness validation into SimpleHomeHelpers.",
+    "dateReleased": "2026-05-28",
+    "releaseNotes": "Suppress House Intent preview feedback in selected Room Lighting.",
     "category": "Convenience",
     "tags": "Lights & Switches, Presence & Location",
     "documentationLink": "https://github.com/hrerikl/hubitat-room-state-manager",

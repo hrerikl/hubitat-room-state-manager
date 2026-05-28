@@ -917,6 +917,44 @@ Map roomStateChildOptions(def requestingChildAppId) {
     return managedRoomOptions(requestingChildAppId, true)
 }
 
+Map roomLightingChildOptions(def requestingChildAppId) {
+    try {
+        Map opts = [:]
+        simpleRoomLightingChildApps().each { child ->
+            String id = child?.id?.toString()
+            if (!id || id == "${requestingChildAppId}") return
+            String label = child?.label?.toString()
+            if (label) opts[(id)] = label
+        }
+        return opts.sort { it.value }
+    } catch (Exception e) {
+        log.warn "Simple Home: Could not build Room Lighting options: ${e.message}"
+        return [:]
+    }
+}
+
+void suppressRoomLightingFeedback(def roomLightingChildAppId, def deviceId, Integer seconds = 5) {
+    def child = childAppById(roomLightingChildAppId)
+    if (!child || !deviceId) return
+
+    try {
+        child.suppressControlFeedbackForDeviceId(deviceId, seconds)
+    } catch (Throwable e) {
+        log.warn "Simple Home: Could not suppress Room Lighting feedback for device ${deviceId}: ${e.message}"
+    }
+}
+
+void clearRoomLightingFeedbackSuppression(def roomLightingChildAppId, def deviceId) {
+    def child = childAppById(roomLightingChildAppId)
+    if (!child || !deviceId) return
+
+    try {
+        child.clearControlFeedbackForDeviceId(deviceId)
+    } catch (Throwable e) {
+        log.warn "Simple Home: Could not clear Room Lighting feedback suppression for device ${deviceId}: ${e.message}"
+    }
+}
+
 private Map managedRoomOptions(def requestingChildAppId, Boolean includeHouseIntent) {
     try {
         Map opts = [:]
