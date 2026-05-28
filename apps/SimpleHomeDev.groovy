@@ -8,7 +8,6 @@
  */
 
 import groovy.json.JsonOutput
-import java.net.URLEncoder
 
 definition(
     name: "Simple Home Dev",
@@ -31,9 +30,9 @@ preferences {
 
         section("Update") {
             input "manifestUrl", "text", title: "Simple Home package manifest URL", defaultValue: "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/packageManifest.json", required: true
-            input "bundleUrl", "text", title: "Simple Home bundle ZIP URL", defaultValue: "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/dev/SimpleHome.zip", required: true
+            input "matchNow", "button", title: "Match Installed Simple Home Code"
             input "updateNow", "button", title: "Update Simple Home"
-            input "retryAttempts", "number", title: "Bundle availability attempts", defaultValue: 5, required: true
+            input "retryAttempts", "number", title: "Source availability attempts", defaultValue: 5, required: true
             input "retryDelaySeconds", "number", title: "Seconds between availability attempts", defaultValue: 10, required: true
         }
 
@@ -59,6 +58,7 @@ preferences {
 
         section("Status") {
             paragraph "Last manifest: ${state.lastManifestPackageName ?: 'Unknown'} ${state.lastManifestVersion ?: ''}"
+            paragraph "Matched components: ${matchedComponentCount()}"
             paragraph state.lastUpdateStatus ?: "No update run yet."
             paragraph state.lastUpdateDetail ?: ""
         }
@@ -93,6 +93,10 @@ def initialize() {
 }
 
 def appButtonHandler(String buttonName) {
+    if (buttonName == "matchNow") {
+        Map result = matchSimpleHome("app button")
+        log.info "${app.label}: ${result.message}"
+    }
     if (buttonName == "updateNow") {
         Map result = updateSimpleHome("app button")
         log.info "${app.label}: ${result.message}"
@@ -109,11 +113,6 @@ def apiUpdate() {
 }
 
 private Map updateSimpleHome(String reason) {
-    String url = bundleUrl?.toString()?.trim()
-    if (!url) {
-        return updateResult(false, "No bundle URL configured.", reason)
-    }
-
     Map manifest = loadPackageManifest()
     if (!manifest) {
         return updateResult(false, "Package manifest was not available after ${availabilityAttempts()} attempts.", reason)
@@ -123,17 +122,39 @@ private Map updateSimpleHome(String reason) {
         return updateResult(false, "Hub security login failed.", reason)
     }
 
-    Boolean available = waitForBundleAvailability(url)
-    if (!available) {
-        return updateResult(false, "Bundle URL was not available after ${availabilityAttempts()} attempts.", reason)
+    Map matches = currentMatches()
+    if (!matchesValidForManifest(matches, manifest)) {
+        Map matchResult = matchManifest(manifest)
+        if (matchResult.success != true) {
+            return updateResult(false, "Simple Home match failed.", reason, matchResult.detail?.toString())
+        }
+        matches = currentMatches()
     }
 
-    Map installResult = installBundle(url)
-    if (installResult?.success != true) {
-        return updateResult(false, "Bundle install failed.", reason, installResult?.detail?.toString())
+    Map updateResult = updateFromManifest(manifest, matches)
+    if (updateResult.success != true) {
+        return updateResult(false, "Simple Home update failed.", reason, updateResult.detail?.toString())
     }
 
-    return updateResult(true, "Simple Home bundle update completed.", reason, installResult?.detail?.toString())
+    return updateResult(true, "Simple Home manifest update completed.", reason, updateResult.detail?.toString())
+}
+
+private Map matchSimpleHome(String reason) {
+    Map manifest = loadPackageManifest()
+    if (!manifest) {
+        return updateResult(false, "Package manifest was not available after ${availabilityAttempts()} attempts.", reason)
+    }
+
+    if (!login()) {
+        return updateResult(false, "Hub security login failed.", reason)
+    }
+
+    Map matchResult = matchManifest(manifest)
+    if (matchResult.success != true) {
+        return updateResult(false, "Simple Home match failed.", reason, matchResult.detail?.toString())
+    }
+
+    return updateResult(true, "Simple Home match completed.", reason, matchResult.detail?.toString())
 }
 
 private Map updateSimpleHomeDev(String reason) {
@@ -162,21 +183,6 @@ private Map updateSimpleHomeDev(String reason) {
     }
 
     return updateResult(true, "Simple Home Dev app code updated. Reopen the app before continuing.", reason)
-}
-
-private Boolean waitForBundleAvailability(String url) {
-    Integer attempts = availabilityAttempts()
-    Integer delaySeconds = availabilityDelaySeconds()
-
-    for (Integer attempt = 1; attempt <= attempts; attempt++) {
-        if (bundleUrlAvailable(url, attempt)) return true
-        if (attempt < attempts) {
-            debug "Bundle not available yet; retrying in ${delaySeconds} seconds."
-            pauseExecution(delaySeconds * 1000)
-        }
-    }
-
-    return false
 }
 
 private Map loadPackageManifest() {
@@ -296,79 +302,214 @@ private String appCodeVersion(String codeId) {
     }
 }
 
-private Boolean bundleUrlAvailable(String url, Integer attempt) {
-    try {
-        Integer statusCode = 0
-        httpGet([uri: url, timeout: 30, ignoreSSLIssues: true]) { resp ->
-            statusCode = safeInteger(resp?.status, 0)
+private Map matchManifest(Map manifest) {
+    Map appCode = installedCodeByKey("app")
+    Map driverCode = installedCodeByKey("driver")
+    Map libraryCode = installedCodeByKey("library")
+    Map matches = [apps: [:], drivers: [:], files: [:]]
+    List missing = []
+
+    asList(manifest.apps).each { item ->
+        String key = componentKey(item)
+        String id = appCode[key]
+        if (id) {
+            matches.apps[item.id?.toString()] = id
+        } else {
+            missing << "app ${item.namespace}.${item.name}"
         }
-        if (statusCode >= 200 && statusCode < 300) {
-            debug "Bundle URL available on attempt ${attempt}: ${url}"
-            return true
-        }
-        debug "Bundle URL returned HTTP ${statusCode} on attempt ${attempt}: ${url}"
-    } catch (Exception e) {
-        debug "Bundle URL check failed on attempt ${attempt}: ${e.message}"
     }
 
-    return false
+    asList(manifest.drivers).each { item ->
+        String key = componentKey(item)
+        String id = driverCode[key]
+        if (id) {
+            matches.drivers[item.id?.toString()] = id
+        } else {
+            missing << "driver ${item.namespace}.${item.name}"
+        }
+    }
+
+    asList(manifest.files).each { item ->
+        String key = componentKey(item)
+        String id = libraryCode[key]
+        if (id) {
+            matches.files[item.id?.toString()] = id
+        } else {
+            missing << "library ${item.namespace}.${item.name}"
+        }
+    }
+
+    state.simpleHomeDevMatches = matches
+    if (missing) {
+        return [success: false, detail: "Matched ${matchedComponentCount(matches)} component(s). Missing: ${missing.join(', ')}"]
+    }
+
+    return [success: true, detail: "Matched ${matchedComponentCount(matches)} component(s)."]
 }
 
-private Map installBundle(String url) {
-    if (location.hub.firmwareVersionString >= "2.3.8.108") {
-        try {
-            String encodedUrl = URLEncoder.encode(url, "UTF-8")
-            Boolean result = false
-            Integer statusCode = 0
-            String responseText = ""
-            httpGet([
-                uri             : "${baseUrl()}/bundle2/uploadZipFromUrl?url=${encodedUrl}&pwd=&private=false",
-                headers         : ["Connection": "keep-alive", "Cookie": state.cookie],
-                timeout         : 420,
-                ignoreSSLIssues : true
-            ]) { resp ->
-                statusCode = safeInteger(resp?.status, 0)
-                responseText = limitedText(resp?.data)
-                result = resp?.data?.success == true
-            }
-            return [
-                success: result,
-                detail : "Bundle endpoint /bundle2/uploadZipFromUrl returned HTTP ${statusCode}: ${responseText}"
-            ]
-        } catch (Exception e) {
-            log.warn "${app.label}: Bundle install failed: ${e.message}"
-            return [success: false, detail: "Bundle endpoint exception: ${e.message}"]
-        }
+private Map updateFromManifest(Map manifest, Map matches) {
+    List updated = []
+    List failed = []
+
+    asList(manifest.files).each { item ->
+        updateManifestItem("library", item, matches.files, updated, failed)
+    }
+    asList(manifest.drivers).each { item ->
+        updateManifestItem("driver", item, matches.drivers, updated, failed)
+    }
+    asList(manifest.apps).each { item ->
+        updateManifestItem("app", item, matches.apps, updated, failed)
     }
 
+    if (failed) {
+        return [success: false, detail: "Updated ${updated.size()} component(s). Failed: ${failed.join(', ')}"]
+    }
+
+    return [success: true, detail: "Updated ${updated.size()} component(s): ${updated.join(', ')}"]
+}
+
+private void updateManifestItem(String kind, Map item, Map matchMap, List updated, List failed) {
+    String manifestId = item.id?.toString()
+    String codeId = matchMap[manifestId]?.toString()
+    String label = "${kind} ${item.namespace}.${item.name}".toString()
+    if (!codeId) {
+        failed << "${label} not matched"
+        return
+    }
+
+    String source = loadTextWithRetry(item.location?.toString(), label)
+    if (!source) {
+        failed << "${label} source unavailable"
+        return
+    }
+
+    Boolean success = false
+    if (kind == "app") {
+        success = updateAppCode(codeId, source)
+    } else if (kind == "driver") {
+        success = updateDriverCode(codeId, source)
+    } else if (kind == "library") {
+        success = updateLibraryCode(codeId, source)
+    }
+
+    if (success) {
+        updated << "${item.name}"
+    } else {
+        failed << "${label} update failed"
+    }
+}
+
+private Map currentMatches() {
+    return state.simpleHomeDevMatches instanceof Map ? state.simpleHomeDevMatches : [apps: [:], drivers: [:], files: [:]]
+}
+
+private Boolean matchesValidForManifest(Map matches, Map manifest) {
+    return asList(manifest.apps).every { matches.apps[it.id?.toString()] } &&
+        asList(manifest.drivers).every { matches.drivers[it.id?.toString()] } &&
+        asList(manifest.files).every { matches.files[it.id?.toString()] }
+}
+
+private Integer matchedComponentCount(Map matches = null) {
+    Map current = matches ?: currentMatches()
+    return safeInteger(current.apps?.size(), 0) + safeInteger(current.drivers?.size(), 0) + safeInteger(current.files?.size(), 0)
+}
+
+private Map installedCodeByKey(String kind) {
+    List entries = installedCodeList(kind)
+    Map results = [:]
+    entries.each { item ->
+        String key = componentKey(item)
+        String id = item.id?.toString()
+        if (key && id && !results[key]) results[key] = id
+    }
+    return results
+}
+
+private List installedCodeList(String kind) {
+    String methodName = "get${kind.capitalize()}CodeList"
+    try {
+        def result = this."${methodName}"()
+        return asList(result)
+    } catch (Throwable e) {
+        debug "Could not call ${methodName}: ${e.message}"
+        return []
+    }
+}
+
+private String componentKey(def item) {
+    String namespace = item?.namespace?.toString()?.trim()
+    String name = item?.name?.toString()?.trim()
+    return namespace && name ? "${namespace}:${name}" : null
+}
+
+private Boolean updateDriverCode(String codeId, String source) {
     try {
         Boolean result = false
-        Integer statusCode = 0
-        String responseText = ""
         httpPost([
-            uri             : baseUrl(),
-            path            : "/bundle/uploadZipFromUrl",
-            headers         : [
-                "Accept"     : "*/*",
-                "ContentType": "text/plain; charset=utf-8",
-                "Connection" : "keep-alive",
-                "Cookie"     : state.cookie
-            ],
-            body            : JsonOutput.toJson([url: url, installer: false, pwd: ""]),
-            timeout         : 420,
-            ignoreSSLIssues : true
+            uri                 : baseUrl(),
+            path                : "/driver/ajax/update",
+            requestContentType  : "application/x-www-form-urlencoded",
+            headers             : ["Connection": "keep-alive", "Cookie": state.cookie],
+            body                : [id: codeId, version: driverCodeVersion(codeId), source: source],
+            timeout             : 420,
+            ignoreSSLIssues     : true
         ]) { resp ->
-            statusCode = safeInteger(resp?.status, 0)
-            responseText = limitedText(resp?.data)
-            result = resp?.status >= 200 && resp?.status < 300
+            result = resp?.data?.status == "success"
         }
-        return [
-            success: result,
-            detail : "Legacy bundle endpoint /bundle/uploadZipFromUrl returned HTTP ${statusCode}: ${responseText}"
-        ]
+        return result
     } catch (Exception e) {
-        log.warn "${app.label}: Legacy bundle install failed: ${e.message}"
-        return [success: false, detail: "Legacy bundle endpoint exception: ${e.message}"]
+        log.warn "${app.label}: Driver code update failed: ${e.message}"
+        return false
+    }
+}
+
+private String driverCodeVersion(String codeId) {
+    return codeVersion("driver", codeId)
+}
+
+private Boolean updateLibraryCode(String codeId, String source) {
+    try {
+        Boolean result = false
+        httpPost([
+            uri                 : baseUrl(),
+            path                : "/library/ajax/update",
+            requestContentType  : "application/x-www-form-urlencoded",
+            headers             : ["Connection": "keep-alive", "Cookie": state.cookie],
+            body                : [id: codeId, version: libraryCodeVersion(codeId), source: source],
+            timeout             : 420,
+            ignoreSSLIssues     : true
+        ]) { resp ->
+            result = resp?.data?.status == "success"
+        }
+        return result
+    } catch (Exception e) {
+        log.warn "${app.label}: Library code update failed: ${e.message}"
+        return false
+    }
+}
+
+private String libraryCodeVersion(String codeId) {
+    return codeVersion("library", codeId)
+}
+
+private String codeVersion(String kind, String codeId) {
+    try {
+        String result = ""
+        httpGet([
+            uri                 : baseUrl(),
+            path                : "/${kind}/ajax/code",
+            requestContentType  : "application/x-www-form-urlencoded",
+            headers             : ["Cookie": state.cookie],
+            query               : [id: codeId],
+            timeout             : 300,
+            ignoreSSLIssues     : true
+        ]) { resp ->
+            result = resp?.data?.version?.toString() ?: ""
+        }
+        return result
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not load ${kind} code version for ${codeId}: ${e.message}"
+        return ""
     }
 }
 
@@ -442,6 +583,11 @@ private Integer availabilityAttempts() {
 
 private Integer availabilityDelaySeconds() {
     return Math.max(safeInteger(retryDelaySeconds, 10), 1)
+}
+
+private List asList(def value) {
+    if (value == null) return []
+    return value instanceof List ? value : [value]
 }
 
 private Integer safeInteger(def value, Integer fallback) {
