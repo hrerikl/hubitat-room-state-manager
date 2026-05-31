@@ -99,7 +99,8 @@ tasks.register('generatePackageManifest') {
             ]
         }
 
-        def apps = file('apps').listFiles()?.findAll { it.name.endsWith('.groovy') && it.name != 'SimpleHomeDev.groovy' }?.sort { it.name }?.collect { entryFor(it, 'apps') }
+        def excludedApps = ['SimpleHomeDev.groovy', 'LundbyOpenClawBridge.groovy'] as Set
+        def apps = file('apps').listFiles()?.findAll { it.name.endsWith('.groovy') && !excludedApps.contains(it.name) }?.sort { it.name }?.collect { entryFor(it, 'apps') }
         def drivers = file('drivers').listFiles()?.findAll { it.name.endsWith('.groovy') }?.sort { it.name }?.collect { entryFor(it, 'drivers') }
         def files = file('libraries').listFiles()?.findAll { it.name.endsWith('.groovy') }?.sort { it.name }?.collect { entryFor(it, 'libraries') }
 
@@ -167,7 +168,7 @@ tasks.register('packageHubitat', Zip) {
     archiveBaseName.set('SimpleHome')
     destinationDirectory.set(layout.buildDirectory.dir('hubitatPackage'))
     from('packageManifest.json')
-    from('apps') { include '**/*.groovy'; exclude 'SimpleHomeDev.groovy'; into('apps') }
+    from('apps') { include '**/*.groovy'; exclude 'SimpleHomeDev.groovy'; exclude 'LundbyOpenClawBridge.groovy'; into('apps') }
     from('drivers') { include '**/*.groovy'; into('drivers') }
     from('libraries') { include '**/*.groovy'; into('libraries') }
 }
