@@ -1200,6 +1200,80 @@ def roomStateChildRoomDevice(def childAppId) {
     }
 }
 
+List<Map> roomDashboardStatus() {
+    return roomStateChildApps()
+        .collect { child -> roomDashboardStatusForChild(child) }
+        .findAll { it != null }
+        .sort { first, second -> first.room <=> second.room }
+}
+
+private Map roomDashboardStatusForChild(def child) {
+    try {
+        if (child.getRoomProfile() == "houseIntent") return null
+
+        def dev = child.getManagedRoomDevice()
+        if (!dev) return null
+
+        String roomState = deviceValue(dev, "roomState") ?: "Off"
+        String lightingIntent = deviceValue(dev, "lightingIntent") ?: "Off"
+        String stateReason = deviceValue(dev, "stateReason") ?: semanticState(dev, roomState, lightingIntent)
+        String lastActivityReason = deviceValue(dev, "lastActivityReason") ?: ""
+        String lastActivityTime = lastActivityTimeFor(dev)
+        String reasonTime = stateAttributeTime(dev, "stateReason")
+        String lastActivityReasonTime = stateAttributeTime(dev, "lastActivityReason")
+
+        return [
+            room                  : child.getHubitatRoomName() ?: child.getConfiguredRoomName() ?: child.getManagedRoomDeviceLabel(),
+            state                 : semanticState(dev, roomState, lightingIntent),
+            reason                : stateReason,
+            reasonTime            : reasonTime,
+            lastActivityTime      : lastActivityTime,
+            lastActivityReason    : lastActivityReason,
+            lastActivityReasonTime: lastActivityReasonTime,
+            light                 : [
+                switch          : deviceValue(dev, "metaLightSwitch") ?: "off",
+                level           : normalizedLevel(deviceValue(dev, "metaLightLevel"), 0),
+                colorTemperature: normalizedColorTemperature(deviceValue(dev, "metaLightColorTemperature"), 2700)
+            ]
+        ]
+    } catch (Throwable e) {
+        log.warn "Simple Home: Could not build room dashboard status for ${child?.label ?: child?.id}: ${e.message}"
+        return null
+    }
+}
+
+private String semanticState(def dev, String roomState, String lightingIntent) {
+    if (roomState in ["Occupied", "Engaged", "Locked", "Asleep"]) return roomState
+    if ((lightingIntent ?: "Off") == "Courtesy") return "Courtesy"
+    return "Off"
+}
+
+private String lastActivityTimeFor(def dev) {
+    Long epoch = safeLong(deviceValue(dev, "presenceActivity"), 0L)
+    if (epoch) return formatTime(epoch)
+    return deviceValue(dev, "lastPresenceActivity") ?: "unknown"
+}
+
+private String stateAttributeTime(def dev, String attributeName) {
+    try {
+        def state = dev?.currentState(attributeName)
+        def date = state?.date
+        if (!date) return "unknown"
+        return date.format("yyyy-MM-dd HH:mm:ss", location.timeZone)
+    } catch (Throwable ignored) {
+        return "unknown"
+    }
+}
+
+private String deviceValue(def dev, String attributeName) {
+    try {
+        def value = dev?.currentValue(attributeName)
+        return value == null ? null : value.toString()
+    } catch (Throwable ignored) {
+        return null
+    }
+}
+
 void roomStateChildPresenceActivity(def childAppId, String reason) {
     def child = roomStateChildApps().find { it?.id?.toString() == "${childAppId}" }
     if (!child) return
