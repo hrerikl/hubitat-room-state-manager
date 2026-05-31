@@ -58,6 +58,10 @@ def initialize() {
     ensureAccessToken()
 }
 
+def appButtonHandler(String buttonName) {
+    debug "Ignoring app button ${buttonName}"
+}
+
 def apiStatus() {
     Map result = [
         success  : true,
