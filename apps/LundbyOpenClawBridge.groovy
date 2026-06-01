@@ -83,7 +83,7 @@ private String statusEndpointUrl() {
 }
 
 private String apiBaseUrl() {
-    return "${getApiServerUrl()}/apps/api/${app.id}"
+    return getFullLocalApiServerUrl()
 }
 
 private String accessTokenText() {
