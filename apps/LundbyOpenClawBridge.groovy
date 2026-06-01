@@ -95,7 +95,7 @@ def apiStatus() {
 
 private String endpointIndexText() {
     List rows = exposedEndpoints().collect { endpoint ->
-        return "${endpoint.name}\nLocal: ${endpointUrl(endpoint.path, false)}\nCloud: ${endpointUrl(endpoint.path, true)}"
+        return "${endpoint.name} (${endpoint.method})\nPath: ${endpointLocalPath(endpoint.path)}\nLocal: ${endpointUrl(endpoint.path, false)}\nCloud: ${endpointUrl(endpoint.path, true)}"
     }
     return "Endpoints:\n${rows.join('\n\n')}"
 }
@@ -106,6 +106,7 @@ private List<Map> endpointPayload() {
             name       : endpoint.name,
             method     : endpoint.method,
             path       : endpoint.path,
+            localPath  : endpointLocalPath(endpoint.path),
             description: endpoint.description,
             localUrl   : endpointUrl(endpoint.path, false),
             cloudUrl   : endpointUrl(endpoint.path, true)
@@ -134,6 +135,11 @@ private String endpointUrl(String path, Boolean cloud) {
     String normalizedPath = path?.startsWith("/") ? path : "/${path ?: ''}"
     String base = cloud ? cloudApiBaseUrl() : localApiBaseUrl()
     return "${base}${normalizedPath}?access_token=${accessTokenText()}"
+}
+
+private String endpointLocalPath(String path) {
+    String normalizedPath = path?.startsWith("/") ? path : "/${path ?: ''}"
+    return "/apps/api/${app.id}${normalizedPath}?access_token=${accessTokenText()}"
 }
 
 private String localApiBaseUrl() {
