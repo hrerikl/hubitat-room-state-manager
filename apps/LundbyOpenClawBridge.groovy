@@ -26,8 +26,7 @@ preferences {
     page(name: "mainPage", title: "Lundby OpenClaw Bridge", install: true, uninstall: true) {
         section("Bridge") {
             paragraph "Agent-facing OAuth bridge. Keep this app narrow: diagnostics and helper surfaces, not core Simple Home behavior."
-            paragraph "Local status endpoint: ${statusEndpointUrl()}"
-            paragraph "Cloud status endpoint: ${cloudStatusEndpointUrl()}"
+            paragraph endpointIndexText()
         }
 
         section("Debug") {
@@ -37,6 +36,13 @@ preferences {
 }
 
 mappings {
+    path("/endpoints") {
+        action: [
+            GET : "apiEndpoints",
+            POST: "apiEndpoints"
+        ]
+    }
+
     path("/status") {
         action: [
             GET : "apiStatus",
@@ -63,6 +69,14 @@ def appButtonHandler(String buttonName) {
     debug "Ignoring app button ${buttonName}"
 }
 
+def apiEndpoints() {
+    render contentType: "application/json", data: JsonOutput.toJson([
+        success  : true,
+        timestamp: timestamp(),
+        endpoints: endpointPayload()
+    ])
+}
+
 def apiStatus() {
     Map result = [
         success  : true,
@@ -79,16 +93,55 @@ def apiStatus() {
     render contentType: "application/json", data: JsonOutput.toJson(result)
 }
 
-private String statusEndpointUrl() {
-    return "${apiBaseUrl()}/status?access_token=${accessTokenText()}"
+private String endpointIndexText() {
+    List rows = exposedEndpoints().collect { endpoint ->
+        return "${endpoint.name}\nLocal: ${endpointUrl(endpoint.path, false)}\nCloud: ${endpointUrl(endpoint.path, true)}"
+    }
+    return "Endpoints:\n${rows.join('\n\n')}"
 }
 
-private String cloudStatusEndpointUrl() {
-    return "${getApiServerUrl()}/${app.id}/status?access_token=${accessTokenText()}"
+private List<Map> endpointPayload() {
+    return exposedEndpoints().collect { endpoint ->
+        return [
+            name       : endpoint.name,
+            method     : endpoint.method,
+            path       : endpoint.path,
+            description: endpoint.description,
+            localUrl   : endpointUrl(endpoint.path, false),
+            cloudUrl   : endpointUrl(endpoint.path, true)
+        ]
+    }
 }
 
-private String apiBaseUrl() {
+private List<Map> exposedEndpoints() {
+    return [
+        [
+            name       : "Endpoints",
+            method     : "GET",
+            path       : "/endpoints",
+            description: "List OpenClaw Bridge endpoints."
+        ],
+        [
+            name       : "Status",
+            method     : "GET",
+            path       : "/status",
+            description: "Return bridge availability and version."
+        ]
+    ]
+}
+
+private String endpointUrl(String path, Boolean cloud) {
+    String normalizedPath = path?.startsWith("/") ? path : "/${path ?: ''}"
+    String base = cloud ? cloudApiBaseUrl() : localApiBaseUrl()
+    return "${base}${normalizedPath}?access_token=${accessTokenText()}"
+}
+
+private String localApiBaseUrl() {
     return getFullLocalApiServerUrl()
+}
+
+private String cloudApiBaseUrl() {
+    return "${getApiServerUrl()}/${app.id}"
 }
 
 private String accessTokenText() {
