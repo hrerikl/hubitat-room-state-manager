@@ -26,7 +26,8 @@ preferences {
     page(name: "mainPage", title: "Lundby OpenClaw Bridge", install: true, uninstall: true) {
         section("Bridge") {
             paragraph "Agent-facing OAuth bridge. Keep this app narrow: diagnostics and helper surfaces, not core Simple Home behavior."
-            paragraph "Status endpoint: ${statusEndpointUrl()}"
+            paragraph "Local status endpoint: ${statusEndpointUrl()}"
+            paragraph "Cloud status endpoint: ${cloudStatusEndpointUrl()}"
         }
 
         section("Debug") {
@@ -80,6 +81,10 @@ def apiStatus() {
 
 private String statusEndpointUrl() {
     return "${apiBaseUrl()}/status?access_token=${accessTokenText()}"
+}
+
+private String cloudStatusEndpointUrl() {
+    return "${getApiServerUrl()}/${app.id}/status?access_token=${accessTokenText()}"
 }
 
 private String apiBaseUrl() {
