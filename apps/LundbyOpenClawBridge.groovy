@@ -147,7 +147,7 @@ private String localApiBaseUrl() {
 }
 
 private String cloudApiBaseUrl() {
-    return "${getApiServerUrl()}/${app.id}"
+    return getFullApiServerUrl()
 }
 
 private String accessTokenText() {
