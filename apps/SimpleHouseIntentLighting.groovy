@@ -124,6 +124,22 @@ def getConfiguredRoomName() {
     return null
 }
 
+def getHubitatRoomId() {
+    return null
+}
+
+def getHubitatRoomName() {
+    return null
+}
+
+def getCustomLightingOnText() {
+    return null
+}
+
+def getCustomLightingOffText() {
+    return null
+}
+
 def getConfiguredRoomChildAppId() {
     return roomChildAppId
 }

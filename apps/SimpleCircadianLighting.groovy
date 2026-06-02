@@ -120,6 +120,26 @@ def getManagedRoomDeviceLabel() {
     return null
 }
 
+def getManagedRoomDevice() {
+    return null
+}
+
+def getHubitatRoomId() {
+    return null
+}
+
+def getHubitatRoomName() {
+    return null
+}
+
+def getCustomLightingOnText() {
+    return null
+}
+
+def getCustomLightingOffText() {
+    return null
+}
+
 private Boolean circadianLightingAllowed() {
     return validateChildUniqueness("Circadian Lighting") { parent.circadianLightingAllowed(app.id) }
 }
