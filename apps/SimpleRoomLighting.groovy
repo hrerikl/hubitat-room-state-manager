@@ -91,6 +91,13 @@ preferences {
                 }
             }
 
+            section("Lock behavior") {
+                input "fadeOffWhenLocked", "bool", title: "Fade automated devices off when room locks", defaultValue: false, required: true
+                if (fadeOffWhenLocked) {
+                    input "lockedFadeOffTransitionSeconds", "number", title: "Locked fade off seconds", defaultValue: 30, required: true
+                }
+            }
+
             if (announceRoomControls) {
                 section("Announcement messages") {
                     input "lockedAnnouncement", "text", title: "Locked message", defaultValue: defaultRoomControlAnnouncement("Locked"), required: true
@@ -153,7 +160,7 @@ def initialize() {
     subscribe(room, "metaLightLevel", reassessHandler)
     subscribe(room, "metaLightColorTemperature", reassessHandler)
     subscribe(room, "lightingIntent", reassessHandler)
-    subscribe(room, "lockedEnabled", roomControlAnnouncementHandler)
+    subscribe(room, "lockedEnabled", lockedEnabledHandler)
     subscribe(room, "asleepEnabled", roomControlAnnouncementHandler)
     subscribe(room, "customLighting", roomControlAnnouncementHandler)
     subscribe(room, "sceneRequest", sceneRequestHandler)
@@ -230,6 +237,13 @@ def overrideSwitchHandler(evt) {
 def sceneRequestHandler(evt) {
     debug "Scene cycle requested from room device"
     cycleSceneSwitch()
+}
+
+def lockedEnabledHandler(evt) {
+    if (evt.value == "on" && fadeOffWhenLockedEnabled()) {
+        applyLockedFadeOff()
+    }
+    roomControlAnnouncementHandler(evt)
 }
 
 def recoverSimpleHomeHandler(evt) {
@@ -530,6 +544,14 @@ private void applyOffCondition(String reason) {
     publishLastLightingAction("Off")
 }
 
+private void applyLockedFadeOff() {
+    String context = activeContextKey()
+    String intentBucket = activeIntentBucket(state.lastActiveMatrixIntent ?: roomDevice()?.currentValue("lightingIntent")?.toString())
+    debug "Applying locked fade off context=${context} intent=${intentBucket}"
+    applyOffRows(context, intentBucket, "Room locked")
+    publishLastLightingAction("Locked fade off")
+}
+
 private void applyInactiveOnRowOffCondition(String reason) {
     String context = activeContextKey()
     String intentBucket = matrixUsesIntent() ? "On" : "Any"
@@ -694,6 +716,10 @@ private Boolean alwaysActivateRowsEnabled() {
 
 private Boolean advancedOffActionsEnabled() {
     return showAdvancedOffActions == true
+}
+
+private Boolean fadeOffWhenLockedEnabled() {
+    return fadeOffWhenLocked == true
 }
 
 private Boolean roomLightingInactive() {
@@ -1056,6 +1082,7 @@ private void turnOffDevice(def dev, String reason, Integer transitionSecondsForC
 }
 
 private Integer transitionSecondsFor(String reason, String actionType) {
+    if (reason == "Room locked") return safeTransitionSeconds(lockedFadeOffTransitionSeconds, 30)
     if (actionType == "deactivation") return safeTransitionSeconds(deactivationTransitionSeconds, 30)
     if (reason in ["metaLightLevel changed", "metaLightColorTemperature changed", "Location Mode changed", "override switch changed"]) {
         return safeTransitionSeconds(referenceTransitionSeconds, 10)
