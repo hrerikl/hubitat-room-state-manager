@@ -163,6 +163,7 @@ def initialize() {
     subscribe(room, "lockedEnabled", lockedEnabledHandler)
     subscribe(room, "asleepEnabled", roomControlAnnouncementHandler)
     subscribe(room, "customLighting", roomControlAnnouncementHandler)
+    subscribe(room, "announcementMessagesJson", roomAnnouncementMessagesHandler)
     subscribe(room, "sceneRequest", sceneRequestHandler)
     subscribe(location, "mode", locationModeHandler)
 
@@ -266,6 +267,10 @@ def roomControlAnnouncementHandler(evt) {
     }
 
     announceRoomControl(message)
+}
+
+def roomAnnouncementMessagesHandler(evt) {
+    debug "Room announcement messages updated"
 }
 
 def controlSwitchHandler(evt) {
@@ -1552,36 +1557,77 @@ private Boolean announceRoomControlsEnabled() {
 }
 
 private String lockedAnnouncementText() {
-    return roomControlAnnouncementText(lockedAnnouncement, "Locked", "Room locked")
+    return roomAnnouncementText("locked", lockedAnnouncement, "Locked", "Room locked")
 }
 
 private String unlockedAnnouncementText() {
-    return roomControlAnnouncementText(unlockedAnnouncement, "Unlocked", "Room unlocked")
+    return roomAnnouncementText("unlocked", unlockedAnnouncement, "Unlocked", "Room unlocked")
 }
 
 private String asleepAnnouncementText() {
-    return roomControlAnnouncementText(asleepAnnouncement, "Asleep", "Room asleep")
+    return roomAnnouncementText("asleep", asleepAnnouncement, "Asleep", "Room asleep")
 }
 
 private String awakeAnnouncementText() {
-    return roomControlAnnouncementText(awakeAnnouncement, "Awake", "Room awake")
+    return roomAnnouncementText("awake", awakeAnnouncement, "Awake", "Room awake")
 }
 
 private void syncRoomAnnouncementMessages(def room) {
     if (!room) return
 
-    Map messages = [
-        locked  : lockedAnnouncementText(),
-        unlocked: unlockedAnnouncementText(),
-        asleep  : asleepAnnouncementText(),
-        awake   : awakeAnnouncementText()
+    Map existing = roomAnnouncementMessages(room)
+    Map defaults = [
+        locked  : roomControlAnnouncementText(lockedAnnouncement, "Locked", "Room locked"),
+        unlocked: roomControlAnnouncementText(unlockedAnnouncement, "Unlocked", "Room unlocked"),
+        asleep  : roomControlAnnouncementText(asleepAnnouncement, "Asleep", "Room asleep"),
+        awake   : roomControlAnnouncementText(awakeAnnouncement, "Awake", "Room awake")
     ]
+    Map missing = [:]
+    defaults.each { slot, text ->
+        if (!existing[slot]) {
+            missing[slot] = text
+        }
+    }
+
+    if (!missing) {
+        debug "Room announcement messages already seeded"
+        return
+    }
 
     try {
-        room.setAnnouncementMessagesJson(groovy.json.JsonOutput.toJson(messages))
-        debug "Synced room announcement messages"
+        room.setAnnouncementMessagesJson(groovy.json.JsonOutput.toJson(missing))
+        debug "Seeded room announcement messages: ${missing.keySet().join(', ')}"
     } catch (Throwable e) {
-        log.warn "${app.label}: Could not sync room announcement messages: ${e.message}"
+        log.warn "${app.label}: Could not seed room announcement messages: ${e.message}"
+    }
+}
+
+private String roomAnnouncementText(String slot, value, String stateName, String oldDefault) {
+    String text = roomAnnouncementMessages()[slot]?.toString()?.trim()
+    if (text) return text
+    return roomControlAnnouncementText(value, stateName, oldDefault)
+}
+
+private Map roomAnnouncementMessages(def room = null) {
+    String json = (room ?: roomDevice())?.currentValue("announcementMessagesJson")?.toString()
+    if (!json?.trim()) return [:]
+
+    try {
+        def parsed = new groovy.json.JsonSlurper().parseText(json)
+        if (!(parsed instanceof Map)) return [:]
+
+        Map result = [:]
+        parsed.each { key, value ->
+            String slot = key?.toString()?.trim()?.toLowerCase()
+            String text = value?.toString()?.trim()
+            if (slot in ["locked", "unlocked", "asleep", "awake"] && text) {
+                result[slot] = text
+            }
+        }
+        return result
+    } catch (Throwable e) {
+        log.warn "${app.label}: Could not read room announcement messages: ${e.message}"
+        return [:]
     }
 }
 
