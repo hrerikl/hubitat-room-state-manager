@@ -157,9 +157,10 @@ def initialize() {
 
 def apiRoomDashboardStatus() {
     render contentType: "application/json", data: JsonOutput.toJson([
-        success  : true,
-        timestamp: formatTime(now()),
-        rooms    : roomDashboardStatus()
+        success    : true,
+        timestamp  : formatTime(now()),
+        houseIntent: houseIntentDashboardStatus(),
+        rooms      : roomDashboardStatus()
     ])
 }
 
@@ -1246,6 +1247,44 @@ List<Map> roomDashboardStatus() {
         .collect { child -> roomDashboardStatusForChild(child) }
         .findAll { it != null }
         .sort { first, second -> first.room <=> second.room }
+}
+
+Map houseIntentDashboardStatus() {
+    def child = houseIntentChildApp()
+    if (!child) return [
+        configured: false
+    ]
+
+    try {
+        def dev = child.getManagedRoomDevice()
+        if (!dev) return [
+            configured: false
+        ]
+
+        String customLighting = deviceValue(dev, "customLighting") ?: "off"
+        String activeScene = deviceValue(dev, "activeScene") ?: (customLighting == "on" ? "Custom" : "Automatic")
+        String stateReason = deviceValue(dev, "stateReason") ?: ""
+
+        return [
+            configured   : true,
+            room         : child.getConfiguredRoomName() ?: child.getManagedRoomDeviceLabel() ?: "House Intent",
+            customLighting: customLighting,
+            activeScene  : activeScene,
+            mode         : customLighting == "on" ? "Custom" : "Automatic",
+            reason       : stateReason,
+            reasonTime   : stateAttributeTime(dev, "stateReason"),
+            light        : [
+                switch          : deviceValue(dev, "metaLightSwitch") ?: "off",
+                level           : normalizedLevel(deviceValue(dev, "metaLightLevel"), 0),
+                colorTemperature: normalizedColorTemperature(deviceValue(dev, "metaLightColorTemperature"), 2700)
+            ]
+        ]
+    } catch (Throwable e) {
+        log.warn "Simple Home: Could not build House Intent dashboard status: ${e.message}"
+        return [
+            configured: false
+        ]
+    }
 }
 
 private Map roomDashboardStatusForChild(def child) {

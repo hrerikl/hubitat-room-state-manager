@@ -85,6 +85,7 @@ def initialize() {
 
     subscribe(picoRemotes, "pushed", "picoPushedHandler")
     subscribe(picoRemotes, "held", "picoHeldHandler")
+    subscribe(location, "mode", locationModeHandler)
     def recovery = recoveryDevice()
     if (recovery) {
         subscribe(recovery, "switch.on", recoverSimpleHomeHandler)
@@ -183,6 +184,12 @@ def picoHeldHandler(evt) {
     }
 }
 
+def locationModeHandler(evt) {
+    if (!houseIntentIsCustom()) return
+    debug "Location Mode changed to ${evt.value}; returning House Intent to automatic reference"
+    returnToHouseReference()
+}
+
 def commitPendingIntent() {
     String reason = state.commitReason ?: "scheduled"
     def room = roomDevice()
@@ -197,6 +204,7 @@ def commitPendingIntent() {
     try {
         clearPreviewFeedbackSuppression()
         room.activateCustomLighting()
+        room.setActiveScene(activeSceneName())
         room.setMetaLightSwitchState(level > 0 ? "on" : "off")
         room.setMetaLightColorTemperature(ct)
         room.setMetaLightLevel(level)
@@ -255,10 +263,13 @@ private void adjustColorTemperature(Integer delta) {
 }
 
 private void returnToHouseReference() {
+    unschedule(commitPendingIntent)
     state.pendingCustom = false
     state.pendingSceneName = "Follow House"
+    state.remove("commitReason")
     try {
         roomDevice()?.clearCustomLighting()
+        roomDevice()?.setActiveScene("Automatic")
     } catch (Exception e) {
         log.warn "${app.label}: Could not return House Intent to automatic reference: ${e.message}"
         return
@@ -299,6 +310,23 @@ private void scheduleCommit(String reason) {
     state.commitReason = reason
     debug "Scheduling House Intent commit in ${seconds} seconds: ${reason}"
     runIn(seconds, "commitPendingIntent", [overwrite: true])
+}
+
+private String activeSceneName() {
+    if (state.pendingCustom == true) {
+        return state.pendingSceneName?.toString()?.trim() ?: "Custom"
+    }
+    return "Automatic"
+}
+
+private Boolean houseIntentIsCustom() {
+    if (state.pendingCustom == true) return true
+    if (state.commitReason) return true
+    try {
+        return roomDevice()?.currentValue("customLighting") == "on"
+    } catch (Throwable ignored) {
+        return false
+    }
 }
 
 private List builtInScenes() {
