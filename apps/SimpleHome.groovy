@@ -8,6 +8,8 @@
  * Provides parent container plus one-time setup helper for reciprocal neighbors. Neighbor relationships are stored by child app ID.
  */
 
+import groovy.json.JsonOutput
+
 definition(
     name: "Simple Home",
     namespace: "lundby",
@@ -15,11 +17,21 @@ definition(
     description: "Parent app for lightweight room state child apps.",
     category: "Convenience",
     singleInstance: true,
-    iconUrl: "",
-    iconX2Url: ""
+    iconUrl: "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/assets/simple-home-dev.png",
+    iconX2Url: "https://raw.githubusercontent.com/hrerikl/hubitat-room-state-manager/main/assets/simple-home-dev.png",
+    oauth: true
 )
 
 #include lundby.SimpleHomeHelpers
+
+mappings {
+    path("/rooms/status") {
+        action: [
+            GET : "apiRoomDashboardStatus",
+            POST: "apiRoomDashboardStatus"
+        ]
+    }
+}
 
 preferences {
     page(name: "mainPage", title: "Simple Home", install: true, uninstall: true) {
@@ -109,6 +121,10 @@ preferences {
             input "reinitializeChildrenNow", "button", title: "Reinitialize child apps"
             paragraph "Use after code changes to rebuild child app subscriptions and schedules without opening each child app."
         }
+
+        section("Agent API") {
+            paragraph simpleHomeApiEndpointText()
+        }
     }
 }
 
@@ -125,6 +141,7 @@ def updated() {
 }
 
 def initialize() {
+    ensureSimpleHomeAccessToken()
     createOrUpdateSharedDevices()
     validateDefensiveAppCreation()
     if (useHouseIntentVirtualRoom) {
@@ -136,6 +153,24 @@ def initialize() {
     subscribe(maintenanceDevice(), "switch.on", maintenanceSwitchOnHandler)
     subscribe(location, "mode", houseStatusModeHandler)
     publishCurrentHouseStatus()
+}
+
+def apiRoomDashboardStatus() {
+    render contentType: "application/json", data: JsonOutput.toJson([
+        success  : true,
+        timestamp: formatTime(now()),
+        rooms    : roomDashboardStatus()
+    ])
+}
+
+private void ensureSimpleHomeAccessToken() {
+    try {
+        if (!state.accessToken) {
+            createAccessToken()
+        }
+    } catch (Throwable e) {
+        debug "Could not create Simple Home OAuth token yet: ${e.message}"
+    }
 }
 
 def getSimpleHomeAppType() {
@@ -265,6 +300,12 @@ private String simpleHomeTemporaryDebugText() {
 
     Date until = new Date(debugUntil)
     return "Temporary debug logging active until ${until.format('yyyy-MM-dd HH:mm:ss', location.timeZone)}."
+}
+
+private String simpleHomeApiEndpointText() {
+    String token = state.accessToken ?: "enable-oauth-and-save"
+    String path = "/apps/api/${app.id}/rooms/status?access_token=${token}"
+    return "Rooms Status (GET)\nPath: ${path}\nLocal: ${getFullLocalApiServerUrl()}/rooms/status?access_token=${token}\nCloud: ${getFullApiServerUrl()}/rooms/status?access_token=${token}"
 }
 
 private void createOrUpdateHouseIntentVirtualRoom() {
