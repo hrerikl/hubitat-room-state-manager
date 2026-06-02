@@ -26,6 +26,7 @@ preferences {
     page(name: "mainPage", title: "Lundby OpenClaw Bridge", install: true, uninstall: true) {
         section("Bridge") {
             paragraph "Agent-facing OAuth bridge. Keep this app narrow: diagnostics and helper surfaces, not core Simple Home behavior."
+            input "simpleHomeRoomsStatusUrl", "text", title: "Simple Home rooms status local URL", required: false
             paragraph endpointIndexText()
         }
 
@@ -47,6 +48,13 @@ mappings {
         action: [
             GET : "apiStatus",
             POST: "apiStatus"
+        ]
+    }
+
+    path("/simple-home/rooms/status") {
+        action: [
+            GET : "apiSimpleHomeRoomsStatus",
+            POST: "apiSimpleHomeRoomsStatus"
         ]
     }
 }
@@ -93,6 +101,39 @@ def apiStatus() {
     render contentType: "application/json", data: JsonOutput.toJson(result)
 }
 
+def apiSimpleHomeRoomsStatus() {
+    if (!simpleHomeRoomsStatusUrl) {
+        render contentType: "application/json", data: JsonOutput.toJson([
+            success  : false,
+            timestamp: timestamp(),
+            message  : "Simple Home rooms status URL is not configured."
+        ])
+        return
+    }
+
+    Map result = null
+    try {
+        httpGet([uri: simpleHomeRoomsStatusUrl, timeout: 15]) { response ->
+            result = response?.data instanceof Map ? response.data : [
+                success: false,
+                message: "Simple Home returned an unexpected response."
+            ]
+        }
+    } catch (Throwable e) {
+        result = [
+            success  : false,
+            timestamp: timestamp(),
+            message  : "Could not load Simple Home room status: ${e.message}"
+        ]
+    }
+
+    render contentType: "application/json", data: JsonOutput.toJson(result ?: [
+        success  : false,
+        timestamp: timestamp(),
+        message  : "Simple Home room status did not return data."
+    ])
+}
+
 private String endpointIndexText() {
     List rows = exposedEndpoints().collect { endpoint ->
         return "${endpoint.name} (${endpoint.method})\nPath: ${endpointLocalPath(endpoint.path)}\nLocal: ${endpointUrl(endpoint.path, false)}\nCloud: ${endpointUrl(endpoint.path, true)}"
@@ -127,6 +168,12 @@ private List<Map> exposedEndpoints() {
             method     : "GET",
             path       : "/status",
             description: "Return bridge availability and version."
+        ],
+        [
+            name       : "Simple Home Rooms Status",
+            method     : "GET",
+            path       : "/simple-home/rooms/status",
+            description: "Return compact Simple Home room state, reason, activity, and light status."
         ]
     ]
 }
