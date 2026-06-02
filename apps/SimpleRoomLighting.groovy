@@ -180,6 +180,7 @@ def initialize() {
     subscribe(overrideSwitches(), "switch", overrideSwitchHandler)
     subscribe(parent.recoveryDevice(), "switch.on", recoverSimpleHomeHandler)
 
+    syncRoomAnnouncementMessages(room)
     reassessLighting("initialize")
 }
 
@@ -1564,6 +1565,24 @@ private String asleepAnnouncementText() {
 
 private String awakeAnnouncementText() {
     return roomControlAnnouncementText(awakeAnnouncement, "Awake", "Room awake")
+}
+
+private void syncRoomAnnouncementMessages(def room) {
+    if (!room) return
+
+    Map messages = [
+        locked  : lockedAnnouncementText(),
+        unlocked: unlockedAnnouncementText(),
+        asleep  : asleepAnnouncementText(),
+        awake   : awakeAnnouncementText()
+    ]
+
+    try {
+        room.setAnnouncementMessagesJson(groovy.json.JsonOutput.toJson(messages))
+        debug "Synced room announcement messages"
+    } catch (Throwable e) {
+        log.warn "${app.label}: Could not sync room announcement messages: ${e.message}"
+    }
 }
 
 private String customLightingOnText() {

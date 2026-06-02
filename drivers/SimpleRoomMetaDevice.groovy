@@ -52,6 +52,7 @@ metadata {
         attribute 'sceneRequest', 'number'
         attribute 'activeScene', 'string'
         attribute 'lastLightingAction', 'string'
+        attribute 'announcementMessagesJson', 'string'
 
         command 'setRoomState', [[name: 'Room State', type: 'ENUM', constraints: ['Off', 'Occupied', 'Engaged', 'Asleep', 'Locked']]]
         command 'setLightingIntent', [[name: 'Lighting Intent', type: 'ENUM', constraints: ['Off', 'Courtesy', 'Night', 'On']]]
@@ -82,6 +83,9 @@ metadata {
         command 'cycleScene'
         command 'setActiveScene', [[name: 'Scene Name', type: 'STRING']]
         command 'setLastLightingAction', [[name: 'Action', type: 'STRING']]
+        command 'setAnnouncementMessagesJson', [[name: 'Messages JSON', type: 'STRING']]
+        command 'setAnnouncementMessage', [[name: 'Slot', type: 'STRING'], [name: 'Text', type: 'STRING']]
+        command 'clearAnnouncementMessages'
     }
 }
 
@@ -156,6 +160,9 @@ void initialize() {
     }
     if (device.currentValue('lastLightingAction') == null) {
         sendEvent(name: 'lastLightingAction', value: '')
+    }
+    if (device.currentValue('announcementMessagesJson') == null) {
+        sendAnnouncementMessages([:])
     }
     if (device.currentValue('presenceActivity') == null) {
         sendEvent(name: 'presenceActivity', value: 0)
@@ -407,6 +414,31 @@ void setLastLightingAction(String action) {
     sendEvent(name: 'lastLightingAction', value: action?.trim() ?: '', isStateChange: true)
 }
 
+void setAnnouncementMessagesJson(String json) {
+    Map existing = announcementMessages()
+    Map requested = parseAnnouncementMessages(json)
+    if (!requested) return
+
+    requested.each { slot, text ->
+        existing[slot] = text
+    }
+    sendAnnouncementMessages(existing)
+}
+
+void setAnnouncementMessage(String slot, String text) {
+    String normalizedSlot = normalizeAnnouncementSlot(slot)
+    String normalizedText = normalizeAnnouncementText(text)
+    if (!normalizedSlot || !normalizedText) return
+
+    Map messages = announcementMessages()
+    messages[normalizedSlot] = normalizedText
+    sendAnnouncementMessages(messages)
+}
+
+void clearAnnouncementMessages() {
+    sendAnnouncementMessages([:])
+}
+
 private Integer normalizeLevel(value) {
     Integer level = 0
     try {
@@ -415,6 +447,55 @@ private Integer normalizeLevel(value) {
         level = 0
     }
     return Math.max(Math.min(level, 100), 0)
+}
+
+private Map announcementMessages() {
+    return parseAnnouncementMessages(device.currentValue('announcementMessagesJson')?.toString())
+}
+
+private Map parseAnnouncementMessages(String json) {
+    if (!json?.trim()) return [:]
+
+    try {
+        def parsed = new groovy.json.JsonSlurper().parseText(json)
+        if (!(parsed instanceof Map)) return [:]
+
+        Map result = [:]
+        parsed.each { key, value ->
+            String slot = normalizeAnnouncementSlot(key)
+            String text = normalizeAnnouncementText(value)
+            if (slot && text) {
+                result[slot] = text
+            }
+        }
+        return result
+    } catch (Exception e) {
+        log.warn "${device.displayName}: Could not parse announcementMessagesJson: ${e.message}"
+        return [:]
+    }
+}
+
+private void sendAnnouncementMessages(Map messages) {
+    Map normalized = [:]
+    (messages ?: [:]).each { key, value ->
+        String slot = normalizeAnnouncementSlot(key)
+        String text = normalizeAnnouncementText(value)
+        if (slot && text) {
+            normalized[slot] = text
+        }
+    }
+    sendEvent(name: 'announcementMessagesJson', value: groovy.json.JsonOutput.toJson(normalized), isStateChange: true)
+}
+
+private String normalizeAnnouncementSlot(value) {
+    String slot = value?.toString()?.trim()?.toLowerCase()
+    return slot in ['locked', 'unlocked', 'asleep', 'awake'] ? slot : null
+}
+
+private String normalizeAnnouncementText(value) {
+    String text = value?.toString()?.trim()
+    if (!text) return null
+    return text.size() > 160 ? text.take(160) : text
 }
 
 private Integer normalizeColorTemperature(value) {
