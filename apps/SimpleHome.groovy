@@ -209,7 +209,8 @@ String roomSummaryText() {
 String houseIntentSummaryText() {
     def child = houseIntentChildApp()
     String childText = child ? "House Intent room: ${child.label ?: child.id}" : "House Intent room: not configured"
-    String referenceText = defaultCircadianReferenceBulb ? "House reference bulb: ${defaultCircadianReferenceBulb.displayName}" : "House reference bulb: not selected"
+    def reference = effectiveCircadianReferenceBulb()
+    String referenceText = reference ? "House reference bulb: ${reference.displayName}" : "House reference bulb: not selected"
     return "${referenceText}\n${childText}"
 }
 
@@ -805,7 +806,26 @@ def arrivalDevice() {
 }
 
 def circadianReferenceBulb() {
+    return effectiveCircadianReferenceBulb()
+}
+
+private def effectiveCircadianReferenceBulb() {
+    if (useHouseIntentVirtualRoom) {
+        def houseReference = houseIntentReferenceBulb()
+        if (houseReference) return houseReference
+    }
     return defaultCircadianReferenceBulb
+}
+
+private def houseIntentReferenceBulb() {
+    def child = houseIntentChildApp()
+    if (!child) return null
+
+    try {
+        return child.getManagedMetaLightDevice()
+    } catch (Throwable ignored) {
+        return null
+    }
 }
 
 def openMeteoReferenceDevice() {
