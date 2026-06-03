@@ -47,6 +47,7 @@ preferences {
         section("Voice") {
             input "speechDevices", "capability.speechSynthesis", title: "Speech devices for Room state announcements", multiple: true, required: false
             input "announceRoomControls", "bool", title: "Announce Lock, Unlock, Sleep, and Wake", defaultValue: false, required: true
+            input "useEchoSpeaksSleepRoutines", "bool", title: "Use Echo Speaks GoodNight/GoodMorning commands when available", defaultValue: true, required: true
         }
 
         section("Advanced") {
@@ -95,15 +96,6 @@ preferences {
                 input "fadeOffWhenLocked", "bool", title: "Fade automated devices off when room locks", defaultValue: false, required: true
                 if (fadeOffWhenLocked) {
                     input "lockedFadeOffTransitionSeconds", "number", title: "Locked fade off seconds", defaultValue: 30, required: true
-                }
-            }
-
-            if (announceRoomControls) {
-                section("Announcement messages") {
-                    input "lockedAnnouncement", "text", title: "Locked message", defaultValue: defaultRoomControlAnnouncement("Locked"), required: true
-                    input "unlockedAnnouncement", "text", title: "Unlocked message", defaultValue: defaultRoomControlAnnouncement("Unlocked"), required: true
-                    input "asleepAnnouncement", "text", title: "Sleep message", defaultValue: defaultRoomControlAnnouncement("Asleep"), required: true
-                    input "awakeAnnouncement", "text", title: "Wake message", defaultValue: defaultRoomControlAnnouncement("Awake"), required: true
                 }
             }
 
@@ -260,7 +252,7 @@ def roomControlAnnouncementHandler(evt) {
     if (evt.name == "lockedEnabled") {
         message = evt.value == "on" ? lockedAnnouncementText() : unlockedAnnouncementText()
     } else if (evt.name == "asleepEnabled") {
-        if (announceEchoSpeaksSleepRoutine(evt.value == "on")) return
+        if (useEchoSpeaksSleepRoutinesEnabled() && announceEchoSpeaksSleepRoutine(evt.value == "on")) return
         message = evt.value == "on" ? asleepAnnouncementText() : awakeAnnouncementText()
     } else if (evt.name == "customLighting") {
         message = evt.value == "on" ? customLightingOnText() : customLightingOffText()
@@ -1556,20 +1548,24 @@ private Boolean announceRoomControlsEnabled() {
     return announceRoomControls == true && asList(speechDevices)
 }
 
+private Boolean useEchoSpeaksSleepRoutinesEnabled() {
+    return useEchoSpeaksSleepRoutines != false
+}
+
 private String lockedAnnouncementText() {
-    return roomAnnouncementText("locked", lockedAnnouncement, "Locked", "Room locked")
+    return roomAnnouncementText("locked", "Locked")
 }
 
 private String unlockedAnnouncementText() {
-    return roomAnnouncementText("unlocked", unlockedAnnouncement, "Unlocked", "Room unlocked")
+    return roomAnnouncementText("unlocked", "Unlocked")
 }
 
 private String asleepAnnouncementText() {
-    return roomAnnouncementText("asleep", asleepAnnouncement, "Asleep", "Room asleep")
+    return roomAnnouncementText("asleep", "Asleep")
 }
 
 private String awakeAnnouncementText() {
-    return roomAnnouncementText("awake", awakeAnnouncement, "Awake", "Room awake")
+    return roomAnnouncementText("awake", "Awake")
 }
 
 private void syncRoomAnnouncementMessages(def room) {
@@ -1577,10 +1573,10 @@ private void syncRoomAnnouncementMessages(def room) {
 
     Map existing = roomAnnouncementMessages(room)
     Map defaults = [
-        locked  : roomControlAnnouncementText(lockedAnnouncement, "Locked", "Room locked"),
-        unlocked: roomControlAnnouncementText(unlockedAnnouncement, "Unlocked", "Room unlocked"),
-        asleep  : roomControlAnnouncementText(asleepAnnouncement, "Asleep", "Room asleep"),
-        awake   : roomControlAnnouncementText(awakeAnnouncement, "Awake", "Room awake")
+        locked  : defaultRoomControlAnnouncement("Locked"),
+        unlocked: defaultRoomControlAnnouncement("Unlocked"),
+        asleep  : defaultRoomControlAnnouncement("Asleep"),
+        awake   : defaultRoomControlAnnouncement("Awake")
     ]
     Map missing = [:]
     defaults.each { slot, text ->
@@ -1602,10 +1598,10 @@ private void syncRoomAnnouncementMessages(def room) {
     }
 }
 
-private String roomAnnouncementText(String slot, value, String stateName, String oldDefault) {
+private String roomAnnouncementText(String slot, String stateName) {
     String text = roomAnnouncementMessages()[slot]?.toString()?.trim()
     if (text) return text
-    return roomControlAnnouncementText(value, stateName, oldDefault)
+    return defaultRoomControlAnnouncement(stateName)
 }
 
 private Map roomAnnouncementMessages(def room = null) {
@@ -1658,12 +1654,6 @@ private String parentCustomLightingOffText() {
     } catch (Throwable ignored) {
         return '<audio src="soundbank://soundlibrary/alarms/beeps_and_bloops/boing_01"/>'
     }
-}
-
-private String roomControlAnnouncementText(value, String stateName, String oldDefault) {
-    String text = value?.toString()?.trim()
-    if (!text || text == oldDefault) return defaultRoomControlAnnouncement(stateName)
-    return text
 }
 
 private String defaultRoomControlAnnouncement(String stateName) {
