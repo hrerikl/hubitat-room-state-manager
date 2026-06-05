@@ -1082,6 +1082,7 @@ private void turnOffDevice(def dev, String reason, Integer transitionSecondsForC
 private Integer transitionSecondsFor(String reason, String actionType) {
     if (reason == "Room locked") return safeTransitionSeconds(lockedFadeOffTransitionSeconds, 30)
     if (actionType == "deactivation") return safeTransitionSeconds(deactivationTransitionSeconds, 30)
+    if (reason in ["metaLightLevel changed", "metaLightColorTemperature changed"] && instantSceneTransitionActive()) return 0
     if (reason in ["metaLightLevel changed", "metaLightColorTemperature changed", "Location Mode changed", "override switch changed"]) {
         return safeTransitionSeconds(referenceTransitionSeconds, 10)
     }
@@ -1206,7 +1207,7 @@ private void cycleSceneSwitch() {
         log.warn "${app.label}: Could not activate scene ${scene?.displayName}: ${e.message}"
     }
 
-    publishActiveScene(sceneName)
+    publishActiveScene(scene.displayName?.toString())
     if (asleep) {
         Integer minutes = sceneNightExtensionMinutesForRoom()
         debug "Extending Night lighting for ${minutes} minutes from button 3 asleep scene"
@@ -1228,6 +1229,7 @@ private void cycleShadowScene(Boolean asleep) {
     Map shadowScene = shadowScenes[nextIndex]
     debug "Activating ${asleep ? 'asleep shadow scene' : 'shadow scene'} ${nextIndex + 1}/${shadowScenes.size()}: ${shadowScene.name}, level=${shadowScene.level}, ct=${shadowScene.ct}"
     setCustomLighting(true)
+    markInstantSceneTransition()
     applyShadowScene(shadowScene)
     publishActiveScene(shadowScene.name as String)
 
@@ -1249,6 +1251,14 @@ private void applyShadowScene(Map shadowScene) {
     } catch (Exception e) {
         log.warn "${app.label}: Could not apply shadow scene ${shadowScene?.name}: ${e.message}"
     }
+}
+
+private void markInstantSceneTransition() {
+    state.instantSceneTransitionUntil = now() + 5000
+}
+
+private Boolean instantSceneTransitionActive() {
+    return safeLong(state.instantSceneTransitionUntil, 0L) >= now()
 }
 
 private List standardShadowScenes() {

@@ -246,8 +246,8 @@ private void cycleScene() {
 
     String sceneName = scene.name as String
     applyPreview(sceneName)
-    commitPendingIntentNow("scene ${sceneName}")
     announceScene(sceneName)
+    scheduleCommit("scene ${sceneName}")
 }
 
 private void adjustLevel(Integer delta) {
@@ -324,12 +324,6 @@ private void scheduleCommit(String reason) {
     state.commitReason = reason
     debug "Scheduling House Intent commit in ${seconds} seconds: ${reason}"
     runIn(seconds, "commitPendingIntent", [overwrite: true])
-}
-
-private void commitPendingIntentNow(String reason) {
-    unschedule(commitPendingIntent)
-    state.commitReason = reason
-    commitPendingIntent()
 }
 
 private void startPreviewLevelChange(String direction) {
