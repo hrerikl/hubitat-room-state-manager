@@ -85,6 +85,7 @@ def initialize() {
 
     subscribe(picoRemotes, "pushed", "picoPushedHandler")
     subscribe(picoRemotes, "held", "picoHeldHandler")
+    subscribe(picoRemotes, "released", "picoReleasedHandler")
     subscribe(location, "mode", locationModeHandler)
     def recovery = recoveryDevice()
     if (recovery) {
@@ -179,8 +180,21 @@ def picoHeldHandler(evt) {
     Integer button = eventIntegerValue(evt)
     debug "Pico held ${button}: ${evt?.displayName}"
 
-    if (button == 3) {
+    if (button == 2) {
+        startPreviewLevelChange("up")
+    } else if (button == 3) {
         returnToHouseReference()
+    } else if (button == 4) {
+        startPreviewLevelChange("down")
+    }
+}
+
+def picoReleasedHandler(evt) {
+    Integer button = eventIntegerValue(evt)
+    debug "Pico released ${button}: ${evt?.displayName}"
+
+    if (button in [2, 4]) {
+        stopPreviewLevelChange()
     }
 }
 
@@ -232,8 +246,8 @@ private void cycleScene() {
 
     String sceneName = scene.name as String
     applyPreview(sceneName)
+    commitPendingIntentNow("scene ${sceneName}")
     announceScene(sceneName)
-    scheduleCommit("scene ${sceneName}")
 }
 
 private void adjustLevel(Integer delta) {
@@ -310,6 +324,52 @@ private void scheduleCommit(String reason) {
     state.commitReason = reason
     debug "Scheduling House Intent commit in ${seconds} seconds: ${reason}"
     runIn(seconds, "commitPendingIntent", [overwrite: true])
+}
+
+private void commitPendingIntentNow(String reason) {
+    unschedule(commitPendingIntent)
+    state.commitReason = reason
+    commitPendingIntent()
+}
+
+private void startPreviewLevelChange(String direction) {
+    def dev = previewDevice
+    if (!dev) return
+
+    state.pendingCustom = true
+    state.pendingSceneName = "Custom"
+    try {
+        suppressPreviewFeedback()
+        dev.startLevelChange(direction)
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not start ${direction} preview level change on ${dev.displayName}: ${e.message}"
+    }
+}
+
+private void stopPreviewLevelChange() {
+    def dev = previewDevice
+    if (!dev) return
+
+    try {
+        suppressPreviewFeedback()
+        dev.stopLevelChange()
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not stop preview level change on ${dev.displayName}: ${e.message}"
+    }
+
+    state.commitReason = "level change released"
+    runIn(1, "commitPreviewLevelChange", [overwrite: true])
+}
+
+def commitPreviewLevelChange() {
+    def dev = previewDevice
+    if (!dev) return
+
+    state.pendingLevel = normalizedLevel(dev.currentValue("level") ?: state.pendingLevel ?: currentRoomLevel())
+    state.pendingCt = normalizedColorTemperature(dev.currentValue("colorTemperature") ?: state.pendingCt ?: currentRoomCt())
+    state.pendingCustom = true
+    state.pendingSceneName = "Custom"
+    commitPendingIntent()
 }
 
 private String activeSceneName() {

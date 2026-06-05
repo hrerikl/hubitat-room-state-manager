@@ -717,7 +717,7 @@ private Boolean advancedOffActionsEnabled() {
 }
 
 private Boolean fadeOffWhenLockedEnabled() {
-    return fadeOffWhenLocked == true
+    return settingBool("fadeOffWhenLocked", false)
 }
 
 private Boolean roomLightingInactive() {
@@ -1545,11 +1545,11 @@ private Boolean bedroomRoomProfile() {
 }
 
 private Boolean announceRoomControlsEnabled() {
-    return announceRoomControls == true && asList(speechDevices)
+    return settingBool("announceRoomControls", false) && asList(speechDevices)
 }
 
 private Boolean useEchoSpeaksSleepRoutinesEnabled() {
-    return useEchoSpeaksSleepRoutines != false
+    return settingBool("useEchoSpeaksSleepRoutines", true)
 }
 
 private String lockedAnnouncementText() {
