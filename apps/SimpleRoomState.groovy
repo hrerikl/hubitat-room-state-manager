@@ -972,6 +972,12 @@ def circadianReferenceHandler(evt) {
 
 def motionActiveHandler(evt) {
     debug "Motion active: ${evt.displayName}"
+
+    if (!eventDeviceStillMatches(evt, "motion", "active")) {
+        debug "Ignoring stale motion active event because sensor is no longer active: ${evt.displayName}"
+        return
+    }
+
     recordPresenceActivity("motion active: ${evt.displayName}")
 }
 
@@ -1021,8 +1027,23 @@ private String eventReason(String reason, evt) {
     return source ? "${activityReason(reason, 'activity')}: ${source}" : activityReason(reason, "activity")
 }
 
+private Boolean eventDeviceStillMatches(evt, String attributeName, String expectedValue) {
+    try {
+        String currentValue = evt?.device?.currentValue(attributeName)?.toString()
+        if (currentValue == null) return true
+        return currentValue == expectedValue
+    } catch (Throwable ignored) {
+        return true
+    }
+}
+
 def motionInactiveHandler(evt) {
     debug "Motion inactive: ${evt.displayName}"
+
+    if (!eventDeviceStillMatches(evt, "motion", "inactive")) {
+        debug "Ignoring stale motion inactive event because sensor is no longer inactive: ${evt.displayName}"
+        return
+    }
 
     if (state.locked) {
         debug "Ignoring motion inactive timeout processing because room is locked"
@@ -1039,6 +1060,11 @@ def motionInactiveHandler(evt) {
 
 def nightMotionActiveHandler(evt) {
     debug "Night motion active: ${evt.displayName}"
+
+    if (!eventDeviceStillMatches(evt, "motion", "active")) {
+        debug "Ignoring stale night motion active event because sensor is no longer active: ${evt.displayName}"
+        return
+    }
 
     if (state.locked) {
         recordLatentActivity("night motion active while locked")
@@ -1062,6 +1088,11 @@ def nightMotionActiveHandler(evt) {
 def doorOpenHandler(evt) {
     debug "Door open: ${evt.displayName}"
 
+    if (!eventDeviceStillMatches(evt, "contact", "open")) {
+        debug "Ignoring stale door open event because contact is no longer open: ${evt.displayName}"
+        return
+    }
+
     if (state.locked) {
         recordLatentActivity("door opened while locked: ${evt.displayName}")
         return
@@ -1078,6 +1109,11 @@ def doorOpenHandler(evt) {
 
 def doorClosedHandler(evt) {
     debug "Door closed: ${evt.displayName}"
+
+    if (!eventDeviceStillMatches(evt, "contact", "closed")) {
+        debug "Ignoring stale door closed event because contact is no longer closed: ${evt.displayName}"
+        return
+    }
 
     if (state.locked) {
         recordLatentActivity("door closed while locked: ${evt.displayName}")
