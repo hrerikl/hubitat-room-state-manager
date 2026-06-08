@@ -1148,7 +1148,7 @@ def neighborRoomHandler(evt) {
 
     String neighborState = evt.value?.toString()
     if (neighborState in ["Occupied", "Engaged"]) {
-        if (courtesyEligibleNow()) {
+        if (courtesyEligibleFromNeighborEvent()) {
             setCourtesyFromNeighborEvent(evt)
             recomputeAndPublish()
         } else {
@@ -1841,6 +1841,13 @@ private String courtesyReason(Map activeNeighbor) {
 
 private Boolean courtesyEligibleNow() {
     return !houseIntentProfile() && courtesyEnabled() && !state.locked && !state.asleep && !state.engaged && !state.occupied
+}
+
+private Boolean courtesyEligibleFromNeighborEvent() {
+    if (!courtesyEligibleNow()) return false
+
+    String publishedRoomState = roomDevice()?.currentValue("roomState")?.toString()
+    return !(publishedRoomState in ["Occupied", "Engaged", "Locked", "Asleep"])
 }
 
 private String stripRoomPrefix(String value) {
