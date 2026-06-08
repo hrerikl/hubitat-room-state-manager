@@ -101,6 +101,7 @@ preferences {
 
             section("Debug") {
                 input "debugLogging", "bool", title: "Enable debug logging", defaultValue: true, required: true
+                input "traceLightingCommands", "bool", title: "Trace lighting command decisions", defaultValue: false, required: true
                 paragraph "Simple Home can suppress or force debug logging from the parent app."
             }
         }
@@ -1019,12 +1020,16 @@ private List overrideSwitches() {
 // -------------------- Device Commands --------------------
 
 private void setDimmer(def dimmer, Integer level, Integer transitionSecondsForCommand, Boolean forceCommand = true) {
+    String currentSwitch = dimmer.currentValue("switch")?.toString()
+    Integer currentLevel = normalizedLevel(dimmer.currentValue("level"), -1)
     if (!forceCommand && dimmer.currentValue("switch") == "on" && normalizedLevel(dimmer.currentValue("level"), -1) == level) {
         debug "Skipping ${dimmer.displayName}; already on at level ${level}"
+        trace "Skip setLevel ${dimmer.displayName}: current=${currentSwitch}/${currentLevel}, target=on/${level}, transition=${transitionSecondsForCommand}, force=${forceCommand}"
         return
     }
 
     try {
+        trace "Command setLevel ${dimmer.displayName}: current=${currentSwitch}/${currentLevel}, target=${level}, transition=${transitionSecondsForCommand}, force=${forceCommand}"
         if ((transitionSecondsForCommand ?: 0) > 0) {
             dimmer.setLevel(level, transitionSecondsForCommand)
         } else {
@@ -1038,12 +1043,15 @@ private void setDimmer(def dimmer, Integer level, Integer transitionSecondsForCo
 private void setColorTemperature(def dev, Integer colorTemperature, Boolean forceCommand = true) {
     if (!isColorTemperatureDevice(dev)) return
 
+    Integer currentCt = normalizedColorTemperature(dev.currentValue("colorTemperature"), -1)
     if (!forceCommand && normalizedColorTemperature(dev.currentValue("colorTemperature"), -1) == colorTemperature) {
         debug "Skipping ${dev.displayName}; already at CT ${colorTemperature}"
+        trace "Skip setColorTemperature ${dev.displayName}: current=${currentCt}, target=${colorTemperature}, force=${forceCommand}"
         return
     }
 
     try {
+        trace "Command setColorTemperature ${dev.displayName}: current=${currentCt}, target=${colorTemperature}, force=${forceCommand}"
         dev.setColorTemperature(colorTemperature)
     } catch (Exception e) {
         log.warn "${app.label}: Could not set ${dev.displayName} color temperature to ${colorTemperature}: ${e.message}"
@@ -1051,12 +1059,15 @@ private void setColorTemperature(def dev, Integer colorTemperature, Boolean forc
 }
 
 private void turnOnDevice(def dev, Boolean forceCommand = true) {
+    String currentSwitch = dev.currentValue("switch")?.toString()
     if (!forceCommand && dev.currentValue("switch") == "on") {
         debug "Skipping ${dev.displayName}; already on"
+        trace "Skip on ${dev.displayName}: current=${currentSwitch}, force=${forceCommand}"
         return
     }
 
     try {
+        trace "Command on ${dev.displayName}: current=${currentSwitch}, force=${forceCommand}"
         dev.on()
     } catch (Exception e) {
         log.warn "${app.label}: Could not turn on ${dev.displayName}: ${e.message}"
@@ -1064,8 +1075,11 @@ private void turnOnDevice(def dev, Boolean forceCommand = true) {
 }
 
 private void turnOffDevice(def dev, String reason, Integer transitionSecondsForCommand = 0) {
+    String currentSwitch = dev.currentValue("switch")?.toString()
+    Integer currentLevel = isDimmer(dev) ? normalizedLevel(dev.currentValue("level"), -1) : null
     if (isDimmer(dev)) {
         try {
+            trace "Command off-level ${dev.displayName}: current=${currentSwitch}/${currentLevel}, target=0, transition=${transitionSecondsForCommand}, reason=${reason}"
             if ((transitionSecondsForCommand ?: 0) > 0) {
                 dev.setLevel(0, transitionSecondsForCommand)
             } else {
@@ -1078,6 +1092,7 @@ private void turnOffDevice(def dev, String reason, Integer transitionSecondsForC
     }
 
     try {
+        trace "Command off ${dev.displayName}: current=${currentSwitch}, reason=${reason}"
         dev.off()
     } catch (Exception e) {
         log.warn "${app.label}: Could not turn off ${dev.displayName} (${reason}): ${e.message}"
@@ -1758,5 +1773,11 @@ private void publishLastLightingAction(String action) {
 private void debug(String msg) {
     if (debugEnabled(debugLogging)) {
         log.debug "${app.label}: ${msg}"
+    }
+}
+
+private void trace(String msg) {
+    if (traceLightingCommands == true && debugEnabled(debugLogging)) {
+        log.debug "${app.label}: TRACE ${msg}"
     }
 }
