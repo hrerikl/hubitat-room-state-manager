@@ -360,7 +360,9 @@ private Map matchManifest(Map manifest) {
     Map matches = [apps: [:], drivers: [:], files: [:]]
     List missing = []
 
-    asList(manifest.apps).each { item ->
+    List manifestApps = asList(manifest.apps)
+    for (Integer i = 0; i < manifestApps.size(); i++) {
+        Map item = manifestApps[i] as Map
         String key = componentKey(item)
         String id = appCode[key]
         if (id) {
@@ -370,7 +372,9 @@ private Map matchManifest(Map manifest) {
         }
     }
 
-    asList(manifest.drivers).each { item ->
+    List manifestDrivers = asList(manifest.drivers)
+    for (Integer i = 0; i < manifestDrivers.size(); i++) {
+        Map item = manifestDrivers[i] as Map
         String key = componentKey(item)
         String id = driverCode[key]
         if (id) {
@@ -380,7 +384,9 @@ private Map matchManifest(Map manifest) {
         }
     }
 
-    asList(manifest.files).each { item ->
+    List manifestFiles = asList(manifest.files)
+    for (Integer i = 0; i < manifestFiles.size(); i++) {
+        Map item = manifestFiles[i] as Map
         String key = componentKey(item)
         String id = libraryCode[key] ?: libraryCode[nameKey(item)]
         if (id) {
@@ -402,13 +408,21 @@ private Map updateFromManifest(Map manifest, Map matches) {
     List updated = []
     List failed = []
 
-    asList(manifest.files).each { item ->
+    List manifestFiles = asList(manifest.files)
+    for (Integer i = 0; i < manifestFiles.size(); i++) {
+        Map item = manifestFiles[i] as Map
         updateManifestItem("library", item, matches.files, updated, failed)
     }
-    asList(manifest.drivers).each { item ->
+
+    List manifestDrivers = asList(manifest.drivers)
+    for (Integer i = 0; i < manifestDrivers.size(); i++) {
+        Map item = manifestDrivers[i] as Map
         updateManifestItem("driver", item, matches.drivers, updated, failed)
     }
-    asList(manifest.apps).each { item ->
+
+    List manifestApps = asList(manifest.apps)
+    for (Integer i = 0; i < manifestApps.size(); i++) {
+        Map item = manifestApps[i] as Map
         updateManifestItem("app", item, matches.apps, updated, failed)
     }
 
@@ -437,17 +451,25 @@ private Map reinitializeSimpleHomeParent() {
 private List installMissingComponents(Map manifest, Map matches) {
     List installed = []
 
-    asList(manifest.files).each { item ->
+    List manifestFiles = asList(manifest.files)
+    for (Integer i = 0; i < manifestFiles.size(); i++) {
+        Map item = manifestFiles[i] as Map
         if (!matches.files[item.id?.toString()]) {
             if (installComponent("library", item)) installed << "library ${item.name}"
         }
     }
-    asList(manifest.drivers).each { item ->
+
+    List manifestDrivers = asList(manifest.drivers)
+    for (Integer i = 0; i < manifestDrivers.size(); i++) {
+        Map item = manifestDrivers[i] as Map
         if (!matches.drivers[item.id?.toString()]) {
             if (installComponent("driver", item)) installed << "driver ${item.name}"
         }
     }
-    asList(manifest.apps).each { item ->
+
+    List manifestApps = asList(manifest.apps)
+    for (Integer i = 0; i < manifestApps.size(); i++) {
+        Map item = manifestApps[i] as Map
         if (!matches.apps[item.id?.toString()]) {
             if (installComponent("app", item)) installed << "app ${item.name}"
         }
