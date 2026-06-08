@@ -313,8 +313,7 @@ private Map packageManifestAvailable(String url, Integer attempt) {
 
 private Boolean updateAppCode(String codeId, String source) {
     try {
-        Boolean result = false
-        httpPost([
+        def resp = httpPost([
             uri                 : baseUrl(),
             path                : "/app/ajax/update",
             requestContentType  : "application/x-www-form-urlencoded",
@@ -322,10 +321,8 @@ private Boolean updateAppCode(String codeId, String source) {
             body                : [id: codeId, version: appCodeVersion(codeId), source: source],
             timeout             : 420,
             ignoreSSLIssues     : true
-        ]) { resp ->
-            result = resp?.data?.status == "success"
-        }
-        return result
+        ])
+        return resp?.data?.status == "success"
     } catch (Exception e) {
         log.warn "${app.label}: App code update failed: ${e.message}"
         return false
@@ -546,9 +543,22 @@ private Map currentMatches() {
 }
 
 private Boolean matchesValidForManifest(Map matches, Map manifest) {
-    return asList(manifest.apps).every { matches.apps[it.id?.toString()] } &&
-        asList(manifest.drivers).every { matches.drivers[it.id?.toString()] } &&
-        asList(manifest.files).every { matches.files[it.id?.toString()] }
+    List manifestApps = asList(manifest.apps)
+    for (Integer i = 0; i < manifestApps.size(); i++) {
+        if (!matches.apps[(manifestApps[i] as Map).id?.toString()]) return false
+    }
+
+    List manifestDrivers = asList(manifest.drivers)
+    for (Integer i = 0; i < manifestDrivers.size(); i++) {
+        if (!matches.drivers[(manifestDrivers[i] as Map).id?.toString()]) return false
+    }
+
+    List manifestFiles = asList(manifest.files)
+    for (Integer i = 0; i < manifestFiles.size(); i++) {
+        if (!matches.files[(manifestFiles[i] as Map).id?.toString()]) return false
+    }
+
+    return true
 }
 
 private Integer matchedComponentCount(Map matches = null) {
@@ -559,7 +569,8 @@ private Integer matchedComponentCount(Map matches = null) {
 private Map installedCodeByKey(String kind) {
     List entries = installedCodeList(kind)
     Map results = [:]
-    entries.each { item ->
+    for (Integer i = 0; i < entries.size(); i++) {
+        def item = entries[i]
         String key = componentKey(item)
         String nameOnlyKey = nameKey(item)
         String id = item.id?.toString()
@@ -615,7 +626,9 @@ private List hub2CodeList(String path, String description) {
             timeout         : 300,
             ignoreSSLIssues : true
         ]) { resp ->
-            asList(resp?.data).each { item ->
+            List items = asList(resp?.data)
+            for (Integer i = 0; i < items.size(); i++) {
+                def item = items[i]
                 result << [
                     id       : firstText(item?.id, item?.typeId, item?.libraryTypeId, item?.appTypeId, item?.deviceTypeId),
                     title    : firstText(item?.name, item?.title),
@@ -642,8 +655,7 @@ private String firstText(Object... values) {
 
 private Boolean updateDriverCode(String codeId, String source) {
     try {
-        Boolean result = false
-        httpPost([
+        def resp = httpPost([
             uri                 : baseUrl(),
             path                : "/driver/ajax/update",
             requestContentType  : "application/x-www-form-urlencoded",
@@ -651,10 +663,8 @@ private Boolean updateDriverCode(String codeId, String source) {
             body                : [id: codeId, version: driverCodeVersion(codeId), source: source],
             timeout             : 420,
             ignoreSSLIssues     : true
-        ]) { resp ->
-            result = resp?.data?.status == "success"
-        }
-        return result
+        ])
+        return resp?.data?.status == "success"
     } catch (Exception e) {
         log.warn "${app.label}: Driver code update failed: ${e.message}"
         return false
@@ -667,8 +677,7 @@ private String driverCodeVersion(String codeId) {
 
 private Boolean updateLibraryCode(String codeId, String source) {
     try {
-        Boolean result = false
-        httpPost([
+        def resp = httpPost([
             uri                 : baseUrl(),
             path                : "/library/ajax/update",
             requestContentType  : "application/x-www-form-urlencoded",
@@ -676,10 +685,8 @@ private Boolean updateLibraryCode(String codeId, String source) {
             body                : [id: codeId, version: libraryCodeVersion(codeId), source: source],
             timeout             : 420,
             ignoreSSLIssues     : true
-        ]) { resp ->
-            result = resp?.data?.status == "success"
-        }
-        return result
+        ])
+        return resp?.data?.status == "success"
     } catch (Exception e) {
         log.warn "${app.label}: Library code update failed: ${e.message}"
         return false
