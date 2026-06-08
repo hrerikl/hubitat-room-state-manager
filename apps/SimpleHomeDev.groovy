@@ -313,7 +313,8 @@ private Map packageManifestAvailable(String url, Integer attempt) {
 
 private Boolean updateAppCode(String codeId, String source) {
     try {
-        def resp = httpPost([
+        Boolean result = false
+        httpPost([
             uri                 : baseUrl(),
             path                : "/app/ajax/update",
             requestContentType  : "application/x-www-form-urlencoded",
@@ -321,8 +322,10 @@ private Boolean updateAppCode(String codeId, String source) {
             body                : [id: codeId, version: appCodeVersion(codeId), source: source],
             timeout             : 420,
             ignoreSSLIssues     : true
-        ])
-        return resp?.data?.status == "success"
+        ]) { resp ->
+            result = resp?.data?.status == "success"
+        }
+        return result
     } catch (Exception e) {
         log.warn "${app.label}: App code update failed: ${e.message}"
         return false
@@ -655,7 +658,8 @@ private String firstText(Object... values) {
 
 private Boolean updateDriverCode(String codeId, String source) {
     try {
-        def resp = httpPost([
+        Boolean result = false
+        httpPost([
             uri                 : baseUrl(),
             path                : "/driver/ajax/update",
             requestContentType  : "application/x-www-form-urlencoded",
@@ -663,8 +667,10 @@ private Boolean updateDriverCode(String codeId, String source) {
             body                : [id: codeId, version: driverCodeVersion(codeId), source: source],
             timeout             : 420,
             ignoreSSLIssues     : true
-        ])
-        return resp?.data?.status == "success"
+        ]) { resp ->
+            result = resp?.data?.status == "success"
+        }
+        return result
     } catch (Exception e) {
         log.warn "${app.label}: Driver code update failed: ${e.message}"
         return false
@@ -677,7 +683,8 @@ private String driverCodeVersion(String codeId) {
 
 private Boolean updateLibraryCode(String codeId, String source) {
     try {
-        def resp = httpPost([
+        Boolean result = false
+        httpPost([
             uri                 : baseUrl(),
             path                : "/library/ajax/update",
             requestContentType  : "application/x-www-form-urlencoded",
@@ -685,8 +692,10 @@ private Boolean updateLibraryCode(String codeId, String source) {
             body                : [id: codeId, version: libraryCodeVersion(codeId), source: source],
             timeout             : 420,
             ignoreSSLIssues     : true
-        ])
-        return resp?.data?.status == "success"
+        ]) { resp ->
+            result = resp?.data?.status == "success"
+        }
+        return result
     } catch (Exception e) {
         log.warn "${app.label}: Library code update failed: ${e.message}"
         return false
