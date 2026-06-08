@@ -183,19 +183,29 @@ def initialize() {
 
 def reassessHandler(evt) {
     debug "Room lighting event ${evt.name}=${evt.value}"
-    Map snap = roomSnapshot(true)
+    queueRoomReassess(evt.name?.toString(), evt.value?.toString())
+}
 
-    if (evt.name == "metaLightSwitch" && evt.value == "off" && offCondition == "metaLightOff") {
+def processRoomReassess() {
+    String reason = state.pendingRoomReassessReason ?: "room device changed"
+    Boolean metaLightOff = state.pendingRoomReassessMetaLightOff == true
+    state.pendingRoomReassessReason = null
+    state.pendingRoomReassessMetaLightOff = false
+
+    Map snap = roomSnapshot()
+    if (snap.valid != true) return
+
+    if (metaLightOff && snap.sw == "off" && offCondition == "metaLightOff") {
         applyOffCondition("MetaLight off", snap)
         return
     }
 
     if (roomLightingInactive(snap)) {
-        applyOffCondition("${evt.name} changed while inactive", snap)
+        applyOffCondition("${reason} while inactive", snap)
         return
     }
 
-    reassessLighting("${evt.name} changed", snap)
+    reassessLighting(reason, snap)
 }
 
 def roomSwitchOffHandler(evt) {
@@ -231,6 +241,22 @@ def overrideSwitchHandler(evt) {
         return
     }
     reassessLighting("override switch changed", snap)
+}
+
+private void queueRoomReassess(String eventName, String eventValue) {
+    String reason = "${eventName ?: 'room device'} changed"
+    state.pendingRoomReassessReason = appendRoomReassessReason(state.pendingRoomReassessReason, reason)
+    if (eventName == "metaLightSwitch" && eventValue == "off") {
+        state.pendingRoomReassessMetaLightOff = true
+    }
+    runInMillis(175, "processRoomReassess", [overwrite: true])
+}
+
+private String appendRoomReassessReason(def existing, String reason) {
+    String existingText = existing?.toString()
+    if (!existingText) return reason
+    if (existingText.split(", ").contains(reason)) return existingText
+    return "${existingText}, ${reason}"
 }
 
 def sceneRequestHandler(evt) {
@@ -441,7 +467,7 @@ private void reassessLighting(String reason, Map snap = null) {
     String context = activeContextKey()
     String intentBucket = activeIntentBucket(intent)
     List devices = allAutomatedDevices()
-    Map stats = [commands: 0, skips: 0, devices: devices.size()]
+    Map stats = lightingStats(devices)
 
     debug "Reassessing context=${context} intent=${intentBucket} roomIntent=${intent} meta=${switchState}/${metaLevel}/${metaCt}: ${reason}"
 
@@ -550,7 +576,7 @@ private void applyOffCondition(String reason, Map snap = null) {
     String context = activeContextKey()
     String intentBucket = activeIntentBucket(state.lastActiveMatrixIntent ?: snap.intent)
     List devices = allAutomatedDevices()
-    Map stats = [commands: 0, skips: 0, devices: devices.size()]
+    Map stats = lightingStats(devices)
     debug "Applying off condition context=${context} intent=${intentBucket}: ${reason}"
     applyOffRows(context, intentBucket, reason, devices, stats)
     publishLastLightingAction("Off")
@@ -563,7 +589,7 @@ private void applyLockedFadeOff() {
     String context = activeContextKey()
     String intentBucket = activeIntentBucket(state.lastActiveMatrixIntent ?: snap.intent)
     List devices = allAutomatedDevices()
-    Map stats = [commands: 0, skips: 0, devices: devices.size()]
+    Map stats = lightingStats(devices)
     debug "Applying locked fade off context=${context} intent=${intentBucket}"
     applyOffRows(context, intentBucket, "Room locked", devices, stats)
     publishLastLightingAction("Locked fade off")
@@ -575,7 +601,7 @@ private void applyInactiveOnRowOffCondition(String reason, Map snap = null) {
     String context = activeContextKey()
     String intentBucket = matrixUsesIntent() ? "On" : "Any"
     List devices = allAutomatedDevices()
-    Map stats = [commands: 0, skips: 0, devices: devices.size()]
+    Map stats = lightingStats(devices)
     debug "Applying inactive On-row off condition context=${context} intent=${intentBucket}: ${reason}"
     applyOffRows(context, intentBucket, reason, devices, stats)
     logLightingTiming("applyInactiveOnRowOffCondition", startedAt, reason, stats)
@@ -583,29 +609,32 @@ private void applyInactiveOnRowOffCondition(String reason, Map snap = null) {
 
 private void applyOffRows(String context, String intentBucket, String reason, List devices = null, Map stats = null) {
     Boolean useOverride = overrideActive(context, intentBucket)
+    Boolean useAdvancedOffActions = advancedOffActionsEnabled()
+    Integer deactivationTransition = transitionSecondsFor(reason, "deactivation")
+    Integer activationTransition = transitionSecondsFor(reason, "activation")
     (devices ?: allAutomatedDevices()).each { dev ->
         if (rowOff(context, intentBucket, dev, useOverride)) {
-            applyOffRow(context, intentBucket, dev, useOverride, reason, stats)
+            applyOffRow(context, intentBucket, dev, useOverride, reason, useAdvancedOffActions, deactivationTransition, activationTransition, stats)
         }
     }
 }
 
-private void applyOffRow(String context, String intentBucket, def dev, Boolean useOverride, String reason, Map stats = null) {
-    String action = advancedOffActionsEnabled() ? rowOffAction(context, intentBucket, dev, useOverride) : "off"
+private void applyOffRow(String context, String intentBucket, def dev, Boolean useOverride, String reason, Boolean useAdvancedOffActions, Integer deactivationTransition, Integer activationTransition, Map stats = null) {
+    String action = useAdvancedOffActions ? rowOffAction(context, intentBucket, dev, useOverride) : "off"
     if (action == "on") {
         if (isDimmer(dev)) {
             Integer level = physicalLevelForRow(context, intentBucket, dev, rowOffLevel(context, intentBucket, dev, 100, useOverride), useOverride)
-            setDimmer(dev, level, transitionSecondsFor(reason, "activation"), alwaysActivateRowsEnabled(), stats)
+            setDimmer(dev, level, activationTransition, alwaysActivateRowsEnabled(), stats)
         } else {
             turnOnDevice(dev, alwaysActivateRowsEnabled(), stats)
         }
     } else {
-        turnOffDevice(dev, reason, transitionSecondsFor(reason, "deactivation"), stats)
+        turnOffDevice(dev, reason, deactivationTransition, stats)
     }
 }
 
 private void recoverSimpleHome() {
-    Map snap = roomSnapshot()
+    Map snap = roomSnapshot(true)
     if (snap.valid != true) return
 
     if (snap.roomState == "Locked" || snap.lockedEnabled == "on" || snap.lock == "locked") {
@@ -1067,6 +1096,7 @@ private void setDimmer(def dimmer, Integer level, Integer transitionSecondsForCo
 
     try {
         incrementLightingStat(stats, "commands")
+        recordLightingCommand(stats, "setLevel ${dimmer.displayName} -> ${level}%/${transitionSecondsForCommand ?: 0}s")
         trace "Command setLevel ${dimmer.displayName}: current=${currentSwitch}/${currentLevel}, target=${level}, transition=${transitionSecondsForCommand}, force=${forceCommand}"
         if ((transitionSecondsForCommand ?: 0) > 0) {
             dimmer.setLevel(level, transitionSecondsForCommand)
@@ -1091,6 +1121,7 @@ private void setColorTemperature(def dev, Integer colorTemperature, Boolean forc
 
     try {
         incrementLightingStat(stats, "commands")
+        recordLightingCommand(stats, "setColorTemperature ${dev.displayName} -> ${colorTemperature}K")
         trace "Command setColorTemperature ${dev.displayName}: current=${currentCt}, target=${colorTemperature}, force=${forceCommand}"
         dev.setColorTemperature(colorTemperature)
     } catch (Exception e) {
@@ -1109,6 +1140,7 @@ private void turnOnDevice(def dev, Boolean forceCommand = true, Map stats = null
 
     try {
         incrementLightingStat(stats, "commands")
+        recordLightingCommand(stats, "on ${dev.displayName}")
         trace "Command on ${dev.displayName}: current=${currentSwitch}, force=${forceCommand}"
         dev.on()
     } catch (Exception e) {
@@ -1122,6 +1154,7 @@ private void turnOffDevice(def dev, String reason, Integer transitionSecondsForC
     if (isDimmer(dev)) {
         try {
             incrementLightingStat(stats, "commands")
+            recordLightingCommand(stats, "setLevel ${dev.displayName} -> 0%/${transitionSecondsForCommand ?: 0}s")
             trace "Command off-level ${dev.displayName}: current=${currentSwitch}/${currentLevel}, target=0, transition=${transitionSecondsForCommand}, reason=${reason}"
             if ((transitionSecondsForCommand ?: 0) > 0) {
                 dev.setLevel(0, transitionSecondsForCommand)
@@ -1136,6 +1169,7 @@ private void turnOffDevice(def dev, String reason, Integer transitionSecondsForC
 
     try {
         incrementLightingStat(stats, "commands")
+        recordLightingCommand(stats, "off ${dev.displayName}")
         trace "Command off ${dev.displayName}: current=${currentSwitch}, reason=${reason}"
         dev.off()
     } catch (Exception e) {
@@ -1814,9 +1848,20 @@ private void publishLastLightingAction(String action) {
     }
 }
 
+private Map lightingStats(List devices) {
+    return [commands: 0, skips: 0, devices: safeInteger(devices?.size(), 0), commandList: []]
+}
+
 private void incrementLightingStat(Map stats, String key) {
     if (stats == null || key == null) return
     stats[key] = safeInteger(stats[key], 0) + 1
+}
+
+private void recordLightingCommand(Map stats, String command) {
+    if (stats == null || !command) return
+    List commands = stats.commandList instanceof List ? stats.commandList : []
+    commands << command
+    stats.commandList = commands
 }
 
 private void logLightingTiming(String operation, Long startedAt, String reason, Map stats = null) {
@@ -1824,6 +1869,10 @@ private void logLightingTiming(String operation, Long startedAt, String reason, 
 
     Long elapsed = now() - startedAt
     String detail = "reason=${reason}, devices=${safeInteger(stats?.devices, 0)}, commands=${safeInteger(stats?.commands, 0)}, skips=${safeInteger(stats?.skips, 0)}"
+    List commandList = stats?.commandList instanceof List ? stats.commandList : []
+    if (commandList) {
+        detail = "${detail}, commandList=${commandList.join('; ')}"
+    }
     if (elapsed >= 1000L) {
         log.warn "${app.label}: ${operation} took ${elapsed}ms (${detail})"
     } else {
