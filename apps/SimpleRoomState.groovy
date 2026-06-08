@@ -282,6 +282,13 @@ def initializeChild() {
 
 def recoverSimpleHomeHandler(evt) {
     debug "Recover Simple Home requested"
+
+    if (state.locked || lockedEnabled() || anyExternalLockOn()) {
+        state.locked = true
+        debug "Recover Simple Home skipped recompute because room is locked"
+        return
+    }
+
     refreshDerivedStates()
     reconcileTimeoutsAfterInitialize()
     recomputeAndPublish()
