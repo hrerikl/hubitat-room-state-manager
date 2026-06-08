@@ -40,6 +40,7 @@ definition(
     category: "Convenience",
     parent: "lundby:Simple Home",
     singleInstance: false,
+    singleThreaded: true,
     iconUrl: "",
     iconX2Url: ""
 )
