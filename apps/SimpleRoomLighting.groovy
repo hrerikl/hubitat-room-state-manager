@@ -584,6 +584,11 @@ private void recoverSimpleHome() {
     def room = roomDevice()
     if (!room) return
 
+    if (room.currentValue("roomState") == "Locked" || room.currentValue("lockedEnabled") == "on" || room.currentValue("lock") == "locked") {
+        debug "Recover Simple Home skipped because room is locked"
+        return
+    }
+
     String switchState = room.currentValue("metaLightSwitch") ?: "off"
     String intent = room.currentValue("lightingIntent") ?: "Off"
     Integer metaLevel = normalizedLevel(room.currentValue("metaLightLevel"), 0)
