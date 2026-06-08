@@ -459,7 +459,7 @@ private void reassessLighting(String reason) {
 
 private void applyIntentRows(String context, String intentBucket, Integer metaLevel, Integer metaCt, Boolean levelChangeOnly = false, Boolean colorTemperatureOnly = false, String reason = "") {
     Boolean useOverride = overrideActive(context, intentBucket)
-    Boolean forceActivation = alwaysActivateRowsEnabled()
+    Boolean forceActivation = alwaysActivateRowsEnabled() && !levelChangeOnly && !colorTemperatureOnly
     Integer transition = transitionSecondsFor(reason, "activation")
     List levelCtAfterSwitchDevices = []
     if (useOverride) {

@@ -1418,12 +1418,50 @@ List neighborRoomDevicesForChildIds(def selectedChildIds) {
                 }
             }.findAll { it != null }
 
-        log.debug "Simple Home: neighbor child IDs=${ids.join(', ')}, available children=${allChildren.collect { it?.id }.join(', ') ?: 'none'}, matched children=${matchedChildren.collect { it?.id }.join(', ') ?: 'none'}, resolved devices=${devices*.displayName?.join(', ') ?: 'none'}"
         return devices
     } catch (Exception e) {
         log.warn "Simple Home: Could not resolve neighbor room devices: ${e.message}"
         return []
     }
+}
+
+Map activeNeighborRoomForChildIds(def selectedChildIds) {
+    List ids = normalizeIdList(selectedChildIds)
+    if (!ids) return [active: false]
+
+    try {
+        List allChildren = roomStateChildApps()
+        for (child in allChildren) {
+            if (!ids.contains(child?.id?.toString())) continue
+
+            try {
+                if (child.getRoomProfile() == "houseIntent") continue
+            } catch (Throwable ignored) {
+                continue
+            }
+
+            def dev = null
+            try {
+                dev = child.getManagedRoomDevice()
+            } catch (Throwable ignored) {
+                dev = null
+            }
+
+            String roomState = dev?.currentValue("roomState")?.toString()
+            if (roomState in ["Occupied", "Engaged"]) {
+                return [
+                    active   : true,
+                    id       : dev?.id?.toString(),
+                    label    : dev?.displayName ?: dev?.name ?: child?.label,
+                    roomState: roomState
+                ]
+            }
+        }
+    } catch (Exception e) {
+        log.warn "Simple Home: Could not resolve active neighbor room: ${e.message}"
+    }
+
+    return [active: false]
 }
 
 private String childAppId(def child) {

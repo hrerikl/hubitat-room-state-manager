@@ -395,7 +395,10 @@ void recordActivityDetail(String epochMs, String reason) {
 }
 
 void setStateReason(String reason) {
-    sendEvent(name: 'stateReason', value: reason ?: '', isStateChange: true)
+    String value = reason ?: ''
+    if (device.currentValue('stateReason') != value) {
+        sendEvent(name: 'stateReason', value: value)
+    }
 }
 
 void cycleScene() {
@@ -411,7 +414,10 @@ void setActiveScene(String scene) {
 }
 
 void setLastLightingAction(String action) {
-    sendEvent(name: 'lastLightingAction', value: action?.trim() ?: '', isStateChange: true)
+    String value = action?.trim() ?: ''
+    if (device.currentValue('lastLightingAction') != value) {
+        sendEvent(name: 'lastLightingAction', value: value)
+    }
 }
 
 void setAnnouncementMessagesJson(String json) {

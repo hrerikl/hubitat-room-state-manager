@@ -1139,8 +1139,21 @@ def neighborRoomHandler(evt) {
         return
     }
 
-    refreshCourtesyState()
-    recomputeAndPublish()
+    String neighborState = evt.value?.toString()
+    if (neighborState in ["Occupied", "Engaged"]) {
+        if (courtesyEligibleNow()) {
+            setCourtesyFromNeighborEvent(evt)
+            recomputeAndPublish()
+        } else {
+            debug "Ignoring active neighbor event because this room is not courtesy-eligible"
+        }
+        return
+    }
+
+    if (state.courtesy) {
+        refreshCourtesyState()
+        recomputeAndPublish()
+    }
 }
 
 def externalLockHandler(evt) {
@@ -1231,6 +1244,7 @@ private Boolean hasRecentActivityWithinOccupiedTimeout() {
 private void setOccupied(String reason) {
     debug "Occupied true: ${reason}"
     state.offReason = null
+    clearCourtesyState()
     recordActivity(reason)
     state.roomLevel = currentRoomControlLevel()
     state.occupied = true
@@ -1249,6 +1263,7 @@ private void setEngaged(String reason) {
     }
 
     debug "Engaged true: ${reason}"
+    clearCourtesyState()
     unschedule(clearEngagedIfStillInactive)
     state.lastEngagedInactiveAt = now()
 
@@ -1267,6 +1282,7 @@ private void setAsleep(Boolean asleep, String reason) {
     state.asleep = asleep
 
     if (asleep) {
+        clearCourtesyState()
         unschedule(clearOccupiedIfStillInactive)
         unschedule(clearEngagedIfStillInactive)
         state.asleepStartedAt = now()
@@ -1282,6 +1298,7 @@ private void setAsleep(Boolean asleep, String reason) {
         state.nightActive = false
         componentSwitchOff("Asleep")
         publishNightLighting(false, 0)
+        refreshCourtesyState()
     }
 
     recomputeAndPublish()
@@ -1350,8 +1367,6 @@ private void setLocked(Boolean locked, String reason, Boolean clearAsleepOnUnloc
             publishNightLighting(false, 0)
         }
 
-        refreshCourtesyState()
-
         if (!state.asleep) {
             if (hasRecentActivityWithinOccupiedTimeout()) {
                 state.occupied = true
@@ -1367,6 +1382,8 @@ private void setLocked(Boolean locked, String reason, Boolean clearAsleepOnUnloc
                 state.lastEngagedInactiveAt = null
             }
         }
+
+        refreshCourtesyState()
     }
 
     recomputeAndPublish()
@@ -1581,6 +1598,7 @@ def clearOccupiedIfStillInactive() {
     state.lastInactiveAt = null
     state.lastActivityAt = null
     state.occupied = false
+    refreshCourtesyState()
     recomputeAndPublish()
 }
 
@@ -1755,36 +1773,67 @@ private void refreshAsleepState() {
     publishNightLighting(false, 0)
 }
 
-private void refreshCourtesyState() {
+private Boolean refreshCourtesyState() {
     if (houseIntentProfile()) {
-        state.courtesy = false
-        state.courtesyReason = null
+        Boolean changed = clearCourtesyState()
         debug "Courtesy false because House Intent rooms do not participate in neighbor courtesy"
-        return
+        return changed
     }
 
     if (!courtesyEnabled()) {
-        state.courtesy = false
-        state.courtesyReason = null
+        Boolean changed = clearCourtesyState()
         debug "Courtesy false because Courtesy switch is off"
-        return
+        return changed
     }
 
-    List activeNeighbors = selectedNeighborRoomDevices().findAll { dev ->
-        String neighborState = dev.currentValue("roomState")
-        neighborState in ["Occupied", "Engaged"]
+    if (!courtesyEligibleNow()) {
+        Boolean changed = clearCourtesyState()
+        debug "Courtesy false because this room is not courtesy-eligible"
+        return changed
     }
 
-    state.courtesy = activeNeighbors as Boolean
-    state.courtesyReason = state.courtesy ? courtesyReason(activeNeighbors) : null
+    Map activeNeighbor = activeNeighborRoom()
+    Boolean courtesy = activeNeighbor?.active == true
+    String reason = courtesy ? courtesyReason(activeNeighbor) : null
+    Boolean changed = state.courtesy != courtesy || state.courtesyReason != reason
+    state.courtesy = courtesy
+    state.courtesyReason = reason
     debug "Courtesy ${state.courtesy ? 'true' : 'false'} from neighbor Room devices"
+    return changed
 }
 
-private String courtesyReason(List activeNeighbors) {
-    List labels = activeNeighbors.collect { dev -> dev?.displayName ?: dev?.name ?: dev?.id }.findAll { it }
-    if (!labels) return "neighboring room"
-    if (labels.size() == 1) return "neighboring room ${stripRoomPrefix(labels[0].toString())}"
-    return "neighboring rooms ${labels.collect { stripRoomPrefix(it.toString()) }.join(', ')}"
+private void setCourtesyFromNeighborEvent(evt) {
+    state.courtesy = true
+    state.courtesyReason = courtesyReason([
+        label    : evt.displayName,
+        roomState: evt.value?.toString()
+    ])
+}
+
+private Boolean clearCourtesyState() {
+    Boolean changed = state.courtesy == true || state.courtesyReason != null
+    state.courtesy = false
+    state.courtesyReason = null
+    return changed
+}
+
+private Map activeNeighborRoom() {
+    if (!parent) return [active: false]
+    try {
+        return parent.activeNeighborRoomForChildIds(neighborChildAppIds) ?: [active: false]
+    } catch (Exception e) {
+        log.warn "${roomDeviceLabel()}: Could not resolve active neighbor room: ${e.message}"
+        return [active: false]
+    }
+}
+
+private String courtesyReason(Map activeNeighbor) {
+    String label = activeNeighbor?.label ?: activeNeighbor?.name ?: activeNeighbor?.id
+    return label ? "neighboring room ${stripRoomPrefix(label.toString())}" : "neighboring room"
+}
+
+private Boolean courtesyEligibleNow() {
+    return !houseIntentProfile() && courtesyEnabled() && !state.locked && !state.asleep && !state.engaged && !state.occupied
 }
 
 private String stripRoomPrefix(String value) {
@@ -2063,31 +2112,42 @@ private void publishRoomDevice(Boolean switchOn, String roomState, String lighti
     if (!dev) return
 
     try {
-        dev.setRoomState(roomState)
+        if (dev.currentValue("roomState") != roomState) {
+            dev.setRoomState(roomState)
+        }
     } catch (Exception e) {
         log.warn "${roomDeviceLabel()}: Could not set roomState on room device: ${e.message}"
     }
 
     try {
-        dev.setLightingIntent(lightingIntent)
+        if (dev.currentValue("lightingIntent") != lightingIntent) {
+            dev.setLightingIntent(lightingIntent)
+        }
     } catch (Exception e) {
         log.warn "${roomDeviceLabel()}: Could not set lightingIntent on room device: ${e.message}"
     }
 
     try {
-        dev.setSwitchState(switchOn ? "on" : "off")
+        String switchValue = switchOn ? "on" : "off"
+        if (dev.currentValue("switch") != switchValue) {
+            dev.setSwitchState(switchValue)
+        }
     } catch (Exception e) {
         log.warn "${roomDeviceLabel()}: Could not set switch state on room device: ${e.message}"
     }
 
     try {
-        dev.setRoomLevel(lightingLevel)
+        if (normalizedPercent(dev.currentValue("level"), -1) != lightingLevel) {
+            dev.setRoomLevel(lightingLevel)
+        }
     } catch (Exception e) {
         log.warn "${roomDeviceLabel()}: Could not set lighting level on room device: ${e.message}"
     }
 
     try {
-        dev.setStateReason(stateReason)
+        if (dev.currentValue("stateReason") != stateReason) {
+            dev.setStateReason(stateReason)
+        }
     } catch (Exception e) {
         log.warn "${roomDeviceLabel()}: Could not set state reason on room device: ${e.message}"
     }
@@ -2100,7 +2160,9 @@ private void publishMetaLightDevice(Boolean switchOn, Integer lightingLevel, Int
     try {
         if (switchOn) {
             Integer level = lightingLevel
-            dev.setMetaLightLevel(level)
+            if (normalizedPercent(state.metaLightLevel, -1) != level) {
+                dev.setMetaLightLevel(level)
+            }
             state.metaLightLevel = level
         }
     } catch (Exception e) {
@@ -2109,15 +2171,20 @@ private void publishMetaLightDevice(Boolean switchOn, Integer lightingLevel, Int
 
     try {
         Integer ct = colorTemperature
-        dev.setMetaLightColorTemperature(ct)
+        if (normalizedColorTemperature(state.metaLightColorTemperature, -1) != ct) {
+            dev.setMetaLightColorTemperature(ct)
+        }
         state.metaLightColorTemperature = ct
     } catch (Exception e) {
         log.warn "${roomDeviceLabel()}: Could not set color temperature on meta-light device: ${e.message}"
     }
 
     try {
-        dev.setMetaLightSwitchState(switchOn ? "on" : "off")
-        state.metaLightSwitch = switchOn ? "on" : "off"
+        String switchValue = switchOn ? "on" : "off"
+        if (state.metaLightSwitch != switchValue) {
+            dev.setMetaLightSwitchState(switchValue)
+        }
+        state.metaLightSwitch = switchValue
     } catch (Exception e) {
         log.warn "${roomDeviceLabel()}: Could not set switch state on meta-light device: ${e.message}"
     }
