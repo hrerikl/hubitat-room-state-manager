@@ -76,6 +76,7 @@ def reinitializeFromParent() {
 }
 
 def initialize() {
+    cacheDebugEnabled(debugLogging)
     updateAppLabel()
     if (!houseIntentLightingAllowed()) {
         markDuplicateForDelete("House Intent Lighting")

@@ -139,6 +139,7 @@ def reinitializeFromParent() {
 }
 
 def initialize() {
+    cacheDebugEnabled(debugLogging)
     updateAppLabel()
 
     if (!roomLightingAllowed()) {
@@ -182,18 +183,19 @@ def initialize() {
 
 def reassessHandler(evt) {
     debug "Room lighting event ${evt.name}=${evt.value}"
+    Map snap = roomSnapshot(true)
 
     if (evt.name == "metaLightSwitch" && evt.value == "off" && offCondition == "metaLightOff") {
-        applyOffCondition("MetaLight off")
+        applyOffCondition("MetaLight off", snap)
         return
     }
 
-    if (roomLightingInactive()) {
-        applyOffCondition("${evt.name} changed while inactive")
+    if (roomLightingInactive(snap)) {
+        applyOffCondition("${evt.name} changed while inactive", snap)
         return
     }
 
-    reassessLighting("${evt.name} changed")
+    reassessLighting("${evt.name} changed", snap)
 }
 
 def roomSwitchOffHandler(evt) {
@@ -212,21 +214,23 @@ def locationModeHandler(evt) {
         return
     }
 
-    if (roomLightingInactive()) {
-        applyInactiveOnRowOffCondition("Location Mode changed while inactive")
+    Map snap = roomSnapshot()
+    if (roomLightingInactive(snap)) {
+        applyInactiveOnRowOffCondition("Location Mode changed while inactive", snap)
         return
     }
 
-    reassessLighting("Location Mode changed")
+    reassessLighting("Location Mode changed", snap)
 }
 
 def overrideSwitchHandler(evt) {
     debug "Override switch ${evt.value}: ${evt.displayName}"
-    if (roomLightingInactive()) {
-        applyInactiveOnRowOffCondition("override switch changed while inactive")
+    Map snap = roomSnapshot()
+    if (roomLightingInactive(snap)) {
+        applyInactiveOnRowOffCondition("override switch changed while inactive", snap)
         return
     }
-    reassessLighting("override switch changed")
+    reassessLighting("override switch changed", snap)
 }
 
 def sceneRequestHandler(evt) {
@@ -425,21 +429,25 @@ def casetaDoubleTappedHandler(evt) {
 
 // -------------------- Matrix Output --------------------
 
-private void reassessLighting(String reason) {
-    def room = roomDevice()
-    if (!room) return
+private void reassessLighting(String reason, Map snap = null) {
+    Long startedAt = now()
+    snap = snap ?: roomSnapshot()
+    if (snap.valid != true) return
 
-    String switchState = room.currentValue("metaLightSwitch") ?: "off"
-    String intent = room.currentValue("lightingIntent") ?: "Off"
-    Integer metaLevel = normalizedLevel(room.currentValue("metaLightLevel"), 0)
-    Integer metaCt = normalizedColorTemperature(room.currentValue("metaLightColorTemperature"), 2700)
+    String switchState = snap.sw
+    String intent = snap.intent
+    Integer metaLevel = snap.level
+    Integer metaCt = snap.ct
     String context = activeContextKey()
     String intentBucket = activeIntentBucket(intent)
+    List devices = allAutomatedDevices()
+    Map stats = [commands: 0, skips: 0, devices: devices.size()]
 
     debug "Reassessing context=${context} intent=${intentBucket} roomIntent=${intent} meta=${switchState}/${metaLevel}/${metaCt}: ${reason}"
 
     if (switchState != "on" || metaLevel <= 0 || !(intent in ["On", "Courtesy", "Night"])) {
         debug "Skipping activation because MetaLight is off or intent is not active"
+        logLightingTiming("reassessLighting", startedAt, reason, stats)
         return
     }
 
@@ -452,13 +460,14 @@ private void reassessLighting(String reason) {
 
     state.lastActiveMatrixContext = context
     state.lastActiveMatrixIntent = intentBucket
-    applyIntentRows(context, intentBucket, metaLevel, metaCt, levelChangeOnly, colorTemperatureOnly, reason)
+    applyIntentRows(context, intentBucket, metaLevel, metaCt, levelChangeOnly, colorTemperatureOnly, reason, devices, stats)
     if (!levelChangeOnly && !colorTemperatureOnly) {
         publishLastLightingAction("${intentBucket} ${metaLevel}% ${metaCt}K")
     }
+    logLightingTiming("reassessLighting", startedAt, reason, stats)
 }
 
-private void applyIntentRows(String context, String intentBucket, Integer metaLevel, Integer metaCt, Boolean levelChangeOnly = false, Boolean colorTemperatureOnly = false, String reason = "") {
+private void applyIntentRows(String context, String intentBucket, Integer metaLevel, Integer metaCt, Boolean levelChangeOnly = false, Boolean colorTemperatureOnly = false, String reason = "", List devices = null, Map stats = null) {
     Boolean useOverride = overrideActive(context, intentBucket)
     Boolean forceActivation = alwaysActivateRowsEnabled() && !levelChangeOnly && !colorTemperatureOnly
     Integer transition = transitionSecondsFor(reason, "activation")
@@ -467,7 +476,7 @@ private void applyIntentRows(String context, String intentBucket, Integer metaLe
         debug "Using override matrix for context=${context} intent=${intentBucket}"
     }
 
-    allAutomatedDevices().each { dev ->
+    (devices ?: allAutomatedDevices()).each { dev ->
         if (!rowAct(context, intentBucket, dev, useOverride)) return
 
         String switchCommand = rowSwitch(context, intentBucket, dev, useOverride)
@@ -485,33 +494,33 @@ private void applyIntentRows(String context, String intentBucket, Integer metaLe
 
         if (colorTemperatureOnly) {
             if (switchCommand == "on" && ctMode == "follow") {
-                setColorTemperature(dev, metaCt, forceActivation)
+                setColorTemperature(dev, metaCt, forceActivation, stats)
             }
         } else if (switchCommand == "off") {
-            turnOffDevice(dev, "activation switch off", transitionSecondsFor(reason, "deactivation"))
+            turnOffDevice(dev, "activation switch off", transitionSecondsFor(reason, "deactivation"), stats)
         } else if (isDimmer(dev)) {
             if (levelMode == "none") {
-                turnOnDevice(dev, forceActivation)
+                turnOnDevice(dev, forceActivation, stats)
             } else {
                 Integer level = levelMode == "explicit" ? rowExplicitLevel(context, intentBucket, dev, metaLevel, useOverride) : rowFollowLevel(context, intentBucket, dev, metaLevel, useOverride)
                 level = physicalLevelForRow(context, intentBucket, dev, level, useOverride)
-                setDimmer(dev, level, transition, forceActivation)
+                setDimmer(dev, level, transition, forceActivation, stats)
             }
             if (ctMode == "follow") {
-                setColorTemperature(dev, metaCt, forceActivation)
+                setColorTemperature(dev, metaCt, forceActivation, stats)
             }
         } else {
-            turnOnDevice(dev, forceActivation)
+            turnOnDevice(dev, forceActivation, stats)
         }
     }
 
     Boolean suppressInitialFeedback = !levelChangeOnly && !colorTemperatureOnly
     levelCtAfterSwitchDevices.each { dev ->
-        applyLevelCtAfterSwitchesRow(context, intentBucket, dev, useOverride, metaLevel, metaCt, levelChangeOnly, colorTemperatureOnly, suppressInitialFeedback, transition, forceActivation)
+        applyLevelCtAfterSwitchesRow(context, intentBucket, dev, useOverride, metaLevel, metaCt, levelChangeOnly, colorTemperatureOnly, suppressInitialFeedback, transition, forceActivation, stats)
     }
 }
 
-private void applyLevelCtAfterSwitchesRow(String context, String intentBucket, def dev, Boolean useOverride, Integer metaLevel, Integer metaCt, Boolean levelChangeOnly, Boolean colorTemperatureOnly, Boolean suppressInitialFeedback, Integer transition, Boolean forceActivation) {
+private void applyLevelCtAfterSwitchesRow(String context, String intentBucket, def dev, Boolean useOverride, Integer metaLevel, Integer metaCt, Boolean levelChangeOnly, Boolean colorTemperatureOnly, Boolean suppressInitialFeedback, Integer transition, Boolean forceActivation, Map stats = null) {
     String ctMode = isColorTemperatureDevice(dev) ? rowCtMode(context, intentBucket, dev, useOverride) : "none"
 
     if (!colorTemperatureOnly) {
@@ -519,14 +528,14 @@ private void applyLevelCtAfterSwitchesRow(String context, String intentBucket, d
         if (suppressInitialFeedback) {
             suppressControlFeedback(dev)
         }
-        setDimmer(dev, level, transition, forceActivation)
+        setDimmer(dev, level, transition, forceActivation, stats)
     }
 
     if (!levelChangeOnly && ctMode == "follow") {
         if (suppressInitialFeedback) {
             suppressControlFeedback(dev)
         }
-        setColorTemperature(dev, metaCt, forceActivation)
+        setColorTemperature(dev, metaCt, forceActivation, stats)
     }
 }
 
@@ -535,71 +544,81 @@ private Boolean shouldSkipInitialActivation(String reason, Boolean levelChangeOn
     return reason in ["initialize", "metaLightSwitch changed", "lightingIntent changed"]
 }
 
-private void applyOffCondition(String reason) {
+private void applyOffCondition(String reason, Map snap = null) {
+    Long startedAt = now()
+    snap = snap ?: roomSnapshot()
     String context = activeContextKey()
-    String intentBucket = activeIntentBucket(state.lastActiveMatrixIntent ?: roomDevice()?.currentValue("lightingIntent")?.toString())
+    String intentBucket = activeIntentBucket(state.lastActiveMatrixIntent ?: snap.intent)
+    List devices = allAutomatedDevices()
+    Map stats = [commands: 0, skips: 0, devices: devices.size()]
     debug "Applying off condition context=${context} intent=${intentBucket}: ${reason}"
-    applyOffRows(context, intentBucket, reason)
+    applyOffRows(context, intentBucket, reason, devices, stats)
     publishLastLightingAction("Off")
+    logLightingTiming("applyOffCondition", startedAt, reason, stats)
 }
 
 private void applyLockedFadeOff() {
+    Long startedAt = now()
+    Map snap = roomSnapshot()
     String context = activeContextKey()
-    String intentBucket = activeIntentBucket(state.lastActiveMatrixIntent ?: roomDevice()?.currentValue("lightingIntent")?.toString())
+    String intentBucket = activeIntentBucket(state.lastActiveMatrixIntent ?: snap.intent)
+    List devices = allAutomatedDevices()
+    Map stats = [commands: 0, skips: 0, devices: devices.size()]
     debug "Applying locked fade off context=${context} intent=${intentBucket}"
-    applyOffRows(context, intentBucket, "Room locked")
+    applyOffRows(context, intentBucket, "Room locked", devices, stats)
     publishLastLightingAction("Locked fade off")
+    logLightingTiming("applyLockedFadeOff", startedAt, "Room locked", stats)
 }
 
-private void applyInactiveOnRowOffCondition(String reason) {
+private void applyInactiveOnRowOffCondition(String reason, Map snap = null) {
+    Long startedAt = now()
     String context = activeContextKey()
     String intentBucket = matrixUsesIntent() ? "On" : "Any"
+    List devices = allAutomatedDevices()
+    Map stats = [commands: 0, skips: 0, devices: devices.size()]
     debug "Applying inactive On-row off condition context=${context} intent=${intentBucket}: ${reason}"
-    applyOffRows(context, intentBucket, reason)
+    applyOffRows(context, intentBucket, reason, devices, stats)
+    logLightingTiming("applyInactiveOnRowOffCondition", startedAt, reason, stats)
 }
 
-private void applyOffRows(String context, String intentBucket, String reason) {
+private void applyOffRows(String context, String intentBucket, String reason, List devices = null, Map stats = null) {
     Boolean useOverride = overrideActive(context, intentBucket)
-    allAutomatedDevices().each { dev ->
+    (devices ?: allAutomatedDevices()).each { dev ->
         if (rowOff(context, intentBucket, dev, useOverride)) {
-            applyOffRow(context, intentBucket, dev, useOverride, reason)
+            applyOffRow(context, intentBucket, dev, useOverride, reason, stats)
         }
     }
 }
 
-private void applyOffRow(String context, String intentBucket, def dev, Boolean useOverride, String reason) {
+private void applyOffRow(String context, String intentBucket, def dev, Boolean useOverride, String reason, Map stats = null) {
     String action = advancedOffActionsEnabled() ? rowOffAction(context, intentBucket, dev, useOverride) : "off"
     if (action == "on") {
         if (isDimmer(dev)) {
             Integer level = physicalLevelForRow(context, intentBucket, dev, rowOffLevel(context, intentBucket, dev, 100, useOverride), useOverride)
-            setDimmer(dev, level, transitionSecondsFor(reason, "activation"), alwaysActivateRowsEnabled())
+            setDimmer(dev, level, transitionSecondsFor(reason, "activation"), alwaysActivateRowsEnabled(), stats)
         } else {
-            turnOnDevice(dev, alwaysActivateRowsEnabled())
+            turnOnDevice(dev, alwaysActivateRowsEnabled(), stats)
         }
     } else {
-        turnOffDevice(dev, reason, transitionSecondsFor(reason, "deactivation"))
+        turnOffDevice(dev, reason, transitionSecondsFor(reason, "deactivation"), stats)
     }
 }
 
 private void recoverSimpleHome() {
-    def room = roomDevice()
-    if (!room) return
+    Map snap = roomSnapshot()
+    if (snap.valid != true) return
 
-    if (room.currentValue("roomState") == "Locked" || room.currentValue("lockedEnabled") == "on" || room.currentValue("lock") == "locked") {
+    if (snap.roomState == "Locked" || snap.lockedEnabled == "on" || snap.lock == "locked") {
         debug "Recover Simple Home skipped because room is locked"
         return
     }
 
-    String switchState = room.currentValue("metaLightSwitch") ?: "off"
-    String intent = room.currentValue("lightingIntent") ?: "Off"
-    Integer metaLevel = normalizedLevel(room.currentValue("metaLightLevel"), 0)
-
-    if (switchState == "on" && metaLevel > 0 && intent in ["On", "Courtesy", "Night"]) {
+    if (snap.sw == "on" && snap.level > 0 && snap.intent in ["On", "Courtesy", "Night"]) {
         debug "Recover Simple Home: reapplying active matrix"
-        reassessLighting("Simple Home recovery")
+        reassessLighting("Simple Home recovery", snap)
     } else {
         debug "Recover Simple Home: applying Off rows"
-        applyInactiveOnRowOffCondition("Simple Home recovery")
+        applyInactiveOnRowOffCondition("Simple Home recovery", snap)
     }
 }
 
@@ -726,14 +745,31 @@ private Boolean fadeOffWhenLockedEnabled() {
     return settingBool("fadeOffWhenLocked", false)
 }
 
-private Boolean roomLightingInactive() {
+private Map roomSnapshot(Boolean includeLockState = false) {
     def room = roomDevice()
-    if (!room) return true
+    if (!room) return [valid: false]
 
-    String switchState = room.currentValue("metaLightSwitch") ?: "off"
-    String intent = room.currentValue("lightingIntent") ?: "Off"
-    Integer metaLevel = normalizedLevel(room.currentValue("metaLightLevel"), 0)
-    return switchState != "on" || metaLevel <= 0 || !(intent in ["On", "Courtesy", "Night"])
+    Map snap = [
+        valid        : true,
+        sw           : room.currentValue("metaLightSwitch") ?: "off",
+        intent       : room.currentValue("lightingIntent") ?: "Off",
+        level        : normalizedLevel(room.currentValue("metaLightLevel"), 0),
+        ct           : normalizedColorTemperature(room.currentValue("metaLightColorTemperature"), 2700)
+    ]
+
+    if (includeLockState) {
+        snap.roomState = room.currentValue("roomState") ?: "Off"
+        snap.lockedEnabled = room.currentValue("lockedEnabled") ?: "off"
+        snap.lock = room.currentValue("lock") ?: "unlocked"
+    }
+
+    return snap
+}
+
+private Boolean roomLightingInactive(Map snap = null) {
+    snap = snap ?: roomSnapshot()
+    if (snap.valid != true) return true
+    return snap.sw != "on" || snap.level <= 0 || !(snap.intent in ["On", "Courtesy", "Night"])
 }
 
 private String activeContextKey() {
@@ -1019,16 +1055,18 @@ private List overrideSwitches() {
 
 // -------------------- Device Commands --------------------
 
-private void setDimmer(def dimmer, Integer level, Integer transitionSecondsForCommand, Boolean forceCommand = true) {
+private void setDimmer(def dimmer, Integer level, Integer transitionSecondsForCommand, Boolean forceCommand = true, Map stats = null) {
     String currentSwitch = dimmer.currentValue("switch")?.toString()
     Integer currentLevel = normalizedLevel(dimmer.currentValue("level"), -1)
-    if (!forceCommand && dimmer.currentValue("switch") == "on" && normalizedLevel(dimmer.currentValue("level"), -1) == level) {
+    if (!forceCommand && currentSwitch == "on" && currentLevel == level) {
+        incrementLightingStat(stats, "skips")
         debug "Skipping ${dimmer.displayName}; already on at level ${level}"
         trace "Skip setLevel ${dimmer.displayName}: current=${currentSwitch}/${currentLevel}, target=on/${level}, transition=${transitionSecondsForCommand}, force=${forceCommand}"
         return
     }
 
     try {
+        incrementLightingStat(stats, "commands")
         trace "Command setLevel ${dimmer.displayName}: current=${currentSwitch}/${currentLevel}, target=${level}, transition=${transitionSecondsForCommand}, force=${forceCommand}"
         if ((transitionSecondsForCommand ?: 0) > 0) {
             dimmer.setLevel(level, transitionSecondsForCommand)
@@ -1040,17 +1078,19 @@ private void setDimmer(def dimmer, Integer level, Integer transitionSecondsForCo
     }
 }
 
-private void setColorTemperature(def dev, Integer colorTemperature, Boolean forceCommand = true) {
+private void setColorTemperature(def dev, Integer colorTemperature, Boolean forceCommand = true, Map stats = null) {
     if (!isColorTemperatureDevice(dev)) return
 
     Integer currentCt = normalizedColorTemperature(dev.currentValue("colorTemperature"), -1)
-    if (!forceCommand && normalizedColorTemperature(dev.currentValue("colorTemperature"), -1) == colorTemperature) {
+    if (!forceCommand && currentCt == colorTemperature) {
+        incrementLightingStat(stats, "skips")
         debug "Skipping ${dev.displayName}; already at CT ${colorTemperature}"
         trace "Skip setColorTemperature ${dev.displayName}: current=${currentCt}, target=${colorTemperature}, force=${forceCommand}"
         return
     }
 
     try {
+        incrementLightingStat(stats, "commands")
         trace "Command setColorTemperature ${dev.displayName}: current=${currentCt}, target=${colorTemperature}, force=${forceCommand}"
         dev.setColorTemperature(colorTemperature)
     } catch (Exception e) {
@@ -1058,15 +1098,17 @@ private void setColorTemperature(def dev, Integer colorTemperature, Boolean forc
     }
 }
 
-private void turnOnDevice(def dev, Boolean forceCommand = true) {
+private void turnOnDevice(def dev, Boolean forceCommand = true, Map stats = null) {
     String currentSwitch = dev.currentValue("switch")?.toString()
-    if (!forceCommand && dev.currentValue("switch") == "on") {
+    if (!forceCommand && currentSwitch == "on") {
+        incrementLightingStat(stats, "skips")
         debug "Skipping ${dev.displayName}; already on"
         trace "Skip on ${dev.displayName}: current=${currentSwitch}, force=${forceCommand}"
         return
     }
 
     try {
+        incrementLightingStat(stats, "commands")
         trace "Command on ${dev.displayName}: current=${currentSwitch}, force=${forceCommand}"
         dev.on()
     } catch (Exception e) {
@@ -1074,11 +1116,12 @@ private void turnOnDevice(def dev, Boolean forceCommand = true) {
     }
 }
 
-private void turnOffDevice(def dev, String reason, Integer transitionSecondsForCommand = 0) {
+private void turnOffDevice(def dev, String reason, Integer transitionSecondsForCommand = 0, Map stats = null) {
     String currentSwitch = dev.currentValue("switch")?.toString()
     Integer currentLevel = isDimmer(dev) ? normalizedLevel(dev.currentValue("level"), -1) : null
     if (isDimmer(dev)) {
         try {
+            incrementLightingStat(stats, "commands")
             trace "Command off-level ${dev.displayName}: current=${currentSwitch}/${currentLevel}, target=0, transition=${transitionSecondsForCommand}, reason=${reason}"
             if ((transitionSecondsForCommand ?: 0) > 0) {
                 dev.setLevel(0, transitionSecondsForCommand)
@@ -1092,6 +1135,7 @@ private void turnOffDevice(def dev, String reason, Integer transitionSecondsForC
     }
 
     try {
+        incrementLightingStat(stats, "commands")
         trace "Command off ${dev.displayName}: current=${currentSwitch}, reason=${reason}"
         dev.off()
     } catch (Exception e) {
@@ -1767,6 +1811,23 @@ private void publishLastLightingAction(String action) {
         roomDevice()?.setLastLightingAction(action)
     } catch (Exception e) {
         log.warn "${app.label}: Could not publish last lighting action: ${e.message}"
+    }
+}
+
+private void incrementLightingStat(Map stats, String key) {
+    if (stats == null || key == null) return
+    stats[key] = safeInteger(stats[key], 0) + 1
+}
+
+private void logLightingTiming(String operation, Long startedAt, String reason, Map stats = null) {
+    if (!startedAt) return
+
+    Long elapsed = now() - startedAt
+    String detail = "reason=${reason}, devices=${safeInteger(stats?.devices, 0)}, commands=${safeInteger(stats?.commands, 0)}, skips=${safeInteger(stats?.skips, 0)}"
+    if (elapsed >= 1000L) {
+        log.warn "${app.label}: ${operation} took ${elapsed}ms (${detail})"
+    } else {
+        trace "${operation} took ${elapsed}ms (${detail})"
     }
 }
 

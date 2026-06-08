@@ -124,12 +124,28 @@ private List normalizeIdList(def rawIds) {
 }
 
 private Boolean debugEnabled(Boolean localDebugSetting) {
+    if (state?.containsKey("simpleHomeCachedDebugEnabled")) {
+        return state.simpleHomeCachedDebugEnabled == true
+    }
+    return resolveDebugEnabled(localDebugSetting)
+}
+
+private Boolean resolveDebugEnabled(Boolean localDebugSetting) {
     try {
         if (parent) return parent.simpleHomeDebugEnabled(localDebugSetting == true) == true
     } catch (Throwable ignored) {
         // Fall through to the child app's local setting.
     }
     return localDebugSetting == true
+}
+
+def refreshDebugEnabled() {
+    cacheDebugEnabled()
+}
+
+private void cacheDebugEnabled(Boolean localDebugSetting = null) {
+    Boolean localSetting = localDebugSetting != null ? localDebugSetting == true : settings?.debugLogging == true
+    state.simpleHomeCachedDebugEnabled = resolveDebugEnabled(localSetting)
 }
 
 private Boolean settingBool(String name, Boolean fallback) {

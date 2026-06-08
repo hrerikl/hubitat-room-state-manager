@@ -79,6 +79,7 @@ def reinitializeFromParent() {
 }
 
 def initialize() {
+    cacheDebugEnabled(debugLogging != false)
     if (!circadianLightingAllowed()) {
         markDuplicateForDelete('Circadian Lighting')
         log.error "${app.label}: Duplicate Circadian Lighting app. Delete this child app and keep the primary Circadian Lighting app."

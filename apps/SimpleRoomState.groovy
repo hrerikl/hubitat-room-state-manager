@@ -226,6 +226,7 @@ def reinitializeFromParent() {
 }
 
 def initializeChild() {
+    cacheDebugEnabled(debugLogging)
     updateChildAppLabel()
 
     if (!roomStateChildAllowed()) {
@@ -749,10 +750,8 @@ def addNeighborChildAppId(String newNeighborChildAppId) {
 
     try {
         app.updateSetting("neighborChildAppIds", [type: "enum", value: existingIds])
-        debug "Added reciprocal neighbor child app id ${newNeighborChildAppId}"
-        unsubscribe()
-        unschedule()
-        initializeChild()
+        debug "Added reciprocal neighbor child app id ${newNeighborChildAppId}; scheduling reinitialize"
+        runIn(2, "initializeChild", [overwrite: true])
         return true
     } catch (Exception e) {
         log.warn "${roomDeviceLabel()}: Could not update reciprocal neighbor list: ${e.message}"

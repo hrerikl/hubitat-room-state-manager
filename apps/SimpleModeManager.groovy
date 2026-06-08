@@ -82,6 +82,7 @@ def reinitializeFromParent() {
 }
 
 def initialize() {
+    cacheDebugEnabled(debugLogging)
     if (!modeManagerAllowed()) {
         markDuplicateForDelete("Mode Manager")
         log.error "${app.label}: Duplicate Mode Manager app. Delete this child app and keep the primary Mode Manager."

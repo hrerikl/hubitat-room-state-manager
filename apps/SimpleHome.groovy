@@ -138,6 +138,7 @@ def updated() {
     unsubscribe()
     unschedule()
     initialize()
+    propagateDebugStateToChildren()
 }
 
 def initialize() {
@@ -153,6 +154,8 @@ def initialize() {
     subscribe(maintenanceDevice(), "switch.on", maintenanceSwitchOnHandler)
     subscribe(location, "mode", houseStatusModeHandler)
     publishCurrentHouseStatus()
+    scheduleTemporaryDebugExpiryIfNeeded()
+    resumeReinitializeQueueIfNeeded()
 }
 
 def apiRoomDashboardStatus() {
@@ -294,6 +297,39 @@ private void startSimpleHomeTemporaryDebug() {
     Integer minutes = Math.max(safeInteger(simpleHomeDebugMinutes, 30), 1)
     state.simpleHomeDebugUntil = now() + (minutes * 60L * 1000L)
     log.info "Simple Home: Temporary debug logging enabled for ${minutes} minute(s)."
+    propagateDebugStateToChildren()
+    runIn(minutes * 60, expireTemporaryDebug, [overwrite: true])
+}
+
+def expireTemporaryDebug() {
+    state.simpleHomeDebugUntil = null
+    log.info "Simple Home: Temporary debug logging expired."
+    propagateDebugStateToChildren()
+}
+
+private void scheduleTemporaryDebugExpiryIfNeeded() {
+    if (simpleHomeDebugMode != "temporary") return
+
+    Long debugUntil = safeLong(state.simpleHomeDebugUntil, 0L)
+    Long remainingMs = debugUntil - now()
+    if (remainingMs <= 0L) {
+        state.simpleHomeDebugUntil = null
+        propagateDebugStateToChildren()
+        return
+    }
+
+    Integer seconds = Math.max(Math.ceil(remainingMs / 1000.0) as Integer, 1)
+    runIn(seconds, expireTemporaryDebug, [overwrite: true])
+}
+
+private void propagateDebugStateToChildren() {
+    allManagedChildren().each { child ->
+        try {
+            child.refreshDebugEnabled()
+        } catch (Throwable e) {
+            log.warn "Simple Home: Could not refresh debug state for ${child?.label ?: child?.id}: ${e.message}"
+        }
+    }
 }
 
 private String simpleHomeTemporaryDebugText() {
@@ -682,25 +718,66 @@ private Boolean primaryChildAllowed(List children, def requestingChildAppId, Str
 def reinitializeChildApps() {
     createOrUpdateSharedDevices()
 
-    Integer attempted = 0
-    Integer succeeded = 0
-    Map counts = [:].withDefault { 0 }
+    List childIds = allManagedChildren()
+        .collect { child -> child?.id?.toString() }
+        .findAll { id -> id }
 
-    allManagedChildren().each { child ->
-        attempted++
+    state.reinitQueue = childIds
+    state.reinitIndex = 0
+    state.reinitAttempted = 0
+    state.reinitSucceeded = 0
+    state.reinitCounts = [:]
+
+    log.info "Simple Home: Scheduled reinitialize for ${childIds.size()} child app(s)."
+    runIn(1, "processReinitQueue", [overwrite: true])
+    return [attempted: childIds.size(), succeeded: 0, counts: [:], summary: "queued"]
+}
+
+def processReinitQueue() {
+    List queue = state.reinitQueue ?: []
+    Integer index = safeInteger(state.reinitIndex, 0)
+
+    if (index >= queue.size()) {
+        Map counts = state.reinitCounts instanceof Map ? state.reinitCounts : [:]
+        Integer attempted = safeInteger(state.reinitAttempted, 0)
+        Integer succeeded = safeInteger(state.reinitSucceeded, 0)
+        String summary = childReinitializeSummary(counts)
+        log.info "Simple Home: Reinitialized ${succeeded} of ${attempted} child app(s)${summary ? ": ${summary}" : "."}"
+        state.reinitQueue = []
+        state.reinitIndex = 0
+        return
+    }
+
+    String childId = queue[index]?.toString()
+    def child = childAppById(childId)
+    state.reinitAttempted = safeInteger(state.reinitAttempted, 0) + 1
+
+    if (child) {
         try {
             child.reinitializeFromParent()
-            succeeded++
+            state.reinitSucceeded = safeInteger(state.reinitSucceeded, 0) + 1
+            Map counts = state.reinitCounts instanceof Map ? state.reinitCounts : [:]
             String type = childTypeName(child)
-            counts[type] = (counts[type] ?: 0) + 1
+            counts[type] = safeInteger(counts[type], 0) + 1
+            state.reinitCounts = counts
         } catch (Throwable e) {
             log.warn "Simple Home: Could not reinitialize child ${child?.label ?: child?.id}: ${e.message}"
         }
+    } else {
+        log.warn "Simple Home: Could not reinitialize missing child app ${childId}."
     }
 
-    String summary = childReinitializeSummary(counts)
-    log.info "Simple Home: Reinitialized ${succeeded} of ${attempted} child app(s)${summary ? ": ${summary}" : "."}"
-    return [attempted: attempted, succeeded: succeeded, counts: counts, summary: summary]
+    state.reinitIndex = index + 1
+    runIn(2, "processReinitQueue", [overwrite: true])
+}
+
+private void resumeReinitializeQueueIfNeeded() {
+    List queue = state.reinitQueue ?: []
+    Integer index = safeInteger(state.reinitIndex, 0)
+    if (queue && index < queue.size()) {
+        log.info "Simple Home: Resuming child reinitialize queue at ${index + 1} of ${queue.size()}."
+        runIn(2, "processReinitQueue", [overwrite: true])
+    }
 }
 
 private String childTypeName(def child) {
