@@ -1214,14 +1214,17 @@ def engagementSwitchOnHandler(evt) {
 def neighborRoomHandler(evt) {
     debug "Neighbor room event ${evt.name}=${evt.value}: ${evt.displayName}"
 
-    if (lockedFlag()) {
+    Boolean lockedNow = lockedFlag()
+    Boolean activeNow = occupiedFlag() || engagedFlag() || asleepFlag() || lockedNow
+
+    if (lockedNow) {
         debug "Ignoring neighbor/courtesy event because room is locked"
         return
     }
 
     String neighborState = evt.value?.toString()
     if (neighborState in ["Occupied", "Engaged"]) {
-        if (activePresenceFlag()) {
+        if (activeNow) {
             debug "Ignoring active neighbor event because this room is already active"
             return
         }
@@ -1987,11 +1990,15 @@ private Boolean buttonNumberMatches(Integer actual, def expected) {
 // -------------------- State Computation and Output --------------------
 
 private String computeRoomState() {
+    return computeRoomState(lockedFlag(), asleepFlag(), engagedFlag(), occupiedFlag())
+}
+
+private String computeRoomState(Boolean lockedNow, Boolean asleepNow, Boolean engagedNow, Boolean occupiedNow) {
     if (houseIntentProfile()) return "Occupied"
-    if (lockedFlag()) return "Locked"
-    if (asleepFlag()) return "Asleep"
-    if (engagedFlag()) return "Engaged"
-    if (occupiedFlag()) return "Occupied"
+    if (lockedNow) return "Locked"
+    if (asleepNow) return "Asleep"
+    if (engagedNow) return "Engaged"
+    if (occupiedNow) return "Occupied"
     return "Off"
 }
 
@@ -2151,14 +2158,17 @@ private Integer modeBasedLightingLevel(String prefix) {
 private void recomputeAndPublish() {
     ensureInitialState()
 
+    Boolean lockedNow = lockedFlag()
+    Boolean asleepNow = asleepFlag()
+    Boolean engagedNow = engagedFlag()
+    Boolean occupiedNow = occupiedFlag()
     String previousLightingIntent = state.lightingIntent ?: "Off"
     Boolean previousSwitchOn = roomDevice()?.currentSwitch == "on"
     Integer previousRoomLevel = normalizedPercent(roomDevice()?.currentValue("level"), 0)
     Integer previousMetaLightLevel = normalizedPercent(state.metaLightLevel, 0)
     Integer previousMetaLightColorTemperature = normalizedColorTemperature(state.metaLightColorTemperature, 2700)
-    Boolean lockedNow = lockedFlag()
 
-    String newRoomState = computeRoomState()
+    String newRoomState = computeRoomState(lockedNow, asleepNow, engagedNow, occupiedNow)
     String newLightingIntent = lockedNow ? previousLightingIntent : computeLightingIntent(newRoomState)
 
     if (previousLightingIntent != newLightingIntent && state.circadianReferencePaused == true) {

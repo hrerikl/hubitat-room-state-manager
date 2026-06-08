@@ -553,32 +553,11 @@ private Boolean multipleHouseIntentLightingApps() {
 }
 
 private List simpleRoomLightingChildApps() {
-    List configured = lightingApps ?: []
-    List discovered = []
-    try {
-        discovered = getChildApps()?.findAll { child ->
-            if (simpleHomeChildTypeIs(child, "houseIntentLighting")) return false
-            return simpleHomeChildTypeIs(child, "roomLighting")
-        } ?: []
-    } catch (Throwable ignored) {
-        discovered = []
-    }
-
-    return uniqueChildApps(configured + discovered)
+    return uniqueChildApps(lightingApps ?: [])
 }
 
 private List modeManagerChildApps() {
-    List configured = modeApps ?: []
-    List discovered = []
-    try {
-        discovered = getChildApps()?.findAll { child ->
-            return simpleHomeChildTypeIs(child, "modeManager")
-        } ?: []
-    } catch (Throwable ignored) {
-        discovered = []
-    }
-
-    return uniqueChildApps(configured + discovered)
+    return uniqueChildApps(modeApps ?: [])
 }
 
 private def modeManagerChildApp() {
@@ -586,17 +565,7 @@ private def modeManagerChildApp() {
 }
 
 private List circadianLightingChildApps() {
-    List configured = circadianApps ?: []
-    List discovered = []
-    try {
-        discovered = getChildApps()?.findAll { child ->
-            return simpleHomeChildTypeIs(child, "circadianLighting")
-        } ?: []
-    } catch (Throwable ignored) {
-        discovered = []
-    }
-
-    return uniqueChildApps(configured + discovered)
+    return uniqueChildApps(circadianApps ?: [])
 }
 
 private def circadianLightingChildApp() {
@@ -1301,10 +1270,13 @@ private List roomLightingRoomChildIds(def requestingChildAppId) {
 
 private def childAppById(def childAppId) {
     if (!childAppId) return null
+    def managed = allManagedChildren().find { child -> child?.id?.toString() == "${childAppId}" }
+    if (managed) return managed
+
     try {
         return getChildApps()?.find { child -> child?.id?.toString() == "${childAppId}" }
     } catch (Throwable ignored) {
-        return allManagedChildren().find { child -> child?.id?.toString() == "${childAppId}" }
+        return null
     }
 }
 
