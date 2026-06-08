@@ -1876,7 +1876,13 @@ private String courtesyReason(Map activeNeighbor) {
 }
 
 private Boolean courtesyEligibleNow() {
-    return !houseIntentProfile() && courtesyEnabled() && !state.locked && !state.asleep && !state.engaged && !state.occupied
+    return !houseIntentProfile() &&
+        courtesyEnabled() &&
+        !state.locked &&
+        !state.asleep &&
+        !state.engaged &&
+        !state.occupied &&
+        !hasRecentActivityWithinOccupiedTimeout()
 }
 
 private Boolean courtesyEligibleFromNeighborEvent() {
