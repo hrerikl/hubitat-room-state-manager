@@ -1330,11 +1330,11 @@ private Boolean hasRecentActivityWithinOccupiedTimeout() {
 
 private void setOccupied(String reason) {
     debug "Occupied true: ${reason}"
+    setOccupiedFlag(true)
     state.offReason = null
     clearCourtesyState()
     recordActivity(reason)
     state.roomLevel = currentRoomControlLevel()
-    setOccupiedFlag(true)
     recomputeAndPublish()
 }
 
@@ -1350,14 +1350,14 @@ private void setEngaged(String reason) {
     }
 
     debug "Engaged true: ${reason}"
+    setOccupiedFlag(true)
+    setEngagedFlag(true)
     clearCourtesyState()
     unschedule(clearEngagedIfStillInactive)
     state.lastEngagedInactiveAt = now()
 
     recordActivity(reason)
 
-    setOccupiedFlag(true)
-    setEngagedFlag(true)
     componentSwitchOn("Engaged")
 
     scheduleEngagedTimeout("engaged on")
