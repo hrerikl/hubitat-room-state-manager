@@ -140,6 +140,8 @@ def reinitializeFromParent() {
 
 def initialize() {
     cacheDebugEnabled(debugLogging)
+    atomicState.roomReassessInFlight = false
+    atomicState.roomReassessDirty = false
     updateAppLabel()
 
     if (!roomLightingAllowed()) {
@@ -187,13 +189,44 @@ def reassessHandler(evt) {
 }
 
 def processRoomReassess() {
+    if (atomicState.roomReassessInFlight == true) {
+        atomicState.roomReassessDirty = true
+        debug "Room reassess already running; marked dirty for trailing pass"
+        return
+    }
+
     String reason = state.pendingRoomReassessReason ?: "room device changed"
     Boolean metaLightOff = state.pendingRoomReassessMetaLightOff == true
     state.pendingRoomReassessReason = null
     state.pendingRoomReassessMetaLightOff = false
 
+    executeRoomReassess(reason, metaLightOff)
+}
+
+private void executeRoomReassess(String reason, Boolean metaLightOff) {
+    atomicState.roomReassessInFlight = true
+    atomicState.roomReassessDirty = false
+
+    try {
+        executeRoomReassessNow(reason, metaLightOff)
+    } finally {
+        atomicState.roomReassessInFlight = false
+        if (atomicState.roomReassessDirty == true || state.pendingRoomReassessReason) {
+            atomicState.roomReassessDirty = false
+            runInMillis(150, "processRoomReassess", [overwrite: true])
+        }
+    }
+}
+
+private void executeRoomReassessNow(String reason, Boolean metaLightOff) {
     Map snap = roomSnapshot()
     if (snap.valid != true) return
+
+    Map drivers = lightingDriverSnapshot(snap)
+    if (!lightingDriversChanged(drivers)) {
+        debug "Skipping room reassess because lighting drivers are unchanged: ${reason}"
+        return
+    }
 
     if (metaLightOff && snap.sw == "off" && offCondition == "metaLightOff") {
         applyOffCondition("MetaLight off", snap)
@@ -249,7 +282,12 @@ private void queueRoomReassess(String eventName, String eventValue) {
     if (eventName == "metaLightSwitch" && eventValue == "off") {
         state.pendingRoomReassessMetaLightOff = true
     }
-    runInMillis(175, "processRoomReassess", [overwrite: true])
+    if (atomicState.roomReassessInFlight == true) {
+        atomicState.roomReassessDirty = true
+        debug "Queued room reassess while running: ${reason}"
+        return
+    }
+    runInMillis(300, "processRoomReassess", [overwrite: true])
 }
 
 private String appendRoomReassessReason(def existing, String reason) {
@@ -487,6 +525,7 @@ private void reassessLighting(String reason, Map snap = null) {
     state.lastActiveMatrixContext = context
     state.lastActiveMatrixIntent = intentBucket
     applyIntentRows(context, intentBucket, metaLevel, metaCt, levelChangeOnly, colorTemperatureOnly, reason, devices, stats)
+    recordLightingDrivers(lightingDriverSnapshot(snap))
     if (!levelChangeOnly && !colorTemperatureOnly) {
         publishLastLightingAction("${intentBucket} ${metaLevel}% ${metaCt}K")
     }
@@ -579,6 +618,7 @@ private void applyOffCondition(String reason, Map snap = null) {
     Map stats = lightingStats(devices)
     debug "Applying off condition context=${context} intent=${intentBucket}: ${reason}"
     applyOffRows(context, intentBucket, reason, devices, stats)
+    recordLightingDrivers(lightingDriverSnapshot(snap))
     publishLastLightingAction("Off")
     logLightingTiming("applyOffCondition", startedAt, reason, stats)
 }
@@ -592,6 +632,7 @@ private void applyLockedFadeOff() {
     Map stats = lightingStats(devices)
     debug "Applying locked fade off context=${context} intent=${intentBucket}"
     applyOffRows(context, intentBucket, "Room locked", devices, stats)
+    recordLightingDrivers(lightingDriverSnapshot(snap))
     publishLastLightingAction("Locked fade off")
     logLightingTiming("applyLockedFadeOff", startedAt, "Room locked", stats)
 }
@@ -604,6 +645,7 @@ private void applyInactiveOnRowOffCondition(String reason, Map snap = null) {
     Map stats = lightingStats(devices)
     debug "Applying inactive On-row off condition context=${context} intent=${intentBucket}: ${reason}"
     applyOffRows(context, intentBucket, reason, devices, stats)
+    recordLightingDrivers(lightingDriverSnapshot(snap))
     logLightingTiming("applyInactiveOnRowOffCondition", startedAt, reason, stats)
 }
 
@@ -793,6 +835,52 @@ private Map roomSnapshot(Boolean includeLockState = false) {
     }
 
     return snap
+}
+
+private Map lightingDriverSnapshot(Map snap = null) {
+    snap = snap ?: roomSnapshot()
+    if (snap.valid != true) return [valid: false]
+
+    String context = activeContextKey()
+    String intentBucket = activeIntentBucket(snap.intent)
+    return [
+        valid    : true,
+        sw       : snap.sw,
+        intent   : snap.intent,
+        bucket   : intentBucket,
+        level    : snap.level,
+        ct       : snap.ct,
+        context  : context,
+        override : overrideActive(context, intentBucket),
+        roomState: roomDevice()?.currentValue("roomState") ?: "Off"
+    ]
+}
+
+private Boolean lightingDriversChanged(Map drivers) {
+    if (drivers?.valid != true) return true
+
+    Map last = state.lastLightingDrivers instanceof Map ? state.lastLightingDrivers : null
+    if (!last) return true
+
+    Long elapsed = now() - safeLong(state.lastLightingDriversAt, 0L)
+    if (elapsed > lightingDriverSkipWindowMs()) return true
+
+    List keys = ["sw", "intent", "bucket", "level", "ct", "context", "override", "roomState"]
+    Boolean changed = keys.any { key -> drivers[key] != last[key] }
+    if (!changed) {
+        trace "Lighting drivers unchanged within ${elapsed}ms: ${drivers}"
+    }
+    return changed
+}
+
+private void recordLightingDrivers(Map drivers) {
+    if (drivers?.valid != true) return
+    state.lastLightingDrivers = drivers
+    state.lastLightingDriversAt = now()
+}
+
+private Integer lightingDriverSkipWindowMs() {
+    return 2000
 }
 
 private Boolean roomLightingInactive(Map snap = null) {
