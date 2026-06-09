@@ -1111,19 +1111,18 @@ private void setDimmer(def dimmer, Integer level, Integer transitionSecondsForCo
 private void setColorTemperature(def dev, Integer colorTemperature, Boolean forceCommand = true, Map stats = null) {
     if (!isColorTemperatureDevice(dev)) return
 
-    String currentSwitch = dev.currentValue("switch")?.toString()
     Integer currentCt = normalizedColorTemperature(dev.currentValue("colorTemperature"), -1)
-    if (currentCt == colorTemperature && (!forceCommand || currentSwitch == "on")) {
+    if (!forceCommand && currentCt == colorTemperature) {
         incrementLightingStat(stats, "skips")
         debug "Skipping ${dev.displayName}; already at CT ${colorTemperature}"
-        trace "Skip setColorTemperature ${dev.displayName}: current=${currentCt}, target=${colorTemperature}, switch=${currentSwitch}, force=${forceCommand}"
+        trace "Skip setColorTemperature ${dev.displayName}: current=${currentCt}, target=${colorTemperature}, force=${forceCommand}"
         return
     }
 
     try {
         incrementLightingStat(stats, "commands")
         recordLightingCommand(stats, "setColorTemperature ${dev.displayName} -> ${colorTemperature}K")
-        trace "Command setColorTemperature ${dev.displayName}: current=${currentCt}, target=${colorTemperature}, switch=${currentSwitch}, force=${forceCommand}"
+        trace "Command setColorTemperature ${dev.displayName}: current=${currentCt}, target=${colorTemperature}, force=${forceCommand}"
         dev.setColorTemperature(colorTemperature)
     } catch (Exception e) {
         log.warn "${app.label}: Could not set ${dev.displayName} color temperature to ${colorTemperature}: ${e.message}"
