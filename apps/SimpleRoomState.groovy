@@ -1008,33 +1008,46 @@ def circadianReferenceHandler(evt) {
 }
 
 def motionActiveHandler(evt) {
+    Map timing = startRoomStateTiming("motionActive")
     debug "Motion active: ${evt.displayName}"
 
     if (!eventDeviceStillMatches(evt, "motion", "active")) {
+        markRoomStateTiming(timing, "staleCheck")
+        logRoomStateTiming(timing, "ignored stale motion active: ${evt.displayName}")
         debug "Ignoring stale motion active event because sensor is no longer active: ${evt.displayName}"
         return
     }
+    markRoomStateTiming(timing, "staleCheck")
 
-    recordPresenceActivity("motion active: ${evt.displayName}")
+    recordPresenceActivity("motion active: ${evt.displayName}", timing)
 }
 
-def recordPresenceActivity(String reason) {
+def recordPresenceActivity(String reason, Map timing = null) {
     reason = activityReason(reason, "presence activity")
+    markRoomStateTiming(timing, "presenceStart")
 
     if (lockedFlag()) {
+        markRoomStateTiming(timing, "lockedCheck")
         recordLatentActivity("${reason} while locked")
+        logRoomStateTiming(timing, "latent activity while locked: ${reason}")
         return
     }
+    markRoomStateTiming(timing, "lockedCheck")
 
     if (asleepFlag()) {
+        markRoomStateTiming(timing, "asleepCheck")
+        logRoomStateTiming(timing, "ignored activity while asleep: ${reason}")
         debug "Ignoring normal activity while asleep: ${reason}"
         return
     }
+    markRoomStateTiming(timing, "asleepCheck")
 
     if (engageOnMotionWithDoorsClosed && allDoorsClosed()) {
-        setEngaged("${reason} with all doors closed")
+        markRoomStateTiming(timing, "doorCheck")
+        setEngaged("${reason} with all doors closed", timing)
     } else {
-        setOccupied(reason)
+        markRoomStateTiming(timing, "doorCheck")
+        setOccupied(reason, timing)
     }
 }
 
@@ -1328,21 +1341,27 @@ private Boolean hasRecentActivityWithinOccupiedTimeout() {
     return elapsedMs <= requiredMs
 }
 
-private void setOccupied(String reason) {
+private void setOccupied(String reason, Map timing = null) {
     debug "Occupied true: ${reason}"
     setOccupiedFlag(true)
+    markRoomStateTiming(timing, "occupiedFlag")
     state.offReason = null
     clearCourtesyState()
+    markRoomStateTiming(timing, "clearCourtesy")
     recordActivity(reason)
+    markRoomStateTiming(timing, "recordActivity")
     state.roomLevel = currentRoomControlLevel()
-    recomputeAndPublish()
+    markRoomStateTiming(timing, "roomControlLevel")
+    recomputeAndPublish(timing)
+    logRoomStateTiming(timing, "setOccupied: ${reason}")
 }
 
-private void setEngaged(String reason) {
+private void setEngaged(String reason, Map timing = null) {
     reason = activityReason(reason, "engagement activity")
     state.offReason = null
 
     if (asleepFlag()) {
+        logRoomStateTiming(timing, "ignored engaged while asleep: ${reason}")
         debug "Ignoring Engaged while asleep: ${reason}"
         setEngagedFlag(false)
         componentSwitchOff("Engaged")
@@ -1352,16 +1371,22 @@ private void setEngaged(String reason) {
     debug "Engaged true: ${reason}"
     setOccupiedFlag(true)
     setEngagedFlag(true)
+    markRoomStateTiming(timing, "engagedFlags")
     clearCourtesyState()
     unschedule(clearEngagedIfStillInactive)
     state.lastEngagedInactiveAt = now()
+    markRoomStateTiming(timing, "clearCourtesy")
 
     recordActivity(reason)
+    markRoomStateTiming(timing, "recordActivity")
 
     componentSwitchOn("Engaged")
+    markRoomStateTiming(timing, "componentSwitch")
 
     scheduleEngagedTimeout("engaged on")
-    recomputeAndPublish()
+    markRoomStateTiming(timing, "scheduleTimeout")
+    recomputeAndPublish(timing)
+    logRoomStateTiming(timing, "setEngaged: ${reason}")
 }
 
 private void setAsleep(Boolean asleep, String reason) {
@@ -2155,8 +2180,10 @@ private Integer modeBasedLightingLevel(String prefix) {
     return normalizedPercent(value, prefix == "occupiedLightingLevel" ? 100 : 20)
 }
 
-private void recomputeAndPublish() {
+private void recomputeAndPublish(Map timing = null) {
+    Long localStartedAt = timing ? null : now()
     ensureInitialState()
+    markRoomStateTiming(timing, "ensureInitialState")
 
     Boolean lockedNow = lockedFlag()
     Boolean asleepNow = asleepFlag()
@@ -2192,9 +2219,12 @@ private void recomputeAndPublish() {
     Boolean roomSwitchShouldBeOn = lockedNow ? previousSwitchOn : (newRoomState in ["Occupied", "Engaged"])
     Boolean metaLightShouldBeOn = lockedNow ? (state.metaLightSwitch == "on") : (newLightingIntent in ["On", "Courtesy", "Night"])
     String stateReason = computeStateReason(newRoomState, newLightingIntent)
+    markRoomStateTiming(timing, "compute")
 
     publishMetaLightDevice(metaLightShouldBeOn, effectiveLightingLevel, effectiveColorTemperature)
+    markRoomStateTiming(timing, "publishMetaLight")
     publishRoomDevice(roomSwitchShouldBeOn, newRoomState, newLightingIntent, roomControlLevel, stateReason)
+    markRoomStateTiming(timing, "publishRoom")
 
     if (state.roomState != newRoomState || state.lightingIntent != newLightingIntent) {
         log.info "${roomDeviceLabel()}: roomState=${newRoomState}, lightingIntent=${newLightingIntent}, stateReason=${stateReason}"
@@ -2203,6 +2233,13 @@ private void recomputeAndPublish() {
     state.roomState = newRoomState
     state.lightingIntent = newLightingIntent
     state.stateReason = stateReason
+
+    if (!timing && localStartedAt) {
+        Long elapsed = now() - localStartedAt
+        if (elapsed >= roomStateTimingWarnMs()) {
+            log.warn "${roomDeviceLabel()}: recomputeAndPublish took ${elapsed}ms"
+        }
+    }
 }
 
 private String computeStateReason(String roomState, String lightingIntent) {
@@ -2300,6 +2337,38 @@ private void publishMetaLightDevice(Boolean switchOn, Integer lightingLevel, Int
 
 
 // -------------------- Logging --------------------
+
+private Map startRoomStateTiming(String operation) {
+    return [operation: operation, startedAt: now(), marks: []]
+}
+
+private void markRoomStateTiming(Map timing, String label) {
+    if (!timing || !label) return
+    Long startedAt = safeLong(timing.startedAt, 0L)
+    if (!startedAt) return
+
+    List marks = timing.marks instanceof List ? timing.marks : []
+    marks << "${label}=${now() - startedAt}ms"
+    timing.marks = marks
+}
+
+private void logRoomStateTiming(Map timing, String detail) {
+    if (!timing) return
+
+    Long startedAt = safeLong(timing.startedAt, 0L)
+    if (!startedAt) return
+
+    Long elapsed = now() - startedAt
+    if (elapsed < roomStateTimingWarnMs()) return
+
+    List marks = timing.marks instanceof List ? timing.marks : []
+    String operation = timing.operation ?: "roomState"
+    log.warn "${roomDeviceLabel()}: ${operation} took ${elapsed}ms (${detail}; ${marks.join(', ')})"
+}
+
+private Integer roomStateTimingWarnMs() {
+    return 750
+}
 
 private void debug(String msg) {
     if (debugEnabled(debugLogging)) {
