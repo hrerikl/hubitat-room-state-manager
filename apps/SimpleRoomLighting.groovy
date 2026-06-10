@@ -234,10 +234,25 @@ private void executeRoomReassessNow(String reason, Boolean metaLightOff) {
     }
 
     if (roomLightingInactive(snap)) {
+        if (activeIntentSnapshot(snap)) {
+            Integer retries = safeInteger(state.activeIntentSnapshotRetries, 0)
+            if (retries < 3) {
+                state.activeIntentSnapshotRetries = retries + 1
+                debug "Active lighting intent has incomplete MetaLight snapshot; retrying reassess (${state.activeIntentSnapshotRetries}/3): ${snap}"
+                state.pendingRoomReassessReason = appendRoomReassessReason(state.pendingRoomReassessReason, reason)
+                runInMillis(300, "processRoomReassess", [overwrite: true])
+            } else {
+                log.warn "${app.label}: Active lighting intent still has incomplete MetaLight snapshot after retries; skipping Off command: ${snap}"
+                state.activeIntentSnapshotRetries = 0
+            }
+            return
+        }
+        state.activeIntentSnapshotRetries = 0
         applyOffCondition("${reason} while inactive", snap)
         return
     }
 
+    state.activeIntentSnapshotRetries = 0
     reassessLighting(reason, snap)
 }
 
@@ -899,6 +914,12 @@ private Boolean roomLightingInactive(Map snap = null) {
     snap = snap ?: roomSnapshot()
     if (snap.valid != true) return true
     return snap.sw != "on" || snap.level <= 0 || !(snap.intent in ["On", "Courtesy", "Night"])
+}
+
+private Boolean activeIntentSnapshot(Map snap = null) {
+    snap = snap ?: roomSnapshot()
+    if (snap.valid != true) return false
+    return snap.intent in ["On", "Courtesy", "Night"]
 }
 
 private String activeContextKey() {

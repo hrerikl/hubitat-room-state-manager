@@ -2364,7 +2364,7 @@ private void publishMetaLightDevice(Boolean switchOn, Integer lightingLevel, Int
     try {
         if (switchOn) {
             Integer level = lightingLevel
-            if (normalizedPercent(state.metaLightLevel, -1) != level) {
+            if (normalizedPercent(dev.currentValue("metaLightLevel"), -1) != level) {
                 dev.setMetaLightLevel(level)
             }
             state.metaLightLevel = level
@@ -2375,7 +2375,7 @@ private void publishMetaLightDevice(Boolean switchOn, Integer lightingLevel, Int
 
     try {
         Integer ct = colorTemperature
-        if (normalizedColorTemperature(state.metaLightColorTemperature, -1) != ct) {
+        if (normalizedColorTemperature(dev.currentValue("metaLightColorTemperature"), -1) != ct) {
             dev.setMetaLightColorTemperature(ct)
         }
         state.metaLightColorTemperature = ct
@@ -2385,7 +2385,7 @@ private void publishMetaLightDevice(Boolean switchOn, Integer lightingLevel, Int
 
     try {
         String switchValue = switchOn ? "on" : "off"
-        if (state.metaLightSwitch != switchValue) {
+        if (dev.currentValue("metaLightSwitch") != switchValue) {
             dev.setMetaLightSwitchState(switchValue)
         }
         state.metaLightSwitch = switchValue
