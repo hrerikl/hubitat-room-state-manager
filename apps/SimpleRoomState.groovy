@@ -2154,7 +2154,8 @@ private Boolean circadianReferenceTrackingActiveForRecompute() {
     if (circadianReferenceBulb) return true
 
     try {
-        return parent.cachedCircadianReferenceAvailable() == true
+        if (parent.cachedCircadianReferenceAvailable() == true) return true
+        return circadianReferenceDevice() != null
     } catch (Exception ignored) {
         return circadianReferenceDevice() != null
     }
