@@ -330,7 +330,9 @@ private void ensureInitialState() {
 
 private void seedPresenceFlag(String name, Boolean fallback) {
     def atomic = atomicState[name]
-    Boolean value = atomic != null ? atomic == true : (state[name] != null ? state[name] == true : fallback == true)
+    if (atomic != null) return
+
+    Boolean value = state[name] != null ? state[name] == true : fallback == true
     setPresenceFlag(name, value)
 }
 
@@ -976,8 +978,11 @@ def locationModeHandler(evt) {
     }
 
     state.forceModeLightingLevel = true
-    recomputeAndPublish()
-    state.forceModeLightingLevel = false
+    try {
+        recomputeAndPublish()
+    } finally {
+        state.forceModeLightingLevel = false
+    }
 }
 
 private Boolean presenceClearingMode(def modeName) {
@@ -1003,8 +1008,11 @@ def circadianReferenceHandler(evt) {
 
     debug "Circadian reference ${evt.name} changed to ${evt.value}"
     state.forceCircadianReferenceUpdate = true
-    recomputeAndPublish()
-    state.forceCircadianReferenceUpdate = false
+    try {
+        recomputeAndPublish()
+    } finally {
+        state.forceCircadianReferenceUpdate = false
+    }
 }
 
 def reapplyCircadianReferenceFromParent(String reason = "parent reference changed") {
