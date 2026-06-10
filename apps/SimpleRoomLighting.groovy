@@ -564,14 +564,20 @@ private void applyIntentRows(String context, String intentBucket, Integer metaLe
         } else if (switchCommand == "off") {
             turnOffDevice(dev, "activation switch off", transitionSecondsFor(reason, "deactivation"), stats)
         } else if (isDimmer(dev)) {
+            Boolean combinedCommandSent = false
             if (levelMode == "none") {
                 turnOnDevice(dev, forceActivation, stats)
             } else {
                 Integer level = levelMode == "explicit" ? rowExplicitLevel(context, intentBucket, dev, metaLevel, useOverride) : rowFollowLevel(context, intentBucket, dev, metaLevel, useOverride)
                 level = physicalLevelForRow(context, intentBucket, dev, level, useOverride)
-                setDimmer(dev, level, transition, forceActivation, stats)
+                if (ctMode == "follow" && !levelChangeOnly) {
+                    combinedCommandSent = setDimmerColorTemperature(dev, level, metaCt, transition, forceActivation, stats)
+                }
+                if (!combinedCommandSent) {
+                    setDimmer(dev, level, transition, forceActivation, stats)
+                }
             }
-            if (ctMode == "follow") {
+            if (ctMode == "follow" && !combinedCommandSent) {
                 setColorTemperature(dev, metaCt, forceActivation, stats)
             }
         } else {
@@ -587,16 +593,22 @@ private void applyIntentRows(String context, String intentBucket, Integer metaLe
 
 private void applyLevelCtAfterSwitchesRow(String context, String intentBucket, def dev, Boolean useOverride, Integer metaLevel, Integer metaCt, Boolean levelChangeOnly, Boolean colorTemperatureOnly, Boolean suppressInitialFeedback, Integer transition, Boolean forceActivation, Map stats = null) {
     String ctMode = isColorTemperatureDevice(dev) ? rowCtMode(context, intentBucket, dev, useOverride) : "none"
+    Boolean combinedCommandSent = false
 
     if (!colorTemperatureOnly) {
         Integer level = physicalLevelForRow(context, intentBucket, dev, rowFollowLevel(context, intentBucket, dev, metaLevel, useOverride), useOverride)
         if (suppressInitialFeedback) {
             suppressControlFeedback(dev)
         }
-        setDimmer(dev, level, transition, forceActivation, stats)
+        if (ctMode == "follow" && !levelChangeOnly) {
+            combinedCommandSent = setDimmerColorTemperature(dev, level, metaCt, transition, forceActivation, stats)
+        }
+        if (!combinedCommandSent) {
+            setDimmer(dev, level, transition, forceActivation, stats)
+        }
     }
 
-    if (!levelChangeOnly && ctMode == "follow") {
+    if (!levelChangeOnly && ctMode == "follow" && !combinedCommandSent) {
         if (suppressInitialFeedback) {
             suppressControlFeedback(dev)
         }
@@ -1196,6 +1208,36 @@ private void setDimmer(def dimmer, Integer level, Integer transitionSecondsForCo
         recordLightingCommandTiming(stats, command, commandStartedAt)
     } catch (Exception e) {
         log.warn "${app.label}: Could not set ${dimmer.displayName} to ${level}: ${e.message}"
+    }
+}
+
+private Boolean setDimmerColorTemperature(def dev, Integer level, Integer colorTemperature, Integer transitionSecondsForCommand, Boolean forceCommand = true, Map stats = null) {
+    if (!isDimmer(dev) || !isColorTemperatureDevice(dev)) return false
+
+    String currentSwitch = dev.currentValue("switch")?.toString()
+    Integer currentLevel = normalizedLevel(dev.currentValue("level"), -1)
+    Integer currentCt = normalizedColorTemperature(dev.currentValue("colorTemperature"), -1)
+    if (!forceCommand && currentSwitch == "on" && currentLevel == level && currentCt == colorTemperature) {
+        incrementLightingStat(stats, "skips")
+        debug "Skipping ${dev.displayName}; already on at level ${level} and CT ${colorTemperature}"
+        trace "Skip setColorTemperature+level ${dev.displayName}: current=${currentSwitch}/${currentLevel}/${currentCt}, target=on/${level}/${colorTemperature}, transition=${transitionSecondsForCommand}, force=${forceCommand}"
+        return true
+    }
+
+    String command = "setColorTemperature ${dev.displayName} -> ${colorTemperature}K/${level}%"
+    try {
+        incrementLightingStat(stats, "commands")
+        recordLightingCommand(stats, command)
+        trace "Command setColorTemperature+level ${dev.displayName}: current=${currentSwitch}/${currentLevel}/${currentCt}, target=${colorTemperature}/${level}, force=${forceCommand}"
+        Long commandStartedAt = now()
+        dev.setColorTemperature(colorTemperature, level)
+        recordLightingCommandTiming(stats, command, commandStartedAt)
+        return true
+    } catch (Exception e) {
+        trace "Combined setColorTemperature+level not available for ${dev.displayName}: ${e.message}"
+        decrementLightingStat(stats, "commands")
+        removeLastLightingCommand(stats, command)
+        return false
     }
 }
 
@@ -1960,11 +2002,25 @@ private void incrementLightingStat(Map stats, String key) {
     stats[key] = safeInteger(stats[key], 0) + 1
 }
 
+private void decrementLightingStat(Map stats, String key) {
+    if (stats == null || key == null) return
+    stats[key] = Math.max(safeInteger(stats[key], 0) - 1, 0)
+}
+
 private void recordLightingCommand(Map stats, String command) {
     if (stats == null || !command) return
     List commands = stats.commandList instanceof List ? stats.commandList : []
     commands << command
     stats.commandList = commands
+}
+
+private void removeLastLightingCommand(Map stats, String command) {
+    if (stats == null || !command || !(stats.commandList instanceof List)) return
+    List commands = stats.commandList
+    if (commands && commands[-1] == command) {
+        commands.remove(commands.size() - 1)
+        stats.commandList = commands
+    }
 }
 
 private void recordLightingCommandTiming(Map stats, String command, Long startedAt) {
