@@ -1184,13 +1184,16 @@ private void setDimmer(def dimmer, Integer level, Integer transitionSecondsForCo
 
     try {
         incrementLightingStat(stats, "commands")
-        recordLightingCommand(stats, "setLevel ${dimmer.displayName} -> ${level}%/${transitionSecondsForCommand ?: 0}s")
+        String command = "setLevel ${dimmer.displayName} -> ${level}%/${transitionSecondsForCommand ?: 0}s"
+        recordLightingCommand(stats, command)
         trace "Command setLevel ${dimmer.displayName}: current=${currentSwitch}/${currentLevel}, target=${level}, transition=${transitionSecondsForCommand}, force=${forceCommand}"
+        Long commandStartedAt = now()
         if ((transitionSecondsForCommand ?: 0) > 0) {
             dimmer.setLevel(level, transitionSecondsForCommand)
         } else {
             dimmer.setLevel(level)
         }
+        recordLightingCommandTiming(stats, command, commandStartedAt)
     } catch (Exception e) {
         log.warn "${app.label}: Could not set ${dimmer.displayName} to ${level}: ${e.message}"
     }
@@ -1209,9 +1212,12 @@ private void setColorTemperature(def dev, Integer colorTemperature, Boolean forc
 
     try {
         incrementLightingStat(stats, "commands")
-        recordLightingCommand(stats, "setColorTemperature ${dev.displayName} -> ${colorTemperature}K")
+        String command = "setColorTemperature ${dev.displayName} -> ${colorTemperature}K"
+        recordLightingCommand(stats, command)
         trace "Command setColorTemperature ${dev.displayName}: current=${currentCt}, target=${colorTemperature}, force=${forceCommand}"
+        Long commandStartedAt = now()
         dev.setColorTemperature(colorTemperature)
+        recordLightingCommandTiming(stats, command, commandStartedAt)
     } catch (Exception e) {
         log.warn "${app.label}: Could not set ${dev.displayName} color temperature to ${colorTemperature}: ${e.message}"
     }
@@ -1228,9 +1234,12 @@ private void turnOnDevice(def dev, Boolean forceCommand = true, Map stats = null
 
     try {
         incrementLightingStat(stats, "commands")
-        recordLightingCommand(stats, "on ${dev.displayName}")
+        String command = "on ${dev.displayName}"
+        recordLightingCommand(stats, command)
         trace "Command on ${dev.displayName}: current=${currentSwitch}, force=${forceCommand}"
+        Long commandStartedAt = now()
         dev.on()
+        recordLightingCommandTiming(stats, command, commandStartedAt)
     } catch (Exception e) {
         log.warn "${app.label}: Could not turn on ${dev.displayName}: ${e.message}"
     }
@@ -1242,13 +1251,16 @@ private void turnOffDevice(def dev, String reason, Integer transitionSecondsForC
     if (isDimmer(dev)) {
         try {
             incrementLightingStat(stats, "commands")
-            recordLightingCommand(stats, "setLevel ${dev.displayName} -> 0%/${transitionSecondsForCommand ?: 0}s")
+            String command = "setLevel ${dev.displayName} -> 0%/${transitionSecondsForCommand ?: 0}s"
+            recordLightingCommand(stats, command)
             trace "Command off-level ${dev.displayName}: current=${currentSwitch}/${currentLevel}, target=0, transition=${transitionSecondsForCommand}, reason=${reason}"
+            Long commandStartedAt = now()
             if ((transitionSecondsForCommand ?: 0) > 0) {
                 dev.setLevel(0, transitionSecondsForCommand)
             } else {
                 dev.setLevel(0)
             }
+            recordLightingCommandTiming(stats, command, commandStartedAt)
             return
         } catch (Exception e) {
             log.warn "${app.label}: Could not fade ${dev.displayName} off (${reason}); trying off(): ${e.message}"
@@ -1257,9 +1269,12 @@ private void turnOffDevice(def dev, String reason, Integer transitionSecondsForC
 
     try {
         incrementLightingStat(stats, "commands")
-        recordLightingCommand(stats, "off ${dev.displayName}")
+        String command = "off ${dev.displayName}"
+        recordLightingCommand(stats, command)
         trace "Command off ${dev.displayName}: current=${currentSwitch}, reason=${reason}"
+        Long commandStartedAt = now()
         dev.off()
+        recordLightingCommandTiming(stats, command, commandStartedAt)
     } catch (Exception e) {
         log.warn "${app.label}: Could not turn off ${dev.displayName} (${reason}): ${e.message}"
     }
@@ -1937,7 +1952,7 @@ private void publishLastLightingAction(String action) {
 }
 
 private Map lightingStats(List devices) {
-    return [commands: 0, skips: 0, devices: safeInteger(devices?.size(), 0), commandList: []]
+    return [commands: 0, skips: 0, devices: safeInteger(devices?.size(), 0), commandList: [], commandTimings: []]
 }
 
 private void incrementLightingStat(Map stats, String key) {
@@ -1952,6 +1967,14 @@ private void recordLightingCommand(Map stats, String command) {
     stats.commandList = commands
 }
 
+private void recordLightingCommandTiming(Map stats, String command, Long startedAt) {
+    if (stats == null || !command || !startedAt) return
+    Long elapsed = now() - startedAt
+    List timings = stats.commandTimings instanceof List ? stats.commandTimings : []
+    timings << "${command} ${elapsed}ms"
+    stats.commandTimings = timings
+}
+
 private void logLightingTiming(String operation, Long startedAt, String reason, Map stats = null) {
     if (!startedAt) return
 
@@ -1960,6 +1983,10 @@ private void logLightingTiming(String operation, Long startedAt, String reason, 
     List commandList = stats?.commandList instanceof List ? stats.commandList : []
     if (commandList) {
         detail = "${detail}, commandList=${commandList.join('; ')}"
+    }
+    List commandTimings = stats?.commandTimings instanceof List ? stats.commandTimings : []
+    if (commandTimings) {
+        detail = "${detail}, commandTimings=${commandTimings.join('; ')}"
     }
     if (elapsed >= 1000L) {
         log.warn "${app.label}: ${operation} took ${elapsed}ms (${detail})"
