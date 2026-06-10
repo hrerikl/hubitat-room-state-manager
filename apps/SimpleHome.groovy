@@ -153,6 +153,8 @@ def initialize() {
     subscribe(recoveryDevice(), "switch.on", recoverySwitchOnHandler)
     subscribe(maintenanceDevice(), "switch.on", maintenanceSwitchOnHandler)
     subscribe(location, "mode", houseStatusModeHandler)
+    refreshCircadianReferenceCache()
+    subscribeCircadianReferenceCache()
     publishCurrentHouseStatus()
     scheduleTemporaryDebugExpiryIfNeeded()
     resumeReinitializeQueueIfNeeded()
@@ -853,6 +855,53 @@ def arrivalDevice() {
 
 def circadianReferenceBulb() {
     return effectiveCircadianReferenceBulb()
+}
+
+def cachedCircadianReferenceAvailable() {
+    return state.cachedCircadianReferenceAvailable == true
+}
+
+def cachedCircadianReferenceLevel() {
+    if (state.cachedCircadianReferenceLevel == null) {
+        refreshCircadianReferenceCache()
+    }
+    return normalizedPercent(state.cachedCircadianReferenceLevel, 100)
+}
+
+def cachedCircadianReferenceColorTemperature() {
+    if (state.cachedCircadianReferenceColorTemperature == null) {
+        refreshCircadianReferenceCache()
+    }
+    return normalizedColorTemperature(state.cachedCircadianReferenceColorTemperature, 2700)
+}
+
+private void subscribeCircadianReferenceCache() {
+    def reference = effectiveCircadianReferenceBulb()
+    if (!reference) return
+
+    subscribe(reference, "level", circadianReferenceCacheHandler)
+    subscribe(reference, "colorTemperature", circadianReferenceCacheHandler)
+}
+
+def circadianReferenceCacheHandler(evt) {
+    if (evt.name == "level") {
+        state.cachedCircadianReferenceLevel = normalizedPercent(evt.value, 100)
+    } else if (evt.name == "colorTemperature") {
+        state.cachedCircadianReferenceColorTemperature = normalizedColorTemperature(evt.value, 2700)
+    }
+    state.cachedCircadianReferenceAvailable = true
+    state.cachedCircadianReferenceAt = now()
+}
+
+private void refreshCircadianReferenceCache() {
+    def reference = effectiveCircadianReferenceBulb()
+    state.cachedCircadianReferenceAvailable = reference != null
+
+    if (!reference) return
+
+    state.cachedCircadianReferenceLevel = normalizedPercent(reference.currentValue("level"), 100)
+    state.cachedCircadianReferenceColorTemperature = normalizedColorTemperature(reference.currentValue("colorTemperature"), 2700)
+    state.cachedCircadianReferenceAt = now()
 }
 
 private def effectiveCircadianReferenceBulb() {

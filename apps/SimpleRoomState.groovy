@@ -2036,8 +2036,12 @@ private String computeLightingIntent(String roomState) {
 }
 
 private Integer computeLightingLevel(String lightingIntent) {
-    if (circadianReferenceTrackingActive() && lightingIntent == "On") return adjustedReferenceLevel("occupied", 100, 0)
-    if (circadianReferenceTrackingActive() && lightingIntent == "Courtesy") return adjustedReferenceLevel("courtesy", 30, 0)
+    return computeLightingLevel(lightingIntent, referenceSnapshotForRecompute())
+}
+
+private Integer computeLightingLevel(String lightingIntent, Map referenceSnapshot) {
+    if (referenceSnapshot?.active == true && lightingIntent == "On") return adjustedReferenceLevel("occupied", 100, 0, referenceSnapshot.level as Integer)
+    if (referenceSnapshot?.active == true && lightingIntent == "Courtesy") return adjustedReferenceLevel("courtesy", 30, 0, referenceSnapshot.level as Integer)
     if (lightingIntent == "On") return currentRoomControlLevel()
     if (lightingIntent == "Courtesy") return configuredCourtesyLightingLevel()
     if (lightingIntent == "Night") return configuredNightLightingLevel()
@@ -2045,19 +2049,31 @@ private Integer computeLightingLevel(String lightingIntent) {
 }
 
 private Integer lockedMetaLightOnLevel() {
-    return circadianReferenceTrackingActive() ? adjustedReferenceLevel("occupied", 100, 0) : nextRoomControlLevel()
+    return lockedMetaLightOnLevel(referenceSnapshotForRecompute())
+}
+
+private Integer lockedMetaLightOnLevel(Map referenceSnapshot) {
+    return referenceSnapshot?.active == true ? adjustedReferenceLevel("occupied", 100, 0, referenceSnapshot.level as Integer) : nextRoomControlLevel()
 }
 
 private Integer effectiveMetaLightColorTemperature() {
-    if (circadianReferenceTrackingActive()) return currentReferenceColorTemperature()
+    return effectiveMetaLightColorTemperature(referenceSnapshotForRecompute())
+}
+
+private Integer effectiveMetaLightColorTemperature(Map referenceSnapshot) {
+    if (referenceSnapshot?.active == true) return normalizedColorTemperature(referenceSnapshot.ct, 2700)
     return normalizedColorTemperature(state.metaLightColorTemperature, 2700)
 }
 
 private Integer adjustedReferenceLevel(String prefix, Integer fallbackPercent, Integer fallbackOffset) {
-    Integer referenceLevel = currentReferenceLevel()
+    return adjustedReferenceLevel(prefix, fallbackPercent, fallbackOffset, currentReferenceLevel())
+}
+
+private Integer adjustedReferenceLevel(String prefix, Integer fallbackPercent, Integer fallbackOffset, Integer referenceLevel) {
+    Integer normalizedReferenceLevel = normalizedPercent(referenceLevel, 100)
     Integer percent = referencePercent(prefix, fallbackPercent)
     Integer offset = referenceOffset(prefix, fallbackOffset)
-    BigDecimal adjusted = ((referenceLevel as BigDecimal) * (percent as BigDecimal) / 100G) + (offset as BigDecimal)
+    BigDecimal adjusted = ((normalizedReferenceLevel as BigDecimal) * (percent as BigDecimal) / 100G) + (offset as BigDecimal)
     return normalizedPercent(adjusted.setScale(0, BigDecimal.ROUND_HALF_UP) as Integer, fallbackPercent)
 }
 
@@ -2096,12 +2112,52 @@ private Integer currentReferenceColorTemperature() {
     return normalizedColorTemperature(circadianReferenceDevice()?.currentValue("colorTemperature"), normalizedColorTemperature(state.metaLightColorTemperature, 2700))
 }
 
+private Map referenceSnapshotForRecompute() {
+    if (!circadianReferenceTrackingActiveForRecompute()) {
+        return [active: false, level: null, ct: null]
+    }
+
+    if (circadianReferenceBulb) {
+        return [
+            active: true,
+            level : normalizedPercent(circadianReferenceBulb.currentValue("level"), 100),
+            ct    : normalizedColorTemperature(circadianReferenceBulb.currentValue("colorTemperature"), normalizedColorTemperature(state.metaLightColorTemperature, 2700))
+        ]
+    }
+
+    try {
+        return [
+            active: true,
+            level : normalizedPercent(parent.cachedCircadianReferenceLevel(), 100),
+            ct    : normalizedColorTemperature(parent.cachedCircadianReferenceColorTemperature(), normalizedColorTemperature(state.metaLightColorTemperature, 2700))
+        ]
+    } catch (Exception ignored) {
+        return [
+            active: true,
+            level : currentReferenceLevel(),
+            ct    : currentReferenceColorTemperature()
+        ]
+    }
+}
+
 private Boolean followCircadianReferenceEnabled() {
     return followCircadianReferenceSettingEnabled() && circadianReferenceDevice()
 }
 
 private Boolean circadianReferenceTrackingActive() {
     return followCircadianReferenceEnabled() && state.circadianReferencePaused != true
+}
+
+private Boolean circadianReferenceTrackingActiveForRecompute() {
+    if (!followCircadianReferenceSettingEnabled()) return false
+    if (state.circadianReferencePaused == true) return false
+    if (circadianReferenceBulb) return true
+
+    try {
+        return parent.cachedCircadianReferenceAvailable() == true
+    } catch (Exception ignored) {
+        return circadianReferenceDevice() != null
+    }
 }
 
 private void pauseCircadianReference(String reason) {
@@ -2207,12 +2263,15 @@ private void recomputeAndPublish(Map timing = null) {
     }
     state.keepCircadianReferencePausedForIntentChange = false
 
+    Map referenceSnapshot = referenceSnapshotForRecompute()
+    markRoomStateTiming(timing, "reference")
+
     Boolean lockedReferenceUpdate = lockedNow && state.forceCircadianReferenceUpdate && state.metaLightSwitch == "on"
-    Integer effectiveLightingLevel = lockedNow && !lockedReferenceUpdate ? previousMetaLightLevel : computeLightingLevel(newLightingIntent)
+    Integer effectiveLightingLevel = lockedNow && !lockedReferenceUpdate ? previousMetaLightLevel : computeLightingLevel(newLightingIntent, referenceSnapshot)
     if (lockedReferenceUpdate && effectiveLightingLevel == 0) {
-        effectiveLightingLevel = lockedMetaLightOnLevel()
+        effectiveLightingLevel = lockedMetaLightOnLevel(referenceSnapshot)
     }
-    Integer effectiveColorTemperature = lockedNow && !lockedReferenceUpdate ? previousMetaLightColorTemperature : effectiveMetaLightColorTemperature()
+    Integer effectiveColorTemperature = lockedNow && !lockedReferenceUpdate ? previousMetaLightColorTemperature : effectiveMetaLightColorTemperature(referenceSnapshot)
     Integer roomControlLevel = lockedNow ? previousRoomLevel : (newRoomState in ["Occupied", "Engaged"] ? effectiveLightingLevel : 0)
 
     // Locking should not change the public switch. It is a freeze/hold state, not an on/off request.
