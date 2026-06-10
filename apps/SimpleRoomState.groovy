@@ -1007,6 +1007,25 @@ def circadianReferenceHandler(evt) {
     state.forceCircadianReferenceUpdate = false
 }
 
+def reapplyCircadianReferenceFromParent(String reason = "parent reference changed") {
+    if (!circadianReferenceTrackingActiveForRecompute()) {
+        debug "Ignoring parent reference reapply because tracking is paused or unavailable: ${reason}"
+        return
+    }
+    if (!metaLightIntentActive()) {
+        debug "Ignoring parent reference reapply because MetaLight is inactive: ${reason}"
+        return
+    }
+
+    debug "Reapplying circadian reference from parent: ${reason}"
+    state.forceCircadianReferenceUpdate = true
+    try {
+        recomputeAndPublish()
+    } finally {
+        state.forceCircadianReferenceUpdate = false
+    }
+}
+
 def motionActiveHandler(evt) {
     Map timing = startRoomStateTiming("motionActive")
     debug "Motion active: ${evt.displayName}"

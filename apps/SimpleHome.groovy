@@ -893,6 +893,23 @@ def circadianReferenceCacheHandler(evt) {
     state.cachedCircadianReferenceAt = now()
 }
 
+def houseIntentReferenceChanged(String reason = "house intent reference changed") {
+    refreshCircadianReferenceCache()
+    reapplyCircadianReferenceToRooms(reason)
+}
+
+private void reapplyCircadianReferenceToRooms(String reason) {
+    roomStateChildApps().each { child ->
+        try {
+            if (child.getRoomProfile() != "houseIntent") {
+                child.reapplyCircadianReferenceFromParent(reason)
+            }
+        } catch (Throwable e) {
+            log.warn "Simple Home: Could not reapply circadian reference for ${child?.label}: ${e.message}"
+        }
+    }
+}
+
 private void refreshCircadianReferenceCache() {
     def reference = effectiveCircadianReferenceBulb()
     state.cachedCircadianReferenceAvailable = reference != null

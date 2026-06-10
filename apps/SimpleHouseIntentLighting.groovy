@@ -223,6 +223,7 @@ def commitPendingIntent() {
         room.setMetaLightSwitchState(level > 0 ? "on" : "off")
         room.setMetaLightColorTemperature(ct)
         room.setMetaLightLevel(level)
+        notifyHouseIntentReferenceChanged(reason)
         debug "Committed House Intent level=${level}, ct=${ct}: ${reason}"
         state.remove("commitReason")
     } catch (Exception e) {
@@ -291,6 +292,14 @@ private void returnToHouseReference() {
     }
     announceScene("Follow House")
     debug "Returned House Intent to automatic reference"
+}
+
+private void notifyHouseIntentReferenceChanged(String reason) {
+    try {
+        parent?.houseIntentReferenceChanged(reason)
+    } catch (Throwable e) {
+        log.warn "${app.label}: Could not notify Simple Home that House Intent changed: ${e.message}"
+    }
 }
 
 private void ensurePendingFromRoom() {
