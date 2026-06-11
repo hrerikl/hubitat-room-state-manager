@@ -41,6 +41,11 @@ preferences {
             input "colorTemperatureStep", "number", title: "Color temperature step", defaultValue: 250, required: true
         }
 
+        section("Automatic return") {
+            input "preserveCustomModeNames", "enum", title: "Modes that keep House Intent custom lighting when entered", options: locationModeOptions(), multiple: true, defaultValue: ["Evening"], required: false
+            paragraph "Entering any other mode returns House Intent to the automatic reference. Default keeps custom lighting through the Day to Evening transition and clears it at Night and Day."
+        }
+
         section("Speech") {
             input "speechDevices", "capability.speechSynthesis", title: "Speech devices for scene names", multiple: true, required: false
             input "announceScenes", "bool", title: "Announce scene names", defaultValue: true, required: true
@@ -201,8 +206,23 @@ def picoReleasedHandler(evt) {
 
 def locationModeHandler(evt) {
     if (!houseIntentIsCustom()) return
+
+    if (preserveCustomInMode(evt.value)) {
+        debug "Location Mode changed to ${evt.value}; keeping House Intent custom lighting"
+        return
+    }
+
     debug "Location Mode changed to ${evt.value}; returning House Intent to automatic reference"
     returnToHouseReference()
+}
+
+private Boolean preserveCustomInMode(def modeName) {
+    String currentMode = modeName?.toString()
+    if (!currentMode) return false
+
+    def configuredModes = settings?.preserveCustomModeNames
+    if (configuredModes == null) configuredModes = ["Evening"]
+    return asList(configuredModes).collect { it?.toString() }.contains(currentMode)
 }
 
 def commitPendingIntent() {
