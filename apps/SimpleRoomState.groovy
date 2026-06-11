@@ -915,6 +915,11 @@ def customLightingHandler(evt) {
         return
     }
 
+    if (state.circadianReferencePaused != true) {
+        debug "Custom lighting cleared while reference tracking already active"
+        return
+    }
+
     resumeCircadianReference("custom lighting cleared")
     recomputeAndPublish()
 }
@@ -932,6 +937,21 @@ private void clearCustomLightingFromRoomControl(String reason) {
         roomDevice()?.clearCustomLighting()
     } catch (Exception e) {
         log.warn "${roomDeviceLabel()}: Could not clear custom lighting for ${reason}: ${e.message}"
+    }
+}
+
+// Session-end housekeeping: uses the raw untyped setter so the customLighting
+// attribute goes truthful without firing the user-facing announcement.
+private void clearCustomLightingSilently(String reason) {
+    def dev = roomDevice()
+    if (!dev) return
+    if (dev.currentValue("customLighting") != "on") return
+
+    try {
+        dev.setCustomLightingState("off")
+        debug "Cleared custom lighting silently: ${reason}"
+    } catch (Exception e) {
+        log.warn "${roomDeviceLabel()}: Could not silently clear custom lighting for ${reason}: ${e.message}"
     }
 }
 
@@ -2295,6 +2315,7 @@ private void recomputeAndPublish(Map timing = null) {
             debug "Keeping circadian reference tracking paused for current lighting intent change"
         } else {
             resumeCircadianReference("lighting intent changed from ${previousLightingIntent} to ${newLightingIntent}")
+            clearCustomLightingSilently("lighting intent changed from ${previousLightingIntent} to ${newLightingIntent}")
         }
     }
     state.keepCircadianReferencePausedForIntentChange = false

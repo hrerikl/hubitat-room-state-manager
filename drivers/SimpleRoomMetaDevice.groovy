@@ -263,18 +263,29 @@ void setMetaLightColorTemperature(value) {
 }
 
 void setCustomLightingState(String value) {
-    String normalized = value == 'on' ? 'on' : 'off'
-    if (device.currentValue('customLighting') != normalized) {
-        sendEvent(name: 'customLighting', value: normalized, isStateChange: true)
-    }
+    sendCustomLightingEvent(value, false)
 }
 
 void activateCustomLighting() {
-    setCustomLightingState('on')
+    sendCustomLightingEvent('on', true)
 }
 
 void clearCustomLighting() {
-    setCustomLightingState('off')
+    sendCustomLightingEvent('off', true)
+}
+
+// activate/clear are the user-action surface and publish digital events, which
+// Room Lighting announces. setCustomLightingState is the raw setter for app
+// housekeeping (silent session-end clears) and stays untyped.
+private void sendCustomLightingEvent(String value, Boolean digital) {
+    String normalized = value == 'on' ? 'on' : 'off'
+    if (device.currentValue('customLighting') == normalized) return
+
+    Map event = [name: 'customLighting', value: normalized, isStateChange: true]
+    if (digital) {
+        event.type = 'digital'
+    }
+    sendEvent(event)
 }
 
 void setCourtesySwitchState(String value) {

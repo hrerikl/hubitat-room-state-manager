@@ -339,6 +339,10 @@ def roomControlAnnouncementHandler(evt) {
         if (useEchoSpeaksSleepRoutinesEnabled() && announceEchoSpeaksSleepRoutine(evt.value == "on")) return
         message = evt.value == "on" ? asleepAnnouncementText() : awakeAnnouncementText()
     } else if (evt.name == "customLighting") {
+        if (!isDigitalEvent(evt)) {
+            debug "Skipping announcement for app-published custom lighting ${evt.value} event"
+            return
+        }
         message = evt.value == "on" ? customLightingOnText() : customLightingOffText()
     }
 
