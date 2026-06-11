@@ -224,6 +224,7 @@ def stillUpHandler(evt) {
 
     Long until = now() + (stillUpExtensionSeconds() * 1000L)
     state.nightExtendedUntil = until
+    scheduleNightExtensionRecheck(until)
     debug "Night extended until ${formatTime(until)}"
 }
 
@@ -271,6 +272,7 @@ private void evaluateNight(String reason) {
     }
 
     if (nightExtended()) {
+        scheduleNightExtensionRecheck(state.nightExtendedUntil as Long)
         debug "Night blocked by StillUp extension until ${formatTime(state.nightExtendedUntil as Long)}"
         return
     }
@@ -333,6 +335,17 @@ private String nightBlockingRoomLabels() {
 private Boolean nightExtended() {
     Long until = state.nightExtendedUntil as Long
     return until && now() < until
+}
+
+private void scheduleNightExtensionRecheck(Long extendedUntil) {
+    if (!extendedUntil) return
+
+    Integer seconds = Math.max(Math.ceil((extendedUntil - now()) / 1000.0) as Integer + 1, 1)
+    runIn(seconds, evaluateNightAfterExtension, [overwrite: true])
+}
+
+def evaluateNightAfterExtension() {
+    evaluateNight("StillUp extension expired")
 }
 
 private String currentHomeModeName() {
