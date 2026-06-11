@@ -574,10 +574,16 @@ private String metaLightDni() {
     return "${device.deviceNetworkId}-MetaLight"
 }
 
-private void setChildSwitchState(String role, String value, String attributeName) {
+private void setChildSwitchState(String role, String value, String attributeName, Boolean fromChild = false) {
     String normalized = value == 'on' ? 'on' : 'off'
     if (device.currentValue(attributeName) != normalized) {
-        sendEvent(name: attributeName, value: normalized)
+        // Child-initiated toggles are digital so app handlers can tell them apart
+        // from app-published writes, which stay untyped and get ignored.
+        Map event = [name: attributeName, value: normalized]
+        if (fromChild) {
+            event.type = 'digital'
+        }
+        sendEvent(event)
     }
 
     def child = childSwitchDevice(role)
@@ -597,7 +603,7 @@ private void setComponentSwitchFromChild(def childDevice, String value) {
     String role = roleFromDni(childDevice?.deviceNetworkId)
     if (!role) return
 
-    setChildSwitchState(role, value, attributeForRole(role))
+    setChildSwitchState(role, value, attributeForRole(role), true)
 }
 
 private void updateChildSwitchLabel(String role, String value) {

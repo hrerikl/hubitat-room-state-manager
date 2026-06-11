@@ -36,6 +36,10 @@
  *   atomicState makes those decisions immediately visible to overlapping handlers; state
  *   stays in sync for existing reads, diagnostics, and migration. Do not write those
  *   four state fields directly.
+ *
+ *   Do not use singleThreaded: true here. It was tried (June 2026) and the synchronous
+ *   room->parent->room call chains convoyed behind serialized handlers, backing events
+ *   up by ~20 minutes. atomicState flags plus debounced lighting reassess is the model.
  */
 
 definition(
@@ -940,6 +944,10 @@ def courtesyEnabledHandler(evt) {
 def engagedEnabledHandler(evt) {
     debug "Engaged enabled ${evt.value}"
 
+    // The meta driver tags child-switch toggles as digital; the app's own
+    // engagedEnabled write-backs are untyped. Filtering them out keeps this
+    // handler from re-entering setEngaged and clobbering the specific
+    // activity reason with a generic one (08db864).
     if (!isDigitalEvent(evt)) {
         debug "Ignoring app-published Engaged switch ${evt.value} event"
         return
