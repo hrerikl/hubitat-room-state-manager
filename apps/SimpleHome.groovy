@@ -519,7 +519,12 @@ private List houseIntentChildApps() {
 }
 
 private List roomStateChildApps() {
-    List configured = childApps ?: []
+    // childApps returns ALL child apps (every input), so filter the configured
+    // seed by type too; otherwise rooms-only calls land on Mode Manager,
+    // Circadian, and Room Lighting children and throw MissingMethodException.
+    List configured = (childApps ?: []).findAll { child ->
+        simpleHomeChildTypeIs(child, "roomState")
+    }
     List discovered = []
     try {
         discovered = getChildApps()?.findAll { child ->
