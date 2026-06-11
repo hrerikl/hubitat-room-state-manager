@@ -272,7 +272,12 @@ def locationModeHandler(evt) {
         return
     }
 
-    Map snap = roomSnapshot()
+    Map snap = roomSnapshot(true)
+    if (snap.roomState == "Locked" || snap.lockedEnabled == "on" || snap.lock == "locked") {
+        debug "Mode change ignored because room is locked"
+        return
+    }
+
     if (roomLightingInactive(snap)) {
         applyInactiveOnRowOffCondition("Location Mode changed while inactive", snap)
         return
