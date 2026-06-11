@@ -340,8 +340,10 @@ private Boolean nightExtended() {
 private void scheduleNightExtensionRecheck(Long extendedUntil) {
     if (!extendedUntil) return
 
-    Integer seconds = Math.max(Math.ceil((extendedUntil - now()) / 1000.0) as Integer + 1, 1)
-    runIn(seconds, evaluateNightAfterExtension, [overwrite: true])
+    Long remainingMs = extendedUntil - now()
+    Integer seconds = Math.ceil(remainingMs / 1000.0) as Integer
+    seconds = Math.max(seconds + 1, 1)
+    runIn(seconds, "evaluateNightAfterExtension", [overwrite: true])
 }
 
 def evaluateNightAfterExtension() {
