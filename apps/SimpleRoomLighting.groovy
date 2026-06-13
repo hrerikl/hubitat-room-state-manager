@@ -142,6 +142,7 @@ def initialize() {
     cacheDebugEnabled(debugLogging)
     atomicState.roomReassessInFlight = false
     atomicState.roomReassessDirty = false
+    atomicState.roomReassessStartedAt = null
     updateAppLabel()
 
     if (!roomLightingAllowed()) {
@@ -190,9 +191,13 @@ def reassessHandler(evt) {
 
 def processRoomReassess() {
     if (atomicState.roomReassessInFlight == true) {
-        atomicState.roomReassessDirty = true
-        debug "Room reassess already running; marked dirty for trailing pass"
-        return
+        if (roomReassessInFlightStale()) {
+            markStaleRoomReassessCleared("processRoomReassess")
+        } else {
+            atomicState.roomReassessDirty = true
+            debug "Room reassess already running; marked dirty for trailing pass"
+            return
+        }
     }
 
     String reason = state.pendingRoomReassessReason ?: "room device changed"
@@ -203,14 +208,44 @@ def processRoomReassess() {
     executeRoomReassess(reason, metaLightOff)
 }
 
+private Boolean roomReassessInFlightStale() {
+    Long startedAt = safeLong(atomicState.roomReassessStartedAt, 0L)
+    if (startedAt <= 0L) return true
+    return now() - startedAt > roomReassessInFlightTimeoutMs()
+}
+
+private Long roomReassessInFlightTimeoutMs() {
+    return 30000L
+}
+
+private void markRoomReassessInFlight(Boolean inFlight) {
+    atomicState.roomReassessInFlight = inFlight
+    if (inFlight) {
+        atomicState.roomReassessStartedAt = now()
+    } else {
+        atomicState.roomReassessStartedAt = null
+    }
+}
+
+private void clearRoomReassessInFlight() {
+    atomicState.roomReassessInFlight = false
+    atomicState.roomReassessStartedAt = null
+}
+
+private void markStaleRoomReassessCleared(String reason) {
+    log.warn "${app.label}: Clearing stale room reassess in-flight flag: ${reason}"
+    atomicState.roomReassessDirty = false
+    clearRoomReassessInFlight()
+}
+
 private void executeRoomReassess(String reason, Boolean metaLightOff) {
-    atomicState.roomReassessInFlight = true
+    markRoomReassessInFlight(true)
     atomicState.roomReassessDirty = false
 
     try {
         executeRoomReassessNow(reason, metaLightOff)
     } finally {
-        atomicState.roomReassessInFlight = false
+        clearRoomReassessInFlight()
         if (atomicState.roomReassessDirty == true || state.pendingRoomReassessReason) {
             atomicState.roomReassessDirty = false
             runInMillis(150, "processRoomReassess", [overwrite: true])
@@ -303,9 +338,13 @@ private void queueRoomReassess(String eventName, String eventValue) {
         state.pendingRoomReassessMetaLightOff = true
     }
     if (atomicState.roomReassessInFlight == true) {
-        atomicState.roomReassessDirty = true
-        debug "Queued room reassess while running: ${reason}"
-        return
+        if (roomReassessInFlightStale()) {
+            markStaleRoomReassessCleared(reason)
+        } else {
+            atomicState.roomReassessDirty = true
+            debug "Queued room reassess while running: ${reason}"
+            return
+        }
     }
     runInMillis(300, "processRoomReassess", [overwrite: true])
 }
