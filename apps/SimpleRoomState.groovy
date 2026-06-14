@@ -1047,21 +1047,28 @@ def circadianReferenceHandler(evt) {
 def reapplyCircadianReferenceFromParent(String reason = "parent reference changed") {
     reconcileCircadianPauseWithRoomDevice(reason)
     if (!circadianReferenceTrackingActiveForRecompute()) {
-        debug "Ignoring parent reference reapply because tracking is paused or unavailable: ${reason}"
-        return
+        String detail = "tracking paused or unavailable"
+        log.info "${roomDeviceLabel()}: Skipping parent reference reapply (${reason}): ${detail}"
+        return [applied: false, reason: detail]
     }
     if (!metaLightIntentActive()) {
-        debug "Ignoring parent reference reapply because MetaLight is inactive: ${reason}"
-        return
+        String detail = "MetaLight inactive"
+        log.info "${roomDeviceLabel()}: Skipping parent reference reapply (${reason}): ${detail}"
+        return [applied: false, reason: detail]
     }
 
-    debug "Reapplying circadian reference from parent: ${reason}"
+    Map before = roomReferenceTraceSnapshot()
+    Map reference = referenceSnapshotForRecompute()
+    log.info "${roomDeviceLabel()}: Reapplying parent reference (${reason}); before=${formatReferenceTrace(before)}, reference=${formatReferenceTrace(reference)}"
     state.forceCircadianReferenceUpdate = true
     try {
         recomputeAndPublish()
     } finally {
         state.forceCircadianReferenceUpdate = false
     }
+    Map after = roomReferenceTraceSnapshot()
+    log.info "${roomDeviceLabel()}: Parent reference reapplied (${reason}); after=${formatReferenceTrace(after)}"
+    return [applied: true, before: before, reference: reference, after: after]
 }
 
 def motionActiveHandler(evt) {
@@ -2195,6 +2202,21 @@ private Map referenceSnapshotForRecompute() {
             ct    : currentReferenceColorTemperature()
         ]
     }
+}
+
+private Map roomReferenceTraceSnapshot() {
+    return [
+        active: true,
+        level : normalizedPercent(state.metaLightLevel, 0),
+        ct    : normalizedColorTemperature(state.metaLightColorTemperature, 2700),
+        intent: state.lightingIntent ?: "Off",
+        sw    : state.metaLightSwitch ?: "off"
+    ]
+}
+
+private String formatReferenceTrace(Map trace) {
+    if (!trace) return "null"
+    return "active=${trace.active}, sw=${trace.sw ?: 'n/a'}, intent=${trace.intent ?: 'n/a'}, level=${trace.level ?: 'null'}, ct=${trace.ct ?: 'null'}"
 }
 
 private Boolean followCircadianReferenceEnabled() {

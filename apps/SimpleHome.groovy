@@ -889,18 +889,14 @@ private void subscribeCircadianReferenceCache() {
 }
 
 def circadianReferenceCacheHandler(evt) {
-    if (evt.name == "level") {
-        state.cachedCircadianReferenceLevel = normalizedPercent(evt.value, 100)
-    } else if (evt.name == "colorTemperature") {
-        state.cachedCircadianReferenceColorTemperature = normalizedColorTemperature(evt.value, 2700)
-    }
-    state.cachedCircadianReferenceAvailable = true
-    state.cachedCircadianReferenceAt = now()
+    refreshCircadianReferenceCache()
+    log.info "Simple Home: Circadian reference event ${evt?.name}=${evt?.value}; cache=${cachedCircadianReferenceSummary()}"
     scheduleCircadianReferenceReapply(evt.name)
 }
 
 def houseIntentReferenceChanged(String reason = "house intent reference changed") {
     refreshCircadianReferenceCache()
+    log.info "Simple Home: House Intent reference changed (${reason}); cache=${cachedCircadianReferenceSummary()}"
     reapplyCircadianReferenceToRooms(reason)
 }
 
@@ -916,19 +912,30 @@ def reapplyCachedCircadianReferenceToRooms() {
     List reasons = asList(state.pendingCircadianReferenceReasons).collect { it?.toString() }.findAll { it }
     state.remove("pendingCircadianReferenceReasons")
     String reason = reasons ? "house reference ${reasons.join('/')} changed" : "house reference changed"
+    log.info "Simple Home: Reapplying cached circadian reference (${reason}); cache=${cachedCircadianReferenceSummary()}"
     reapplyCircadianReferenceToRooms(reason)
 }
 
 private void reapplyCircadianReferenceToRooms(String reason) {
+    Integer applied = 0
+    Integer skipped = 0
+    Integer failed = 0
     roomStateChildApps().each { child ->
         try {
             if (child.getRoomProfile() != "houseIntent") {
-                child.reapplyCircadianReferenceFromParent(reason)
+                Map result = child.reapplyCircadianReferenceFromParent(reason) as Map
+                if (result?.applied == true) {
+                    applied = applied + 1
+                } else {
+                    skipped = skipped + 1
+                }
             }
         } catch (Throwable e) {
+            failed = failed + 1
             log.warn "Simple Home: Could not reapply circadian reference for ${child?.label}: ${e.message}"
         }
     }
+    log.info "Simple Home: Reference reapply complete (${reason}); applied=${applied}, skipped=${skipped}, failed=${failed}, cache=${cachedCircadianReferenceSummary()}"
 }
 
 private void refreshCircadianReferenceCache() {
@@ -940,6 +947,10 @@ private void refreshCircadianReferenceCache() {
     state.cachedCircadianReferenceLevel = normalizedPercent(reference.currentValue("level"), 100)
     state.cachedCircadianReferenceColorTemperature = normalizedColorTemperature(reference.currentValue("colorTemperature"), 2700)
     state.cachedCircadianReferenceAt = now()
+}
+
+private String cachedCircadianReferenceSummary() {
+    return "${state.cachedCircadianReferenceLevel ?: 'null'}%/${state.cachedCircadianReferenceColorTemperature ?: 'null'}K available=${state.cachedCircadianReferenceAvailable == true}"
 }
 
 private def effectiveCircadianReferenceBulb() {
