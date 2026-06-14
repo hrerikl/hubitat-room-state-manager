@@ -1023,6 +1023,7 @@ private Boolean presenceClearingMode(def modeName) {
 }
 
 def circadianReferenceHandler(evt) {
+    reconcileCircadianPauseWithRoomDevice("circadian reference ${evt?.name} event")
     if (!circadianReferenceTrackingActive()) {
         if (followCircadianReferenceEnabled()) {
             debug "Ignoring circadian reference ${evt.name} change because tracking is paused"
@@ -1044,6 +1045,7 @@ def circadianReferenceHandler(evt) {
 }
 
 def reapplyCircadianReferenceFromParent(String reason = "parent reference changed") {
+    reconcileCircadianPauseWithRoomDevice(reason)
     if (!circadianReferenceTrackingActiveForRecompute()) {
         debug "Ignoring parent reference reapply because tracking is paused or unavailable: ${reason}"
         return
@@ -2214,6 +2216,20 @@ private Boolean circadianReferenceTrackingActiveForRecompute() {
     } catch (Exception ignored) {
         return circadianReferenceDevice() != null
     }
+}
+
+private void reconcileCircadianPauseWithRoomDevice(String reason) {
+    if (state.circadianReferencePaused != true) return
+
+    try {
+        if (roomDevice()?.currentValue("customLighting") == "on") return
+    } catch (Throwable ignored) {
+        return
+    }
+
+    debug "Clearing stale circadian reference pause because custom lighting is off: ${reason}"
+    state.circadianReferencePaused = false
+    state.keepCircadianReferencePausedForIntentChange = false
 }
 
 private void pauseCircadianReference(String reason) {
