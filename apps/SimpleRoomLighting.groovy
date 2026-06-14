@@ -406,8 +406,10 @@ def controlSwitchHandler(evt) {
 
     if (evt.value == "on") {
         room.on()
+        scheduleLockedRoomControlReassess("control switch on")
     } else if (evt.value == "off") {
         room.off()
+        scheduleLockedRoomControlReassess("control switch off")
     }
 }
 
@@ -436,6 +438,7 @@ def picoPushedHandler(evt) {
 
     if (button == 1) {
         roomOnIfNeeded()
+        scheduleLockedRoomControlReassess("Pico button 1")
     } else if (button == 2) {
         allowNextLevelFollow()
         setRoomLevelAsCustom(adjustedRoomLevel(step))
@@ -446,6 +449,7 @@ def picoPushedHandler(evt) {
         setRoomLevelAsCustom(adjustedRoomLevel(-step))
     } else if (button == 5) {
         room.off()
+        scheduleLockedRoomControlReassess("Pico button 5")
     } else {
         debug "No default Pico pushed action for button ${button}"
     }
@@ -1615,6 +1619,7 @@ private void setRoomLevelAsCustom(Integer level) {
 
     setCustomLighting(true)
     room.setLevel(level)
+    scheduleLockedRoomControlReassess("room level control")
 }
 
 private void returnToAutomaticLighting() {
@@ -1667,6 +1672,22 @@ private void roomOnIfNeeded() {
     }
 
     room.on()
+}
+
+private void scheduleLockedRoomControlReassess(String reason) {
+    def room = roomDevice()
+    if (!room) return
+
+    if (room.currentValue("lockedEnabled") != "on" && room.currentValue("lock") != "locked") return
+
+    state.pendingLockedRoomControlReason = reason ?: "locked room control"
+    runInMillis(500, "reassessAfterLockedRoomControl", [overwrite: true])
+}
+
+def reassessAfterLockedRoomControl() {
+    String reason = state.pendingLockedRoomControlReason ?: "locked room control"
+    state.pendingLockedRoomControlReason = null
+    reassessLighting(reason)
 }
 
 private void recordPicoPresenceActivity(Integer button, evt) {
