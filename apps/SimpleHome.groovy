@@ -896,10 +896,26 @@ def circadianReferenceCacheHandler(evt) {
     }
     state.cachedCircadianReferenceAvailable = true
     state.cachedCircadianReferenceAt = now()
+    scheduleCircadianReferenceReapply(evt.name)
 }
 
 def houseIntentReferenceChanged(String reason = "house intent reference changed") {
     refreshCircadianReferenceCache()
+    reapplyCircadianReferenceToRooms(reason)
+}
+
+private void scheduleCircadianReferenceReapply(String attributeName) {
+    List reasons = asList(state.pendingCircadianReferenceReasons).collect { it?.toString() }.findAll { it }
+    String reason = attributeName?.toString()
+    if (reason && !reasons.contains(reason)) reasons << reason
+    state.pendingCircadianReferenceReasons = reasons
+    runInMillis(250, reapplyCachedCircadianReferenceToRooms, [overwrite: true])
+}
+
+def reapplyCachedCircadianReferenceToRooms() {
+    List reasons = asList(state.pendingCircadianReferenceReasons).collect { it?.toString() }.findAll { it }
+    state.remove("pendingCircadianReferenceReasons")
+    String reason = reasons ? "house reference ${reasons.join('/')} changed" : "house reference changed"
     reapplyCircadianReferenceToRooms(reason)
 }
 
