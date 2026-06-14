@@ -306,6 +306,7 @@ private void returnToHouseReference() {
     try {
         roomDevice()?.clearCustomLighting()
         roomDevice()?.setActiveScene("Automatic")
+        notifyHouseIntentReferenceChanged("returned to automatic reference")
     } catch (Exception e) {
         log.warn "${app.label}: Could not return House Intent to automatic reference: ${e.message}"
         return
@@ -499,22 +500,45 @@ private void clearPreviewFeedbackSuppression() {
 private void announceScene(String sceneName) {
     if (announceScenes == false || !sceneName) return
     asList(speechDevices).each { dev ->
-        try {
-            dev.speak(sceneName)
-        } catch (Exception e) {
-            log.warn "${app.label}: Could not announce ${sceneName} on ${dev.displayName}: ${e.message}"
-        }
+        announceText(dev, sceneName, "scene")
     }
 }
 
 private void announceManualAdjustment(String message) {
     if (announceManualAdjustments == false || !message) return
     asList(speechDevices).each { dev ->
-        try {
-            dev.speak(message)
-        } catch (Exception e) {
-            log.warn "${app.label}: Could not announce manual House Intent adjustment on ${dev.displayName}: ${e.message}"
-        }
+        announceText(dev, message, "manual House Intent adjustment")
+    }
+}
+
+private void announceText(dev, String message, String description) {
+    if (!dev || !message) return
+
+    try {
+        dev.playTextAndResume(message)
+        return
+    } catch (Exception ignored) {
+        // Try the next common speech command shape.
+    }
+
+    try {
+        dev.playTextAndRestore(message)
+        return
+    } catch (Exception ignored) {
+        // Try the next common speech command shape.
+    }
+
+    try {
+        dev.playText(message)
+        return
+    } catch (Exception ignored) {
+        // Fall back to standard SpeechSynthesis.
+    }
+
+    try {
+        dev.speak(message)
+    } catch (Exception e) {
+        log.warn "${app.label}: Could not announce ${description} on ${dev.displayName}: ${e.message}"
     }
 }
 

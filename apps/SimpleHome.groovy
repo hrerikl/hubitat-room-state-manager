@@ -909,7 +909,7 @@ private void scheduleCircadianReferenceReapply(String attributeName) {
     String reason = attributeName?.toString()
     if (reason && !reasons.contains(reason)) reasons << reason
     state.pendingCircadianReferenceReasons = reasons
-    runInMillis(250, reapplyCachedCircadianReferenceToRooms, [overwrite: true])
+    runInMillis(250, "reapplyCachedCircadianReferenceToRooms", [overwrite: true])
 }
 
 def reapplyCachedCircadianReferenceToRooms() {
