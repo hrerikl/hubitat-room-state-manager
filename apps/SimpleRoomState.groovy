@@ -1044,7 +1044,7 @@ def circadianReferenceHandler(evt) {
     }
 }
 
-def reapplyCircadianReferenceFromParent(String reason = "parent reference changed") {
+def reapplyCircadianReferenceFromParent(String reason = "parent reference changed", Integer referenceLevel = null, Integer referenceColorTemperature = null) {
     reconcileCircadianPauseWithRoomDevice(reason)
     if (!circadianReferenceTrackingActiveForRecompute()) {
         String detail = "tracking paused or unavailable"
@@ -1058,11 +1058,11 @@ def reapplyCircadianReferenceFromParent(String reason = "parent reference change
     }
 
     Map before = roomReferenceTraceSnapshot()
-    Map reference = referenceSnapshotForRecompute()
+    Map reference = referenceSnapshotForRecompute(parentReferenceSnapshot(referenceLevel, referenceColorTemperature))
     log.info "${roomDeviceLabel()}: Reapplying parent reference (${reason}); before=${formatReferenceTrace(before)}, reference=${formatReferenceTrace(reference)}"
     state.forceCircadianReferenceUpdate = true
     try {
-        recomputeAndPublish()
+        recomputeAndPublish(null, reference)
     } finally {
         state.forceCircadianReferenceUpdate = false
     }
@@ -2176,16 +2176,31 @@ private Integer currentReferenceColorTemperature() {
     return normalizedColorTemperature(circadianReferenceDevice()?.currentValue("colorTemperature"), normalizedColorTemperature(state.metaLightColorTemperature, 2700))
 }
 
-private Map referenceSnapshotForRecompute() {
+private Map parentReferenceSnapshot(Integer referenceLevel, Integer referenceColorTemperature) {
+    if (referenceLevel == null && referenceColorTemperature == null) return null
+    return [
+        active: true,
+        level : normalizedPercent(referenceLevel, 100),
+        ct    : normalizedColorTemperature(referenceColorTemperature, normalizedColorTemperature(state.metaLightColorTemperature, 2700)),
+        source: "parent-push"
+    ]
+}
+
+private Map referenceSnapshotForRecompute(Map preferredReference = null) {
     if (!circadianReferenceTrackingActiveForRecompute()) {
-        return [active: false, level: null, ct: null]
+        return [active: false, level: null, ct: null, source: "inactive"]
+    }
+
+    if (preferredReference?.active == true) {
+        return preferredReference
     }
 
     if (circadianReferenceBulb) {
         return [
             active: true,
             level : normalizedPercent(circadianReferenceBulb.currentValue("level"), 100),
-            ct    : normalizedColorTemperature(circadianReferenceBulb.currentValue("colorTemperature"), normalizedColorTemperature(state.metaLightColorTemperature, 2700))
+            ct    : normalizedColorTemperature(circadianReferenceBulb.currentValue("colorTemperature"), normalizedColorTemperature(state.metaLightColorTemperature, 2700)),
+            source: "local-device"
         ]
     }
 
@@ -2193,13 +2208,16 @@ private Map referenceSnapshotForRecompute() {
         return [
             active: true,
             level : normalizedPercent(parent.cachedCircadianReferenceLevel(), 100),
-            ct    : normalizedColorTemperature(parent.cachedCircadianReferenceColorTemperature(), normalizedColorTemperature(state.metaLightColorTemperature, 2700))
+            ct    : normalizedColorTemperature(parent.cachedCircadianReferenceColorTemperature(), normalizedColorTemperature(state.metaLightColorTemperature, 2700)),
+            source: "parent-cache"
         ]
-    } catch (Exception ignored) {
+    } catch (Exception e) {
+        debug "Could not read parent circadian reference cache; falling back to reference device: ${e.message}"
         return [
             active: true,
             level : currentReferenceLevel(),
-            ct    : currentReferenceColorTemperature()
+            ct    : currentReferenceColorTemperature(),
+            source: "fallback-device"
         ]
     }
 }
@@ -2216,7 +2234,7 @@ private Map roomReferenceTraceSnapshot() {
 
 private String formatReferenceTrace(Map trace) {
     if (!trace) return "null"
-    return "active=${trace.active}, sw=${trace.sw ?: 'n/a'}, intent=${trace.intent ?: 'n/a'}, level=${trace.level ?: 'null'}, ct=${trace.ct ?: 'null'}"
+    return "active=${trace.active}, source=${trace.source ?: 'n/a'}, sw=${trace.sw ?: 'n/a'}, intent=${trace.intent ?: 'n/a'}, level=${trace.level ?: 'null'}, ct=${trace.ct ?: 'null'}"
 }
 
 private Boolean followCircadianReferenceEnabled() {
@@ -2330,7 +2348,7 @@ private Integer modeBasedLightingLevel(String prefix) {
     return normalizedPercent(value, prefix == "occupiedLightingLevel" ? 100 : 20)
 }
 
-private void recomputeAndPublish(Map timing = null) {
+private void recomputeAndPublish(Map timing = null, Map preferredReference = null) {
     Long localStartedAt = timing ? null : now()
     ensureInitialState()
     markRoomStateTiming(timing, "ensureInitialState")
@@ -2358,7 +2376,7 @@ private void recomputeAndPublish(Map timing = null) {
     }
     state.keepCircadianReferencePausedForIntentChange = false
 
-    Map referenceSnapshot = referenceSnapshotForRecompute()
+    Map referenceSnapshot = referenceSnapshotForRecompute(preferredReference)
     markRoomStateTiming(timing, "reference")
 
     Boolean lockedReferenceUpdate = lockedNow && state.forceCircadianReferenceUpdate && state.metaLightSwitch == "on"

@@ -920,10 +920,12 @@ private void reapplyCircadianReferenceToRooms(String reason) {
     Integer applied = 0
     Integer skipped = 0
     Integer failed = 0
+    Integer referenceLevel = cachedCircadianReferenceLevel()
+    Integer referenceColorTemperature = cachedCircadianReferenceColorTemperature()
     roomStateChildApps().each { child ->
         try {
             if (child.getRoomProfile() != "houseIntent") {
-                Map result = child.reapplyCircadianReferenceFromParent(reason) as Map
+                Map result = child.reapplyCircadianReferenceFromParent(reason, referenceLevel, referenceColorTemperature) as Map
                 if (result?.applied == true) {
                     applied = applied + 1
                 } else {
