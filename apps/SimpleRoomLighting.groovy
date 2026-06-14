@@ -582,9 +582,12 @@ private void reassessLighting(String reason, Map snap = null) {
         return
     }
 
+    Map lastDrivers = state.lastLightingDrivers instanceof Map ? state.lastLightingDrivers : null
     Boolean sameActiveMatrix = state.lastActiveMatrixContext == context && state.lastActiveMatrixIntent == intentBucket
-    Boolean levelChangeOnly = reason == "metaLightLevel changed" && sameActiveMatrix && levelFollowAllowed()
-    Boolean colorTemperatureOnly = reason == "metaLightColorTemperature changed" && sameActiveMatrix
+    Boolean levelChanged = lastDrivers ? normalizedLevel(lastDrivers.level, 0) != metaLevel : false
+    Boolean colorTemperatureChanged = lastDrivers ? normalizedColorTemperature(lastDrivers.ct, 2700) != metaCt : false
+    Boolean levelChangeOnly = sameActiveMatrix && levelChanged && !colorTemperatureChanged && levelFollowAllowed()
+    Boolean colorTemperatureOnly = sameActiveMatrix && colorTemperatureChanged && !levelChanged
     if (reason == "metaLightLevel changed") {
         clearLevelFollowMarkers()
     }
