@@ -43,6 +43,8 @@ preferences {
             input 'outdoorLuxForMaxLevel', 'number', title: 'Outdoor lux for maximum level', defaultValue: 40000, required: true
             input 'minReferenceCT', 'number', title: 'Minimum reference color temperature', defaultValue: 2200, required: true
             input 'maxReferenceCT', 'number', title: 'Maximum reference color temperature', defaultValue: 6500, required: true
+            input 'maxLevelChangePerPublish', 'number', title: 'Maximum level change per publish', defaultValue: 15, required: true
+            input 'maxCtChangePerPublish', 'number', title: 'Maximum color temperature change per publish', defaultValue: 400, required: true
         }
 
         section('Outdoor lighting enable') {
@@ -157,11 +159,14 @@ def publishReference(String reason = 'schedule') {
     Integer outdoorCT = currentInteger(outdoorLightSensor, 'outdoorCT', minCt())
     Integer targetLevel = referenceLevel(outdoorLux)
     Integer targetCT = clampInteger(outdoorCT, minCt(), maxCt())
+    Map reference = limitedReference(targetLevel, targetCT)
+    Integer publishLevel = reference.level as Integer
+    Integer publishCT = reference.ct as Integer
 
-    debug "Publishing reference for ${reason}: outdoorLux=${outdoorLux}, outdoorCT=${outdoorCT}, level=${targetLevel}, ct=${targetCT}"
-    publishToReferenceBulb(targetCT, targetLevel)
+    debug "Publishing reference for ${reason}: outdoorLux=${outdoorLux}, outdoorCT=${outdoorCT}, target=${targetLevel}/${targetCT}, publish=${publishLevel}/${publishCT}"
+    publishToReferenceBulb(publishCT, publishLevel)
     publishOutdoorLightingEnabled(outdoorLux)
-    publishToHouseStatus(targetLevel, targetCT, outdoorLux)
+    publishToHouseStatus(publishLevel, publishCT, outdoorLux)
 }
 
 private void publishToReferenceBulb(Integer ct, Integer level) {
@@ -290,6 +295,35 @@ private Integer modeMinimumLevel() {
         return clampInteger(settingInteger(eveningMinimumLevel, 20), 1, 100)
     }
     return clampInteger(settingInteger(dayMinimumLevel, 35), 1, 100)
+}
+
+private Map limitedReference(Integer targetLevel, Integer targetCT) {
+    Integer currentLevel = currentInteger(referenceBulb, 'level', -1)
+    Integer currentCT = currentInteger(referenceBulb, 'colorTemperature', -1)
+
+    return [
+        level: limitedStep(currentLevel, targetLevel, maxLevelChange()),
+        ct   : limitedStep(currentCT, targetCT, maxCtChange())
+    ]
+}
+
+private Integer limitedStep(Integer current, Integer target, Integer maxChange) {
+    if (current == null || current < 0) return target
+    Integer safeTarget = target ?: current
+    Integer safeMax = Math.max(maxChange ?: 0, 0)
+    if (safeMax == 0) return safeTarget
+
+    Integer delta = safeTarget - current
+    if (Math.abs(delta) <= safeMax) return safeTarget
+    return current + (delta > 0 ? safeMax : 0 - safeMax)
+}
+
+private Integer maxLevelChange() {
+    return clampInteger(settingInteger(maxLevelChangePerPublish, 15), 0, 100)
+}
+
+private Integer maxCtChange() {
+    return clampInteger(settingInteger(maxCtChangePerPublish, 400), 0, 5000)
 }
 
 private Integer settingInteger(value, Integer fallback) {
