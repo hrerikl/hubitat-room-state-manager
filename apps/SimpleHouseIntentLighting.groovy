@@ -157,8 +157,9 @@ private Boolean houseIntentLightingAllowed() {
 }
 
 def recoverSimpleHomeHandler(evt) {
-    state.commitReason = "Simple Home recovery"
-    commitPendingIntent()
+    clearPendingIntent()
+    reapplyHouseIntentRoomReference("Simple Home recovery")
+    notifyHouseIntentReferenceChanged("Simple Home recovery")
 }
 
 def picoPushedHandler(evt) {
@@ -300,12 +301,11 @@ private void adjustColorTemperature(Integer delta) {
 
 private void returnToHouseReference() {
     unschedule(commitPendingIntent)
-    state.pendingCustom = false
-    state.pendingSceneName = "Follow House"
-    state.remove("commitReason")
+    clearPendingIntent()
     try {
         roomDevice()?.clearCustomLighting()
         roomDevice()?.setActiveScene("Automatic")
+        reapplyHouseIntentRoomReference("returned to automatic reference")
         notifyHouseIntentReferenceChanged("returned to automatic reference")
     } catch (Exception e) {
         log.warn "${app.label}: Could not return House Intent to automatic reference: ${e.message}"
@@ -321,6 +321,22 @@ private void notifyHouseIntentReferenceChanged(String reason) {
     } catch (Throwable e) {
         log.warn "${app.label}: Could not notify Simple Home that House Intent changed: ${e.message}"
     }
+}
+
+private void reapplyHouseIntentRoomReference(String reason) {
+    try {
+        parent?.roomStateChildReapplyCircadianReference(roomChildAppId, reason)
+    } catch (Throwable e) {
+        log.warn "${app.label}: Could not reapply House Intent room reference: ${e.message}"
+    }
+}
+
+private void clearPendingIntent() {
+    state.pendingCustom = false
+    state.pendingSceneName = "Follow House"
+    state.remove("pendingLevel")
+    state.remove("pendingCt")
+    state.remove("commitReason")
 }
 
 private void ensurePendingFromRoom() {

@@ -1398,6 +1398,17 @@ def roomStateChildRoomDevice(def childAppId) {
     }
 }
 
+void roomStateChildReapplyCircadianReference(def childAppId, String reason = "parent requested reference reapply") {
+    def child = roomStateChildApps().find { it?.id?.toString() == "${childAppId}" }
+    if (!child) return
+
+    try {
+        child.reapplyCircadianReferenceFromParent(reason)
+    } catch (Throwable e) {
+        log.warn "Simple Home: Could not reapply circadian reference for ${child?.label}: ${e.message}"
+    }
+}
+
 List<Map> roomDashboardStatus() {
     return roomStateChildApps()
         .collect { child -> roomDashboardStatusForChild(child) }
