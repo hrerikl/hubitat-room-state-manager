@@ -2362,6 +2362,7 @@ private void recomputeAndPublish(Map timing = null, Map preferredReference = nul
     Integer previousRoomLevel = normalizedPercent(roomDevice()?.currentValue("level"), 0)
     Integer previousMetaLightLevel = normalizedPercent(state.metaLightLevel, 0)
     Integer previousMetaLightColorTemperature = normalizedColorTemperature(state.metaLightColorTemperature, 2700)
+    String previousMetaLightSwitch = state.metaLightSwitch ?: "off"
 
     String newRoomState = computeRoomState(lockedNow, asleepNow, engagedNow, occupiedNow)
     String newLightingIntent = lockedNow ? previousLightingIntent : computeLightingIntent(newRoomState)
@@ -2395,6 +2396,14 @@ private void recomputeAndPublish(Map timing = null, Map preferredReference = nul
 
     publishMetaLightDevice(metaLightShouldBeOn, effectiveLightingLevel, effectiveColorTemperature)
     markRoomStateTiming(timing, "publishMetaLight")
+    notifyParentHouseIntentReferenceChangedIfNeeded(
+        previousMetaLightSwitch,
+        previousMetaLightLevel,
+        previousMetaLightColorTemperature,
+        metaLightShouldBeOn ? "on" : "off",
+        effectiveLightingLevel,
+        effectiveColorTemperature
+    )
     publishRoomDevice(roomSwitchShouldBeOn, newRoomState, newLightingIntent, roomControlLevel, stateReason)
     markRoomStateTiming(timing, "publishRoom")
 
@@ -2504,6 +2513,17 @@ private void publishMetaLightDevice(Boolean switchOn, Integer lightingLevel, Int
         state.metaLightSwitch = switchValue
     } catch (Exception e) {
         log.warn "${roomDeviceLabel()}: Could not set switch state on meta-light device: ${e.message}"
+    }
+}
+
+private void notifyParentHouseIntentReferenceChangedIfNeeded(String previousSwitch, Integer previousLevel, Integer previousCt, String newSwitch, Integer newLevel, Integer newCt) {
+    if (!houseIntentProfile()) return
+    if (previousSwitch == newSwitch && previousLevel == newLevel && previousCt == newCt) return
+
+    try {
+        parent?.houseIntentReferenceChanged("House Intent room reference changed")
+    } catch (Throwable e) {
+        log.warn "${roomDeviceLabel()}: Could not notify Simple Home that House Intent reference changed: ${e.message}"
     }
 }
 
