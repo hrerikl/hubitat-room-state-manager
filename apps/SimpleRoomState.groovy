@@ -808,7 +808,7 @@ def roomSwitchOnHandler(evt) {
 
     if (lockedFlag()) {
         debug "Room is locked; routing room switch on to MetaLight only"
-        publishMetaLightDevice(true, lockedMetaLightOnLevel(), effectiveMetaLightColorTemperature())
+        publishLockedMetaLightControl(true, lockedMetaLightOnLevel(), effectiveMetaLightColorTemperature())
         return
     }
 
@@ -831,7 +831,7 @@ def roomSwitchOffHandler(evt) {
 
     if (lockedFlag()) {
         debug "Room is locked; routing room switch off to MetaLight only"
-        publishMetaLightDevice(false, 0, effectiveMetaLightColorTemperature())
+        publishLockedMetaLightControl(false, 0, effectiveMetaLightColorTemperature())
         return
     }
 
@@ -869,7 +869,7 @@ def roomLevelHandler(evt) {
 
     if (lockedFlag()) {
         debug "Room is locked; routing room level to MetaLight only"
-        publishMetaLightDevice(level > 0, level, effectiveMetaLightColorTemperature())
+        publishLockedMetaLightControl(level > 0, level, effectiveMetaLightColorTemperature())
         return
     }
 
@@ -2513,6 +2513,24 @@ private void publishMetaLightDevice(Boolean switchOn, Integer lightingLevel, Int
         state.metaLightSwitch = switchValue
     } catch (Exception e) {
         log.warn "${roomDeviceLabel()}: Could not set switch state on meta-light device: ${e.message}"
+    }
+}
+
+private void publishLockedMetaLightControl(Boolean switchOn, Integer lightingLevel, Integer colorTemperature) {
+    publishMetaLightDevice(switchOn, lightingLevel, colorTemperature)
+    publishLockedLightingIntent(switchOn ? "On" : "Off")
+}
+
+private void publishLockedLightingIntent(String lightingIntent) {
+    state.lightingIntent = lightingIntent
+
+    try {
+        def dev = roomDevice()
+        if (dev?.currentValue("lightingIntent") != lightingIntent) {
+            dev?.setLightingIntent(lightingIntent)
+        }
+    } catch (Exception e) {
+        log.warn "${roomDeviceLabel()}: Could not set locked lighting intent ${lightingIntent}: ${e.message}"
     }
 }
 
