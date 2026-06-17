@@ -200,7 +200,7 @@ def picoReleasedHandler(evt) {
     Integer button = eventIntegerValue(evt)
     debug "Pico released ${button}: ${evt?.displayName}"
 
-    if (button in [2, 4]) {
+    if (button in [2, 4] || state.previewLevelChangeActive == true) {
         stopPreviewLevelChange()
     }
 }
@@ -375,13 +375,19 @@ private void scheduleCommit(String reason) {
 
 private void startPreviewLevelChange(String direction) {
     def dev = previewDevice
-    if (!dev) return
+    if (!dev) {
+        log.warn "${app.label}: Cannot start House Intent preview level change; no preview device is configured."
+        return
+    }
 
     state.pendingCustom = true
     state.pendingSceneName = "Custom"
+    state.previewLevelChangeActive = true
+    state.previewLevelChangeDirection = direction
     try {
         suppressPreviewFeedback()
         dev.startLevelChange(direction)
+        debug "Started ${direction} preview level change on ${dev.displayName}"
     } catch (Exception e) {
         log.warn "${app.label}: Could not start ${direction} preview level change on ${dev.displayName}: ${e.message}"
     }
@@ -389,27 +395,41 @@ private void startPreviewLevelChange(String direction) {
 
 private void stopPreviewLevelChange() {
     def dev = previewDevice
-    if (!dev) return
+    if (!dev) {
+        state.previewLevelChangeActive = false
+        state.remove("previewLevelChangeDirection")
+        log.warn "${app.label}: Cannot stop House Intent preview level change; no preview device is configured."
+        return
+    }
 
     try {
         suppressPreviewFeedback()
         dev.stopLevelChange()
+        debug "Stopped ${state.previewLevelChangeDirection ?: ''} preview level change on ${dev.displayName}"
     } catch (Exception e) {
         log.warn "${app.label}: Could not stop preview level change on ${dev.displayName}: ${e.message}"
     }
 
+    state.previewLevelChangeActive = false
+    state.remove("previewLevelChangeDirection")
     state.commitReason = "level change released"
     runIn(1, "commitPreviewLevelChange", [overwrite: true])
 }
 
 def commitPreviewLevelChange() {
     def dev = previewDevice
-    if (!dev) return
+    if (!dev) {
+        log.warn "${app.label}: Cannot commit House Intent preview level change; no preview device is configured."
+        return
+    }
 
-    state.pendingLevel = normalizedLevel(dev.currentValue("level") ?: state.pendingLevel ?: currentRoomLevel())
-    state.pendingCt = normalizedColorTemperature(dev.currentValue("colorTemperature") ?: state.pendingCt ?: currentRoomCt())
+    def previewLevel = dev.currentValue("level")
+    def previewCt = dev.currentValue("colorTemperature")
+    state.pendingLevel = normalizedLevel(previewLevel ?: state.pendingLevel ?: currentRoomLevel())
+    state.pendingCt = normalizedColorTemperature(previewCt ?: state.pendingCt ?: currentRoomCt())
     state.pendingCustom = true
     state.pendingSceneName = "Custom"
+    debug "Committing House Intent preview from ${dev.displayName}: level=${previewLevel}, ct=${previewCt}"
     commitPendingIntent()
 }
 
