@@ -176,15 +176,32 @@ private void handleFetchFailure(String status) {
         return
     }
 
-    Date sunrise = state.lastSunrise ? new Date(state.lastSunrise as Long) : null
-    Date sunset = state.lastSunset ? new Date(state.lastSunset as Long) : null
-    BigDecimal daylight = daylightCurve(now(), adjustedTime(sunrise, 0), adjustedTime(sunset, 0))
+    Long sunriseMs = anchorStoredTimeToToday(state.lastSunrise)
+    Long sunsetMs = anchorStoredTimeToToday(state.lastSunset)
+    BigDecimal daylight = daylightCurve(now(), sunriseMs, sunsetMs)
     Integer lux = clampInteger((daylight * 70000G).setScale(0, BigDecimal.ROUND_HALF_UP) as Integer, 0, 70000)
     Integer ct = roundToStep(clampInteger((2200G + (4300G * daylight)).setScale(0, BigDecimal.ROUND_HALF_UP) as Integer, 2200, 6500), ctStep())
     String updated = new Date().format('yyyy-MM-dd HH:mm:ss', location.timeZone)
 
     publishOutdoorLight(lux, ct, 0G, 0G, 0, 'Local Fallback', updated, 'Local Fallback', status)
     debug "Published local fallback after stale Open-Meteo data: lux=${lux}, ct=${ct}, status=${status}"
+}
+
+// Stored sunrise/sunset come from the last successful fetch; after an outage
+// crosses midnight their dates are in the past and daylightCurve would return
+// 0 all day (perpetual night). Re-anchor the stored time-of-day onto today.
+private Long anchorStoredTimeToToday(def storedMs) {
+    Long stored = longValue(storedMs, 0L)
+    if (!stored) return null
+
+    Calendar storedCal = Calendar.getInstance(location.timeZone)
+    storedCal.setTimeInMillis(stored)
+    Calendar today = Calendar.getInstance(location.timeZone)
+    today.set(Calendar.HOUR_OF_DAY, storedCal.get(Calendar.HOUR_OF_DAY))
+    today.set(Calendar.MINUTE, storedCal.get(Calendar.MINUTE))
+    today.set(Calendar.SECOND, storedCal.get(Calendar.SECOND))
+    today.set(Calendar.MILLISECOND, 0)
+    return today.getTimeInMillis()
 }
 
 private Integer calculateOutdoorLux(BigDecimal radiation, BigDecimal cloud, Date sunrise, Date sunset) {
