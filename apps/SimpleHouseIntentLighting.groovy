@@ -234,7 +234,8 @@ def commitPendingIntent() {
         return
     }
 
-    Integer level = normalizedLevel(state.pendingLevel ?: currentRoomLevel())
+    // pendingLevel 0 means dim-to-off; ?: would discard it as unset.
+    Integer level = normalizedLevel(state.pendingLevel != null ? state.pendingLevel : currentRoomLevel())
     Integer ct = normalizedColorTemperature(state.pendingCt ?: currentRoomCt())
 
     try {
@@ -348,7 +349,7 @@ private void applyPreview(String reason) {
     def dev = previewDevice
     if (!dev) return
 
-    Integer level = normalizedLevel(state.pendingLevel ?: currentRoomLevel())
+    Integer level = normalizedLevel(state.pendingLevel != null ? state.pendingLevel : currentRoomLevel())
     Integer ct = normalizedColorTemperature(state.pendingCt ?: currentRoomCt())
 
     try {
@@ -425,7 +426,8 @@ def commitPreviewLevelChange() {
 
     def previewLevel = dev.currentValue("level")
     def previewCt = dev.currentValue("colorTemperature")
-    state.pendingLevel = normalizedLevel(previewLevel ?: state.pendingLevel ?: currentRoomLevel())
+    def resolvedLevel = previewLevel != null ? previewLevel : (state.pendingLevel != null ? state.pendingLevel : currentRoomLevel())
+    state.pendingLevel = normalizedLevel(resolvedLevel)
     state.pendingCt = normalizedColorTemperature(previewCt ?: state.pendingCt ?: currentRoomCt())
     state.pendingCustom = true
     state.pendingSceneName = "Custom"
