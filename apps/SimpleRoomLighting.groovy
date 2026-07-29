@@ -709,7 +709,9 @@ private Boolean shouldSkipInitialActivation(String reason, Boolean levelChangeOn
 private void applyOffCondition(String reason, Map snap = null) {
     Long startedAt = now()
     snap = snap ?: roomSnapshot()
-    String context = activeContextKey()
+    // Off rows must resolve in the context that activated the lights, not the
+    // current mode — same staleness rule the intent half already follows.
+    String context = state.lastActiveMatrixContext ?: activeContextKey()
     String intentBucket = activeIntentBucket(state.lastActiveMatrixIntent ?: snap.intent)
     List devices = allAutomatedDevices()
     Map stats = lightingStats(devices)
@@ -723,7 +725,7 @@ private void applyOffCondition(String reason, Map snap = null) {
 private void applyLockedFadeOff() {
     Long startedAt = now()
     Map snap = roomSnapshot()
-    String context = activeContextKey()
+    String context = state.lastActiveMatrixContext ?: activeContextKey()
     String intentBucket = activeIntentBucket(state.lastActiveMatrixIntent ?: snap.intent)
     List devices = allAutomatedDevices()
     Map stats = lightingStats(devices)
