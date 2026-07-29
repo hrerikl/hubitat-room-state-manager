@@ -356,6 +356,21 @@ private String appendRoomReassessReason(def existing, String reason) {
     return "${existingText}, ${reason}"
 }
 
+// Debounced reassess passes coalesce reasons into "a changed, b changed", so
+// consumers must match tokens, never the whole string.
+private List reasonTokens(String reason) {
+    return reason?.toString()?.split(", ")?.collect { it.trim() }?.findAll { it } ?: []
+}
+
+private Boolean reasonIncludes(String reason, String token) {
+    return reasonTokens(reason).contains(token)
+}
+
+private Boolean reasonOnly(String reason, List tokens) {
+    List parsed = reasonTokens(reason)
+    return parsed && parsed.every { it in tokens }
+}
+
 def sceneRequestHandler(evt) {
     debug "Scene cycle requested from room device"
     cycleSceneSwitch()
@@ -588,7 +603,7 @@ private void reassessLighting(String reason, Map snap = null) {
     Boolean colorTemperatureChanged = lastDrivers ? normalizedColorTemperature(lastDrivers.ct, 2700) != metaCt : false
     Boolean levelChangeOnly = sameActiveMatrix && levelChanged && !colorTemperatureChanged && levelFollowAllowed()
     Boolean colorTemperatureOnly = sameActiveMatrix && colorTemperatureChanged && !levelChanged
-    if (reason == "metaLightLevel changed") {
+    if (reasonIncludes(reason, "metaLightLevel changed")) {
         clearLevelFollowMarkers()
     }
 
@@ -688,7 +703,7 @@ private void applyLevelCtAfterSwitchesRow(String context, String intentBucket, d
 
 private Boolean shouldSkipInitialActivation(String reason, Boolean levelChangeOnly) {
     if (levelChangeOnly) return false
-    return reason in ["initialize", "metaLightSwitch changed", "lightingIntent changed"]
+    return reasonTokens(reason).any { it in ["initialize", "metaLightSwitch changed", "lightingIntent changed"] }
 }
 
 private void applyOffCondition(String reason, Map snap = null) {
@@ -1399,10 +1414,11 @@ private void turnOffDevice(def dev, String reason, Integer transitionSecondsForC
 }
 
 private Integer transitionSecondsFor(String reason, String actionType) {
-    if (reason == "Room locked") return safeTransitionSeconds(lockedFadeOffTransitionSeconds, 30)
+    if (reasonIncludes(reason, "Room locked")) return safeTransitionSeconds(lockedFadeOffTransitionSeconds, 30)
     if (actionType == "deactivation") return safeTransitionSeconds(deactivationTransitionSeconds, 30)
-    if (reason in ["metaLightLevel changed", "metaLightColorTemperature changed"] && instantSceneTransitionActive()) return 0
-    if (reason in ["metaLightLevel changed", "metaLightColorTemperature changed", "Location Mode changed", "override switch changed"]) {
+    List levelCtTokens = ["metaLightLevel changed", "metaLightColorTemperature changed"]
+    if (reasonOnly(reason, levelCtTokens) && instantSceneTransitionActive()) return 0
+    if (reasonOnly(reason, levelCtTokens + ["Location Mode changed", "override switch changed"])) {
         return safeTransitionSeconds(referenceTransitionSeconds, 10)
     }
     return safeTransitionSeconds(activationTransitionSeconds ?: transitionSeconds, 2)
