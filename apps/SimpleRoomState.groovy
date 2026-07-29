@@ -864,8 +864,13 @@ def roomLevelHandler(evt) {
     }
 
     debug "Room level set to ${level}"
-    pauseCircadianReference(eventReason("manual room level change", evt))
-    activateCustomLightingFromRoomControl(eventReason("manual room level change", evt))
+    // Only a nonzero level is a manual lighting choice. The meta driver's off()
+    // emits a digital level 0, and treating that as custom lighting left
+    // already-off rooms stuck with customLighting on and circadian paused.
+    if (level > 0) {
+        pauseCircadianReference(eventReason("manual room level change", evt))
+        activateCustomLightingFromRoomControl(eventReason("manual room level change", evt))
+    }
 
     if (lockedFlag()) {
         debug "Room is locked; routing room level to MetaLight only"
