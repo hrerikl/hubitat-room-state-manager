@@ -559,12 +559,36 @@ private Boolean multipleHouseIntentLightingApps() {
     return houseIntentLightingChildApps().size() > 1
 }
 
+// Input properties do not reliably return existing children (live hub shows
+// "Add mode manager" despite one running), so each registry needs the typed
+// getChildApps() discovery; without it duplicate guards, reinitialize, and
+// Room Lighting feedback suppression all silently miss these child types.
 private List simpleRoomLightingChildApps() {
-    return uniqueChildApps(lightingApps ?: [])
+    List configured = lightingApps ?: []
+    List discovered = []
+    try {
+        discovered = getChildApps()?.findAll { child ->
+            return simpleHomeChildTypeIs(child, "roomLighting")
+        } ?: []
+    } catch (Throwable ignored) {
+        discovered = []
+    }
+
+    return uniqueChildApps(configured + discovered)
 }
 
 private List modeManagerChildApps() {
-    return uniqueChildApps(modeApps ?: [])
+    List configured = modeApps ?: []
+    List discovered = []
+    try {
+        discovered = getChildApps()?.findAll { child ->
+            return simpleHomeChildTypeIs(child, "modeManager")
+        } ?: []
+    } catch (Throwable ignored) {
+        discovered = []
+    }
+
+    return uniqueChildApps(configured + discovered)
 }
 
 private def modeManagerChildApp() {
@@ -572,7 +596,17 @@ private def modeManagerChildApp() {
 }
 
 private List circadianLightingChildApps() {
-    return uniqueChildApps(circadianApps ?: [])
+    List configured = circadianApps ?: []
+    List discovered = []
+    try {
+        discovered = getChildApps()?.findAll { child ->
+            return simpleHomeChildTypeIs(child, "circadianLighting")
+        } ?: []
+    } catch (Throwable ignored) {
+        discovered = []
+    }
+
+    return uniqueChildApps(configured + discovered)
 }
 
 private def circadianLightingChildApp() {
