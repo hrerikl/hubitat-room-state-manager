@@ -1174,6 +1174,12 @@ def motionInactiveHandler(evt) {
         return
     }
 
+    // Count the occupied timeout from when motion ENDED. Sensors that hold
+    // active through continuous presence would otherwise expire the room
+    // about a second after motion stops (elapsed measured from motion start).
+    Long timestamp = now()
+    state.lastActivityAt = timestamp
+    state.lastInactiveAt = timestamp
     scheduleOccupiedTimeout("motion inactive")
 }
 
@@ -1553,6 +1559,10 @@ private void setLocked(Boolean locked, String reason, Boolean clearAsleepOnUnloc
                 setOccupiedFlag(true)
                 if (!engagedFlag()) {
                     scheduleOccupiedTimeout("locked cleared with recent activity")
+                } else {
+                    // Locking unscheduled the engaged timeout; without a re-arm
+                    // an engaged room stays Engaged forever after unlock.
+                    scheduleEngagedTimeout("locked cleared while engaged")
                 }
             } else {
                 setOccupiedFlag(false)
@@ -1933,9 +1943,15 @@ private void refreshLockedState() {
     if (anyExternalLockOn()) {
         componentSwitchOn("Locked")
         setLocked(true, "refresh locked state from external lock")
-    } else {
-        setLocked(lockedEnabled(), "refresh locked state", false)
+        return
     }
+
+    Boolean desired = lockedEnabled()
+    // Re-locking re-arms lock schedules after unschedule(), but running the
+    // unlock path on an already-unlocked room fires unlock side effects
+    // (activity stamps, occupancy clearing) on every app save.
+    if (!desired && !lockedFlag()) return
+    setLocked(desired, "refresh locked state", false)
 }
 
 private void refreshAsleepState() {
