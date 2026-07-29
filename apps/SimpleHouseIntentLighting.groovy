@@ -301,7 +301,6 @@ private void adjustColorTemperature(Integer delta) {
 }
 
 private void returnToHouseReference() {
-    unschedule(commitPendingIntent)
     clearPendingIntent()
     try {
         roomDevice()?.clearCustomLighting()
@@ -333,6 +332,10 @@ private void reapplyHouseIntentRoomReference(String reason) {
 }
 
 private void clearPendingIntent() {
+    // Cancel queued commits too; a pending timer firing after a clear would
+    // re-commit stale values and stick the house in custom mode.
+    unschedule(commitPendingIntent)
+    unschedule(commitPreviewLevelChange)
     state.pendingCustom = false
     state.pendingSceneName = "Follow House"
     state.remove("pendingLevel")
@@ -341,8 +344,12 @@ private void clearPendingIntent() {
 }
 
 private void ensurePendingFromRoom() {
-    if (state.pendingLevel == null) state.pendingLevel = currentRoomLevel()
-    if (state.pendingCt == null) state.pendingCt = currentRoomCt()
+    // Outside a custom session the pending values may be stale seeds from a
+    // reboot or an old session; reseed from the room so the first adjustment
+    // steps from what the house is actually doing.
+    Boolean freshSession = state.pendingCustom != true
+    if (freshSession || state.pendingLevel == null) state.pendingLevel = currentRoomLevel()
+    if (freshSession || state.pendingCt == null) state.pendingCt = currentRoomCt()
 }
 
 private void applyPreview(String reason) {
