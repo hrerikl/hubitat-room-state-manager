@@ -91,12 +91,9 @@ In VS Code, use **Terminal > Run Task** and pick `Hubitat: check`, `Hubitat: tes
 
 ## Hubitat Workflow
 
-1. Edit app code locally in `src/main/groovy/apps/RoomStateAutomation.groovy`.
-2. Run `gradle check`.
-3. Copy the app source into Hubitat: **Apps Code > New App** or your existing app entry.
-4. Save and install/update the app from **Apps**.
+Simple Home deployments go through the installed **Simple Home Dev** app. Use `scripts/deploy-dev.ps1`: it validates the code and package, requires committed changes, pushes `main`, and invokes the configured Dev update endpoint. Keep `.hubitat-dev.json` local and never commit its access token.
 
-Hubitat app code is script-like Groovy, so the test harness intentionally mocks only the platform calls this app uses. As your app grows, add methods to `src/test/groovy/hubitat/HubitatAppSpec.groovy` instead of pulling Hubitat-specific behavior into production code.
+Do not update individual Simple Home code entries directly through MCP. Use MCP for inspection and post-deployment verification. After an endpoint error, inspect the saved source and Dev status before retrying because part of an update may already have completed.
 
 ## Suggested Next Steps
 
