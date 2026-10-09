@@ -999,6 +999,10 @@ def lockedEnabledHandler(evt) {
 
 def locationModeHandler(evt) {
     debug "Location Mode changed to ${evt.value}"
+    if (lockedFlag()) {
+        debug "Ignoring Location Mode update because room is locked"
+        return
+    }
 
     if (presenceClearingMode(evt.value)) {
         clearPresenceFromLocationMode(evt.value?.toString())
@@ -1028,6 +1032,10 @@ private Boolean presenceClearingMode(def modeName) {
 }
 
 def circadianReferenceHandler(evt) {
+    if (lockedFlag()) {
+        debug "Ignoring circadian reference update because room is locked"
+        return
+    }
     reconcileCircadianPauseWithRoomDevice("circadian reference ${evt?.name} event")
     if (!circadianReferenceTrackingActive()) {
         if (followCircadianReferenceEnabled()) {
@@ -1050,6 +1058,9 @@ def circadianReferenceHandler(evt) {
 }
 
 def reapplyCircadianReferenceFromParent(String reason = "parent reference changed", Integer referenceLevel = null, Integer referenceColorTemperature = null) {
+    if (lockedFlag()) {
+        return [applied: false, reason: "room locked"]
+    }
     reconcileCircadianPauseWithRoomDevice(reason)
     if (!circadianReferenceTrackingActiveForRecompute()) {
         String detail = "tracking paused or unavailable"
@@ -2280,6 +2291,10 @@ private Boolean circadianReferenceTrackingActiveForRecompute() {
 }
 
 private void reconcileCircadianPauseWithRoomDevice(String reason) {
+    // Locking deliberately pauses automatic reference tracking, even when
+    // Custom Lighting is off. Only reconcile a stale custom-lighting pause
+    // after the lock has been released.
+    if (lockedFlag()) return
     if (state.circadianReferencePaused != true) return
 
     try {

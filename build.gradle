@@ -267,3 +267,13 @@ codenarc {
     configFile = file('config/codenarc/codenarc.groovy')
     ignoreFailures = true
 }
+
+// Exercise the deployed handlers without requiring a live house mode change.
+tasks.register('lockModeRegression', JavaExec) {
+    classpath = configurations.testRuntimeClasspath
+    mainClass = 'groovy.ui.GroovyMain'
+    args 'scripts/LockModeRegression.groovy', 'apps/SimpleRoomState.groovy'
+}
+tasks.named('check') {
+    dependsOn tasks.named('lockModeRegression')
+}
