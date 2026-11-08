@@ -157,6 +157,9 @@ preferences {
                     }
                 }
 
+                input "nightMotionProtection", "bool", title: "Cap automatic lighting during Night", defaultValue: defaultNightMotionProtection(), required: true
+                input "nightMotionMaximumLevel", "number", title: "Night automatic brightness cap (percent)", defaultValue: 3, required: true
+
                 input "useModeBasedLightingLevels", "bool", title: "Use Location Mode based lighting settings", defaultValue: false, required: true, submitOnChange: true
 
                 if (useModeBasedLightingLevels) {
@@ -1009,7 +1012,13 @@ def locationModeHandler(evt) {
         return
     }
 
-    if (!useModeBasedLightingLevels || !changeLightingLevelOnModeChange) {
+    if (nightMotionProtectionEnabled() && evt?.value?.toString() == "Night") {
+        clearCustomLightingSilently("Night motion protection")
+        resumeCircadianReference("Night motion protection")
+        state.keepCircadianReferencePausedForIntentChange = false
+    }
+
+    if ((!useModeBasedLightingLevels || !changeLightingLevelOnModeChange) && !nightMotionProtectionEnabled()) {
         debug "Ignoring Location Mode level update because mode-change level adjustment is disabled"
         return
     }
@@ -2144,6 +2153,25 @@ private Integer computeLightingLevel(String lightingIntent, Map referenceSnapsho
     return 0
 }
 
+private Boolean defaultNightMotionProtection() {
+    return safeRoomName() == "Media Room"
+}
+
+private Boolean nightMotionProtectionEnabled() {
+    return !houseIntentProfile() && settingBool("nightMotionProtection", defaultNightMotionProtection())
+}
+
+private Boolean automaticNightLightingCapped() {
+    return nightMotionProtectionEnabled() && currentLocationModeName() == "Night" &&
+        roomDevice()?.currentValue("customLighting") != "on"
+}
+
+private Integer capAutomaticNightLevel(Integer level) {
+    if (!automaticNightLightingCapped() || level <= 0) return level
+    Integer maximum = normalizedPercent(nightMotionMaximumLevel, 3)
+    return Math.min(level, Math.max(maximum, 1))
+}
+
 private Integer lockedMetaLightOnLevel() {
     return lockedMetaLightOnLevel(referenceSnapshotForRecompute())
 }
@@ -2421,7 +2449,13 @@ private void recomputeAndPublish(Map timing = null, Map preferredReference = nul
     if (lockedReferenceUpdate && effectiveLightingLevel == 0) {
         effectiveLightingLevel = lockedMetaLightOnLevel(referenceSnapshot)
     }
+    if (!lockedNow && automaticNightLightingCapped()) {
+        Integer beforeCap = effectiveLightingLevel
+        effectiveLightingLevel = capAutomaticNightLevel(effectiveLightingLevel)
+        if (beforeCap != effectiveLightingLevel) debug "Night motion protection capped ${beforeCap}% to ${effectiveLightingLevel}%"
+    }
     Integer effectiveColorTemperature = lockedNow && !lockedReferenceUpdate ? previousMetaLightColorTemperature : effectiveMetaLightColorTemperature(referenceSnapshot)
+    if (!lockedNow && automaticNightLightingCapped()) effectiveColorTemperature = 2200
     Integer roomControlLevel = lockedNow ? previousRoomLevel : (newRoomState in ["Occupied", "Engaged"] ? effectiveLightingLevel : 0)
 
     // Locking should not change the public switch. It is a freeze/hold state, not an on/off request.

@@ -42,8 +42,10 @@ preferences {
         }
 
         section("Automatic return") {
+            input "nightModeName", "enum", title: "Night mode always clears custom scenes", options: locationModeOptions(), defaultValue: "Night", required: true
+            input "manualOverrideHours", "number", title: "Maximum custom lighting hours (0 holds until a mode reset)", defaultValue: 2, required: true
             input "preserveCustomModeNames", "enum", title: "Modes that keep House Intent custom lighting when entered", options: locationModeOptions(), multiple: true, defaultValue: ["Evening"], required: false
-            paragraph "Entering any other mode returns House Intent to the automatic reference. Default keeps custom lighting through the Day to Evening transition and clears it at Night and Day."
+            paragraph "Evening preserves custom lighting until its time limit. Night always clears custom lighting, including Party, and cancels pending scene commits."
         }
 
         section("Speech") {
@@ -97,6 +99,14 @@ def initialize() {
     if (recovery) {
         subscribe(recovery, "switch.on", recoverSimpleHomeHandler)
     }
+    subscribe(roomDevice(), "customLighting", houseCustomLightingHandler)
+    runEvery5Minutes(overrideWatchdog)
+    // Clear an untracked legacy hold once; new holds get an explicit start time.
+    if (state.overridePolicyVersion != 1) {
+        state.overridePolicyVersion = 1
+        if (houseIntentIsCustom()) returnToHouseReference(false)
+    }
+    enforceAutomaticReturn("initialize")
     ensurePendingFromRoom()
 }
 
@@ -157,7 +167,10 @@ private Boolean houseIntentLightingAllowed() {
 }
 
 def recoverSimpleHomeHandler(evt) {
+    Long startedAt = state.manualOverrideStartedAt as Long
     clearPendingIntent()
+    if (houseIntentIsCustom()) state.manualOverrideStartedAt = startedAt
+    enforceAutomaticReturn("Simple Home recovery")
     reapplyHouseIntentRoomReference("Simple Home recovery")
     notifyHouseIntentReferenceChanged("Simple Home recovery")
 }
@@ -206,6 +219,11 @@ def picoReleasedHandler(evt) {
 }
 
 def locationModeHandler(evt) {
+    if (evt?.value?.toString() == (nightModeName ?: "Night").toString()) {
+        // Clear timers even if a scene is only previewed and not yet committed.
+        returnToHouseReference(false)
+        return
+    }
     if (!houseIntentIsCustom()) return
 
     if (preserveCustomInMode(evt.value)) {
@@ -219,7 +237,7 @@ def locationModeHandler(evt) {
 
 private Boolean preserveCustomInMode(def modeName) {
     String currentMode = modeName?.toString()
-    if (!currentMode) return false
+    if (!currentMode || currentMode == (nightModeName ?: "Night").toString()) return false
 
     def configuredModes = settings?.preserveCustomModeNames
     if (configuredModes == null) configuredModes = ["Evening"]
@@ -227,6 +245,11 @@ private Boolean preserveCustomInMode(def modeName) {
 }
 
 def commitPendingIntent() {
+    if (houseNightActive()) {
+        returnToHouseReference(false)
+        return
+    }
+    if (state.pendingCustom != true || !state.commitReason) return
     String reason = state.commitReason ?: "scheduled"
     def room = roomDevice()
     if (!room) {
@@ -240,6 +263,7 @@ def commitPendingIntent() {
 
     try {
         clearPreviewFeedbackSuppression()
+        if (!state.manualOverrideStartedAt) state.manualOverrideStartedAt = now()
         room.activateCustomLighting()
         room.setActiveScene(activeSceneName())
         room.setMetaLightSwitchState(level > 0 ? "on" : "off")
@@ -300,7 +324,7 @@ private void adjustColorTemperature(Integer delta) {
     scheduleCommit("color temperature adjusted")
 }
 
-private void returnToHouseReference() {
+private void returnToHouseReference(Boolean announce = true) {
     clearPendingIntent()
     try {
         roomDevice()?.clearCustomLighting()
@@ -311,8 +335,8 @@ private void returnToHouseReference() {
         log.warn "${app.label}: Could not return House Intent to automatic reference: ${e.message}"
         return
     }
-    announceScene("Follow House")
-    debug "Returned House Intent to automatic reference"
+    if (announce) announceScene("Follow House")
+    log.info "${app.label}: Returned House Intent to automatic reference"
 }
 
 private void notifyHouseIntentReferenceChanged(String reason) {
@@ -334,13 +358,46 @@ private void reapplyHouseIntentRoomReference(String reason) {
 private void clearPendingIntent() {
     // Cancel queued commits too; a pending timer firing after a clear would
     // re-commit stale values and stick the house in custom mode.
-    unschedule(commitPendingIntent)
-    unschedule(commitPreviewLevelChange)
+    unschedule("commitPendingIntent")
+    unschedule("commitPreviewLevelChange")
     state.pendingCustom = false
     state.pendingSceneName = "Follow House"
     state.remove("pendingLevel")
     state.remove("pendingCt")
     state.remove("commitReason")
+    state.remove("manualOverrideStartedAt")
+}
+
+private Boolean houseNightActive() {
+    return currentLocationModeName() == (nightModeName ?: "Night").toString()
+}
+
+def houseCustomLightingHandler(evt) {
+    if (evt?.value == "on") {
+        if (!state.manualOverrideStartedAt) state.manualOverrideStartedAt = now()
+        enforceAutomaticReturn("custom lighting event")
+    } else {
+        clearPendingIntent()
+    }
+}
+
+def overrideWatchdog() {
+    enforceAutomaticReturn("watchdog")
+}
+
+private void enforceAutomaticReturn(String reason) {
+    if (!houseIntentIsCustom()) return
+    if (houseNightActive()) {
+        log.info "${app.label}: Night clears custom lighting (${reason})"
+        returnToHouseReference(false)
+        return
+    }
+    if (!state.manualOverrideStartedAt) state.manualOverrideStartedAt = now()
+    Integer hours = Math.max(safeInteger(manualOverrideHours, 2), 0)
+    if (hours > 0 && now() - (state.manualOverrideStartedAt as Long) >= hours * 3600000L) {
+        log.info "${app.label}: Custom lighting time limit reached (${reason})"
+        returnToHouseReference(false)
+    }
 }
 
 private void ensurePendingFromRoom() {

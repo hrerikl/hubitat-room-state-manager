@@ -35,6 +35,8 @@ preferences {
 
         section("Presence") {
             input "presenceSensors", "capability.presenceSensor", title: "Presence sensors. Present means someone is home.", multiple: true, required: false
+            input "presenceSwitches", "capability.switch", title: "Someone Home override switches (on means home)", multiple: true, required: false
+            paragraph "Phones and the home override are combined. If all report away, Night cannot start."
             input "vacationSwitch", "capability.switch", title: "Vacation switch. On means no-presence becomes Vacation instead of Away.", multiple: false, required: false
             input "arrivalPulseSeconds", "number", title: "Someone Arrived pulse seconds", defaultValue: 30, required: true
         }
@@ -51,6 +53,13 @@ preferences {
             input "stillUpSwitches", "capability.switch", title: "StillUp switches. On extends Night; during Night, On returns to Evening.", multiple: true, required: false
             input "stillUpButtons", "capability.pushableButton", title: "StillUp buttons. Pushed extends Night; during Night, pushed returns to Evening.", multiple: true, required: false
             input "stillUpExtensionMinutes", "number", title: "StillUp extends Night by minutes from activation", defaultValue: 60, required: true
+        }
+
+        section("Current decision") {
+            paragraph "Location Mode: ${currentLocationModeName()}"
+            paragraph "Presence: ${presenceSummary()}"
+            paragraph "Night: ${state.lastNightDecision ?: 'Not yet evaluated'}"
+            paragraph "Blocking rooms: ${nightBlockingRoomLabels() ?: 'none'}"
         }
 
         section("Debug") {
@@ -92,6 +101,7 @@ def initialize() {
     ensureParentArrivalDevice()
 
     subscribe(presenceSensors, "presence", presenceHandler)
+    subscribe(presenceSwitches, "switch", presenceHandler)
     subscribe(vacationSwitch, "switch", presenceHandler)
     subscribe(stillUpSwitches, "switch.on", stillUpHandler)
     subscribe(stillUpButtons, "pushed", stillUpHandler)
@@ -101,6 +111,7 @@ def initialize() {
     scheduleDayStart()
     scheduleEveningStart()
     scheduleNightStart()
+    runEvery5Minutes(modeWatchdog)
 
     evaluatePresenceMode("initialize")
     evaluateNight("initialize")
@@ -212,8 +223,35 @@ def presenceHandler(evt) {
         pulseArrival("presence arrival: ${evt.displayName}")
         returnHomeFromAway("presence arrival: ${evt.displayName}")
     }
+    if (someoneHome()) returnHomeFromAway("presence input")
     evaluatePresenceMode("presence input")
+    evaluateNight("presence input")
 }
+
+def modeWatchdog() {
+    evaluatePresenceMode("watchdog")
+    if (someoneHome()) {
+        returnHomeFromAway("watchdog")
+        if (!nightWindowActive()) {
+            setModeIfNeeded(eveningWindowActive() ? eveningModeName : dayModeName, "schedule watchdog")
+        }
+    }
+    evaluateNight("watchdog")
+}
+
+private String presenceSummary() {
+    List entries = asList(presenceSensors).collect { "${it.displayName}: ${it.currentPresence ?: 'unknown'}" }
+    entries.addAll(asList(presenceSwitches).collect { "${it.displayName}: ${it.currentSwitch ?: 'unknown'}" })
+    return entries ? entries.join(", ") : "No inputs configured; assuming home"
+}
+
+private void recordNightDecision(String detail) {
+    if (state.lastNightDecision != detail) {
+        state.lastNightDecision = detail
+        log.info "${app.label}: ${detail}"
+    }
+}
+
 
 def stillUpHandler(evt) {
     debug "StillUp activated: ${evt.displayName}"
@@ -262,47 +300,59 @@ private void returnHomeFromAway(String reason) {
 
 private void evaluateNight(String reason) {
     if (!someoneHome()) {
+        resetNightReadiness()
+        recordNightDecision("Blocked: no configured presence input reports home (${presenceSummary()})")
         evaluatePresenceMode("night check with no presence")
         return
     }
-
+    if (currentLocationModeName() == nightModeName) {
+        resetNightReadiness()
+        recordNightDecision("Night active")
+        return
+    }
     if (!nightWindowActive()) {
-        debug "Night blocked because night window is not active: ${reason}"
+        resetNightReadiness()
+        recordNightDecision("Waiting for Night start time")
         return
     }
-
     if (nightExtended()) {
+        resetNightReadiness()
         scheduleNightExtensionRecheck(state.nightExtendedUntil as Long)
-        debug "Night blocked by StillUp extension until ${formatTime(state.nightExtendedUntil as Long)}"
+        recordNightDecision("StillUp until ${formatTime(state.nightExtendedUntil as Long)}")
+        return
+    }
+    if (!nightReadyRoomsReady()) {
+        resetNightReadiness()
+        recordNightDecision("Blocked by rooms: ${nightBlockingRoomLabels() ?: 'unknown'}")
         return
     }
 
-    if (nightReadyRoomsReady()) {
-        Integer seconds = nightReadySeconds()
-        debug "Night-ready rooms are ready; scheduling Night in ${seconds} seconds"
-        runIn(seconds, activateNightIfStillReady, [overwrite: true])
-    } else {
-        unschedule(activateNightIfStillReady)
-        debug "Night blocked because selected rooms are not ready: ${nightBlockingRoomLabels() ?: 'none'}"
+    Long timestamp = now()
+    if (state.nightReadySince == null) state.nightReadySince = timestamp
+    Long deadline = (state.nightReadySince as Long) + nightReadySeconds() * 1000L
+    if (timestamp >= deadline) {
+        setModeIfNeeded(nightModeName, "night-ready rooms settled")
+        resetNightReadiness()
+        recordNightDecision("Night active: rooms settled")
+        return
+    }
+    // Repeated ready-room events and watchdog ticks retain the original deadline.
+    if (state.nightReadyDeadline != deadline) {
+        Integer seconds = Math.max(Math.ceil((deadline - timestamp) / 1000.0) as Integer, 1)
+        runIn(seconds, "activateNightIfStillReady", [overwrite: true])
+        state.nightReadyDeadline = deadline
+        recordNightDecision("Rooms ready; Night at ${formatTime(deadline)}")
     }
 }
 
+private void resetNightReadiness() {
+    if (state.nightReadySince != null || state.nightReadyDeadline != null) unschedule("activateNightIfStillReady")
+    state.remove("nightReadySince")
+    state.remove("nightReadyDeadline")
+}
+
 def activateNightIfStillReady() {
-    if (!someoneHome()) {
-        evaluatePresenceMode("night activation with no presence")
-        return
-    }
-
-    if (!nightWindowActive() || nightExtended()) {
-        debug "Night activation skipped because window or extension changed"
-        return
-    }
-
-    if (nightReadyRoomsReady()) {
-        setModeIfNeeded(nightModeName, "night-ready rooms settled")
-    } else {
-        debug "Night activation skipped because rooms are no longer ready"
-    }
+    evaluateNight("night-ready timer")
 }
 
 private Boolean nightReadyRoomsReady() {
@@ -376,8 +426,9 @@ private Date eveningStartToday() {
 // -------------------- Helpers --------------------
 
 private Boolean someoneHome() {
-    if (!presenceSensors) return true
-    return presenceSensors?.any { it.currentPresence == "present" } ?: false
+    if (!presenceSensors && !presenceSwitches) return true
+    return (presenceSensors?.any { it.currentPresence == "present" } ?: false) ||
+        (presenceSwitches?.any { it.currentSwitch == "on" } ?: false)
 }
 
 private Boolean vacationActive() {

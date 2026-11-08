@@ -38,13 +38,18 @@ preferences {
             input 'eveningModeName', 'enum', title: 'Evening mode', options: locationModeOptions(), defaultValue: 'Evening', required: true
             input 'nightModeName', 'enum', title: 'Night mode', options: locationModeOptions(), defaultValue: 'Night', required: true
             input 'dayMinimumLevel', 'number', title: 'Day minimum level', defaultValue: 35, required: true
-            input 'eveningMinimumLevel', 'number', title: 'Evening minimum level', defaultValue: 20, required: true
+            input 'eveningMinimumLevel', 'number', title: 'Evening minimum level', defaultValue: 85, required: true
             input 'nightReferenceLevel', 'number', title: 'Night level', defaultValue: 5, required: true
             input 'outdoorLuxForMaxLevel', 'number', title: 'Outdoor lux for maximum level', defaultValue: 40000, required: true
             input 'minReferenceCT', 'number', title: 'Minimum reference color temperature', defaultValue: 2200, required: true
             input 'maxReferenceCT', 'number', title: 'Maximum reference color temperature', defaultValue: 6500, required: true
             input 'maxLevelChangePerPublish', 'number', title: 'Maximum level change per publish', defaultValue: 15, required: true
             input 'maxCtChangePerPublish', 'number', title: 'Maximum color temperature change per publish', defaultValue: 400, required: true
+        }
+
+        section('Evening and bedtime') {
+            input 'eveningReferenceCT', 'number', title: 'Evening color temperature', defaultValue: 2700, required: true
+            input 'nightReferenceCT', 'number', title: 'Night color temperature', defaultValue: 2200, required: true
         }
 
         section('Outdoor lighting enable') {
@@ -88,9 +93,23 @@ def initialize() {
         return
     }
 
+    applyBedtimeReferenceDefaults()
+    subscribe(location, 'mode', locationModeHandler)
     subscribe(parent.recoveryDevice(), 'switch.on', recoverSimpleHomeHandler)
     schedulePublishing()
     publishReference('initialize')
+}
+
+private void applyBedtimeReferenceDefaults() {
+    if (state.bedtimeReferenceDefaultsVersion == 1) return
+    app.updateSetting('eveningMinimumLevel', [type: 'number', value: 85])
+    app.updateSetting('nightReferenceLevel', [type: 'number', value: 5])
+    state.bedtimeReferenceDefaultsVersion = 1
+    log.info "${app.label}: Evening minimum 85%, Night 5%; future changes remain configurable."
+}
+
+def locationModeHandler(evt) {
+    publishReference("Location Mode ${evt?.value}")
 }
 
 def appButtonHandler(String buttonName) {
@@ -158,7 +177,7 @@ def publishReference(String reason = 'schedule') {
     Integer outdoorLux = currentInteger(outdoorLightSensor, 'outdoorLux', currentInteger(outdoorLightSensor, 'illuminance', 0))
     Integer outdoorCT = currentInteger(outdoorLightSensor, 'outdoorCT', minCt())
     Integer targetLevel = referenceLevel(outdoorLux)
-    Integer targetCT = clampInteger(outdoorCT, minCt(), maxCt())
+    Integer targetCT = referenceColorTemperature(outdoorCT)
     Map reference = limitedReference(targetLevel, targetCT)
     Integer publishLevel = reference.level as Integer
     Integer publishCT = reference.ct as Integer
@@ -297,14 +316,29 @@ private Integer modeMinimumLevel() {
     return clampInteger(settingInteger(dayMinimumLevel, 35), 1, 100)
 }
 
+private Boolean nightReferenceActive() {
+    return currentLocationModeName() == (nightModeName ?: 'Night').toString()
+}
+
+private Integer referenceColorTemperature(Integer outdoorCT) {
+    if (nightReferenceActive()) return clampInteger(settingInteger(nightReferenceCT, 2200), minCt(), maxCt())
+    if (currentLocationModeName() == (eveningModeName ?: 'Evening').toString()) {
+        return clampInteger(settingInteger(eveningReferenceCT, 2700), minCt(), maxCt())
+    }
+    return clampInteger(outdoorCT, minCt(), maxCt())
+}
+
 private Map limitedReference(Integer targetLevel, Integer targetCT) {
+    // Bedtime must become dim immediately, not through several 15-minute steps.
+    if (nightReferenceActive()) return [level: targetLevel, ct: targetCT]
     Integer currentLevel = currentInteger(referenceBulb, 'level', -1)
     Integer currentCT = currentInteger(referenceBulb, 'colorTemperature', -1)
 
-    return [
-        level: limitedStep(currentLevel, targetLevel, maxLevelChange()),
-        ct   : limitedStep(currentCT, targetCT, maxCtChange())
-    ]
+    Integer level = limitedStep(currentLevel, targetLevel, maxLevelChange())
+    if (currentLocationModeName() == (eveningModeName ?: 'Evening').toString()) {
+        level = Math.max(level, modeMinimumLevel())
+    }
+    return [level: level, ct: limitedStep(currentCT, targetCT, maxCtChange())]
 }
 
 private Integer limitedStep(Integer current, Integer target, Integer maxChange) {
