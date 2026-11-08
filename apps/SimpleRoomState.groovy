@@ -1012,11 +1012,7 @@ def locationModeHandler(evt) {
         return
     }
 
-    if (nightMotionProtectionEnabled() && evt?.value?.toString() == "Night") {
-        clearCustomLightingSilently("Night motion protection")
-        resumeCircadianReference("Night motion protection")
-        state.keepCircadianReferencePausedForIntentChange = false
-    }
+    resetNightManualLighting("Night mode change")
 
     if ((!useModeBasedLightingLevels || !changeLightingLevelOnModeChange) && !nightMotionProtectionEnabled()) {
         debug "Ignoring Location Mode level update because mode-change level adjustment is disabled"
@@ -1559,6 +1555,9 @@ private void setLocked(Boolean locked, String reason, Boolean clearAsleepOnUnloc
     } else {
         unschedule(autoClearLock)
         componentSwitchOff("Locked")
+        // Night may have started while the TV lock intentionally froze this room.
+        // Discard the earlier local scene before motion can resume automation.
+        resetNightManualLighting("Night TV unlock")
 
         // On unlock, optionally stamp activity now, then restore Occupied
         // only if last activity is still within the normal occupied timeout.
@@ -2151,6 +2150,13 @@ private Integer computeLightingLevel(String lightingIntent, Map referenceSnapsho
     if (lightingIntent == "Courtesy") return configuredCourtesyLightingLevel()
     if (lightingIntent == "Night") return configuredNightLightingLevel()
     return 0
+}
+
+private void resetNightManualLighting(String reason) {
+    if (!nightMotionProtectionEnabled() || currentLocationModeName() != "Night") return
+    clearCustomLightingSilently(reason)
+    resumeCircadianReference(reason)
+    state.keepCircadianReferencePausedForIntentChange = false
 }
 
 private Boolean defaultNightMotionProtection() {

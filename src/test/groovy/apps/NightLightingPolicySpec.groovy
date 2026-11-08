@@ -152,12 +152,20 @@ class NightLightingPolicySpec extends Specification {
     }
 
     private Script room(String mode, String custom, String name = 'Media Room') {
-        handlers('SimpleRoomState', ['def locationModeHandler(evt)', 'private Boolean defaultNightMotionProtection()',
+        handlers('SimpleRoomState', ['private void setLocked(', 'private void resetNightManualLighting(', 'def locationModeHandler(evt)', 'private Boolean defaultNightMotionProtection()',
             'private Boolean nightMotionProtectionEnabled()',
             'private Boolean automaticNightLightingCapped()', 'private Integer capAutomaticNightLevel('],
-            [state:[:], useModeBasedLightingLevels:false, changeLightingLevelOnModeChange:false, mode:mode, custom:custom, roomName:name, settings:[:], nightMotionMaximumLevel:3], '''
+            [state:[:], autoClearLock:"autoClearLock", unlockImpliesActivity:false, useModeBasedLightingLevels:false, changeLightingLevelOnModeChange:false, mode:mode, custom:custom, roomName:name, settings:[:], nightMotionMaximumLevel:3], '''
             def safeRoomName() { roomName }
             def lockedFlag() { false }
+            def setLockedFlag(value) { state.locked = value }
+            def unschedule(value) {}
+            def componentSwitchOff(value) {}
+            def asleepFlag() { false }
+            def hasRecentActivityWithinOccupiedTimeout() { false }
+            def setOccupiedFlag(value) {}
+            def setEngagedFlag(value) {}
+            def refreshCourtesyState() {}
             def presenceClearingMode(value) { false }
             def clearCustomLightingSilently(reason) { custom = 'off' }
             def resumeCircadianReference(reason) {}
@@ -185,6 +193,15 @@ class NightLightingPolicySpec extends Specification {
         def app = room('Night','on')
         when:
         app.locationModeHandler([value:'Night'])
+        then:
+        app.custom == 'off'
+        app.capAutomaticNightLevel(100) == 3
+    }
+    def 'TV unlock after Night started clears the scene held by the lock'() {
+        given:
+        def app = room('Night','on')
+        when:
+        app.setLocked(false, 'TV off')
         then:
         app.custom == 'off'
         app.capAutomaticNightLevel(100) == 3

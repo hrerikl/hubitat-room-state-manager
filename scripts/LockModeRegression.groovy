@@ -17,6 +17,7 @@ def scaffolding = '''
 def lockedFlag() { state.locked == true }
 def debug(Object ignored) {}
 def nightMotionProtectionEnabled() { false }
+def resetNightManualLighting(reason) {}
 def presenceClearingMode(Object mode) { mode in ['Away','Vacation'] }
 def clearPresenceFromLocationMode(String mode) { state.cleared = mode }
 def recomputeAndPublish(Object... ignored) { state.recomputed = true }
