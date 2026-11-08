@@ -179,7 +179,12 @@ def initialize() {
     subscribe(parent.recoveryDevice(), "switch.on", recoverSimpleHomeHandler)
 
     syncRoomAnnouncementMessages(room)
-    reassessLighting("initialize")
+    Map snap = roomSnapshot(true)
+    if (snap.roomState == "Locked" || snap.lockedEnabled == "on" || snap.lock == "locked") {
+        debug "Initialization preserves device outputs because room is locked"
+        return
+    }
+    reassessLighting("initialize", snap)
 }
 
 // -------------------- Events --------------------
