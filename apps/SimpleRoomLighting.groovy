@@ -10,6 +10,13 @@
  *   selected physical controls -> Room on/off/level
  */
 
+import groovy.transform.Field
+
+// Room device resolved through the parent, held for this execution only. A
+// non-static field is per script instance, so nothing leaks between events.
+@Field def roomDeviceMemo = null
+@Field String roomDeviceMemoKey = null
+
 definition(
     name: "Simple Room Lighting",
     namespace: "lundby",
@@ -926,16 +933,16 @@ private Map roomSnapshot(Boolean includeLockState = false) {
 
     Map snap = [
         valid        : true,
-        sw           : room.currentValue("metaLightSwitch") ?: "off",
-        intent       : room.currentValue("lightingIntent") ?: "Off",
-        level        : normalizedLevel(room.currentValue("metaLightLevel"), 0),
-        ct           : normalizedColorTemperature(room.currentValue("metaLightColorTemperature"), 2700)
+        sw           : freshRoomValue(room, "metaLightSwitch") ?: "off",
+        intent       : freshRoomValue(room, "lightingIntent") ?: "Off",
+        level        : normalizedLevel(freshRoomValue(room, "metaLightLevel"), 0),
+        ct           : normalizedColorTemperature(freshRoomValue(room, "metaLightColorTemperature"), 2700)
     ]
 
     if (includeLockState) {
-        snap.roomState = room.currentValue("roomState") ?: "Off"
-        snap.lockedEnabled = room.currentValue("lockedEnabled") ?: "off"
-        snap.lock = room.currentValue("lock") ?: "unlocked"
+        snap.roomState = freshRoomValue(room, "roomState") ?: "Off"
+        snap.lockedEnabled = freshRoomValue(room, "lockedEnabled") ?: "off"
+        snap.lock = freshRoomValue(room, "lock") ?: "unlocked"
     }
 
     return snap
@@ -956,8 +963,14 @@ private Map lightingDriverSnapshot(Map snap = null) {
         ct       : snap.ct,
         context  : context,
         override : overrideActive(context, intentBucket),
-        roomState: roomDevice()?.currentValue("roomState") ?: "Off"
+        roomState: currentRoomStateValue()
     ]
+}
+
+private String currentRoomStateValue() {
+    def room = roomDevice()
+    if (!room) return "Off"
+    return (freshRoomValue(room, "roomState") ?: "Off").toString()
 }
 
 private Boolean lightingDriversChanged(Map drivers) {
@@ -1840,11 +1853,30 @@ private String eventDeviceId(evt) {
 private def roomDevice() {
     if (!roomChildAppId) return null
 
+    // One parent round-trip per execution; a reassess pass used to make four.
+    String key = "${roomChildAppId}"
+    if (roomDeviceMemo != null && roomDeviceMemoKey == key) return roomDeviceMemo
+
     try {
-        return parent.roomStateChildRoomDevice(roomChildAppId)
+        def resolved = parent.roomStateChildRoomDevice(roomChildAppId)
+        if (resolved != null) {
+            roomDeviceMemo = resolved
+            roomDeviceMemoKey = key
+        }
+        return resolved
     } catch (Exception e) {
         log.warn "${app.label}: Could not resolve Room device: ${e.message}"
         return null
+    }
+}
+
+// The memoized handle may cache attribute values within an execution, so the
+// pass snapshots read past that cache to see what the Room published last.
+private def freshRoomValue(def room, String attributeName) {
+    try {
+        return room.currentValue(attributeName, true)
+    } catch (Throwable ignored) {
+        return room.currentValue(attributeName)
     }
 }
 
