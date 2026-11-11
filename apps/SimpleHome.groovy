@@ -9,6 +9,16 @@
  */
 
 import groovy.json.JsonOutput
+import groovy.transform.Field
+
+// Child app id -> Simple Home app type. A child's type never changes, so one
+// probe per child per code load replaces a cross-app call into every child on
+// every registry lookup. Static fields reset on code update or hub restart.
+@Field static java.util.concurrent.ConcurrentHashMap childTypeCache = new java.util.concurrent.ConcurrentHashMap()
+
+// Parent app id -> [id, at] for the House Intent room child. Positive results
+// only, revalidated after houseIntentChildCacheMs and on initialize.
+@Field static java.util.concurrent.ConcurrentHashMap houseIntentChildIdCache = new java.util.concurrent.ConcurrentHashMap()
 
 definition(
     name: "Simple Home",
@@ -142,6 +152,7 @@ def updated() {
 }
 
 def initialize() {
+    houseIntentChildIdCache.remove(app.id?.toString())
     ensureSimpleHomeAccessToken()
     createOrUpdateSharedDevices()
     validateDefensiveAppCreation()
@@ -503,7 +514,25 @@ private def circadianAppReferenceBulb() {
 }
 
 private def houseIntentChildApp() {
-    return houseIntentChildApps().find { child -> child }
+    String key = app.id?.toString()
+    Map cached = houseIntentChildIdCache.get(key) as Map
+    if (cached?.id && (now() - safeLong(cached.at, 0L)) < houseIntentChildCacheMs()) {
+        def cachedChild = roomStateChildById(cached.id)
+        if (cachedChild) return cachedChild
+    }
+
+    def found = houseIntentChildApps().find { child -> child }
+    String foundId = found?.id?.toString()
+    if (foundId) {
+        houseIntentChildIdCache.put(key, [id: foundId, at: now()])
+    } else {
+        houseIntentChildIdCache.remove(key)
+    }
+    return found
+}
+
+private Long houseIntentChildCacheMs() {
+    return 300000L
 }
 
 private List houseIntentChildApps() {
@@ -519,22 +548,19 @@ private List houseIntentChildApps() {
 }
 
 private List roomStateChildApps() {
-    // childApps returns ALL child apps (every input), so filter the configured
-    // seed by type too; otherwise rooms-only calls land on Mode Manager,
-    // Circadian, and Room Lighting children and throw MissingMethodException.
-    List configured = (childApps ?: []).findAll { child ->
-        simpleHomeChildTypeIs(child, "roomState")
-    }
-    List discovered = []
+    // childApps and getChildApps() both return ALL child apps, so enumerate
+    // once and filter by type; rooms-only calls must never land on Mode
+    // Manager, Circadian, or Room Lighting children.
+    List children = []
     try {
-        discovered = getChildApps()?.findAll { child ->
-            return simpleHomeChildTypeIs(child, "roomState")
-        } ?: []
+        children = getChildApps() ?: []
     } catch (Throwable ignored) {
-        discovered = []
+        children = childApps ?: []
     }
 
-    return uniqueChildApps(configured + discovered)
+    return uniqueChildApps(children.findAll { child ->
+        simpleHomeChildTypeIs(child, "roomState")
+    })
 }
 
 private def houseIntentLightingChildApp() {
@@ -623,11 +649,45 @@ private List uniqueChildApps(List apps) {
 }
 
 private String simpleHomeAppType(def child) {
+    String id = child?.id?.toString()
+    if (id) {
+        def cached = childTypeCache.get(id)
+        if (cached != null) return cached.toString()
+    }
+
     try {
-        return child?.getSimpleHomeAppType()?.toString()
+        String type = child?.getSimpleHomeAppType()?.toString()
+        if (id && type) childTypeCache.put(id, type)
+        return type
     } catch (Throwable ignored) {
         return null
     }
+}
+
+// Direct lookup by child app id. Scanning every child to find one id was the
+// dominant cost of the whole stack, so only fall back to a scan if the direct
+// call fails.
+private def simpleHomeChildById(def childAppId) {
+    String id = childAppId?.toString()?.trim()
+    if (!id) return null
+
+    try {
+        def child = getChildAppById(id as Long)
+        if (child) return child
+    } catch (Throwable ignored) {
+        // Fall through to the scan.
+    }
+
+    try {
+        return getChildApps()?.find { child -> child?.id?.toString() == id }
+    } catch (Throwable ignored) {
+        return null
+    }
+}
+
+private def roomStateChildById(def childAppId) {
+    def child = simpleHomeChildById(childAppId)
+    return child && simpleHomeChildTypeIs(child, "roomState") ? child : null
 }
 
 private Boolean simpleHomeChildTypeIs(def child, String type) {
@@ -1403,19 +1463,11 @@ private List roomLightingRoomChildIds(def requestingChildAppId) {
 }
 
 private def childAppById(def childAppId) {
-    if (!childAppId) return null
-    def managed = allManagedChildren().find { child -> child?.id?.toString() == "${childAppId}" }
-    if (managed) return managed
-
-    try {
-        return getChildApps()?.find { child -> child?.id?.toString() == "${childAppId}" }
-    } catch (Throwable ignored) {
-        return null
-    }
+    return simpleHomeChildById(childAppId)
 }
 
 Map roomStateChildInfo(def childAppId) {
-    def child = roomStateChildApps().find { it?.id?.toString() == "${childAppId}" }
+    def child = roomStateChildById(childAppId)
     if (!child) return [:]
 
     try {
@@ -1435,7 +1487,7 @@ Map roomStateChildInfo(def childAppId) {
 }
 
 def roomStateChildRoomDevice(def childAppId) {
-    def child = roomStateChildApps().find { it?.id?.toString() == "${childAppId}" }
+    def child = roomStateChildById(childAppId)
     if (!child) return null
 
     try {
@@ -1446,7 +1498,7 @@ def roomStateChildRoomDevice(def childAppId) {
 }
 
 void roomStateChildReapplyCircadianReference(def childAppId, String reason = "parent requested reference reapply") {
-    def child = roomStateChildApps().find { it?.id?.toString() == "${childAppId}" }
+    def child = roomStateChildById(childAppId)
     if (!child) return
 
     try {
@@ -1569,7 +1621,7 @@ private String deviceValue(def dev, String attributeName) {
 }
 
 void roomStateChildPresenceActivity(def childAppId, String reason) {
-    def child = roomStateChildApps().find { it?.id?.toString() == "${childAppId}" }
+    def child = roomStateChildById(childAppId)
     if (!child) return
 
     try {
@@ -1580,7 +1632,7 @@ void roomStateChildPresenceActivity(def childAppId, String reason) {
 }
 
 void roomStateChildEngagementActivity(def childAppId, String reason) {
-    def child = roomStateChildApps().find { it?.id?.toString() == "${childAppId}" }
+    def child = roomStateChildById(childAppId)
     if (!child) return
 
     try {
@@ -1595,9 +1647,8 @@ List neighborRoomDevicesForChildIds(def selectedChildIds) {
     if (!ids) return []
 
     try {
-        List allChildren = roomStateChildApps()
-        List matchedChildren = allChildren.findAll { child ->
-            if (!ids.contains(child?.id?.toString())) return false
+        List matchedChildren = ids.collect { id -> roomStateChildById(id) }.findAll { child ->
+            if (!child) return false
             try {
                 return child.getRoomProfile() != "houseIntent"
             } catch (Throwable ignored) {
@@ -1624,9 +1675,9 @@ Map activeNeighborRoomForChildIds(def selectedChildIds) {
     if (!ids) return [active: false]
 
     try {
-        List allChildren = roomStateChildApps()
-        for (child in allChildren) {
-            if (!ids.contains(child?.id?.toString())) continue
+        for (id in ids) {
+            def child = roomStateChildById(id)
+            if (!child) continue
 
             try {
                 if (child.getRoomProfile() == "houseIntent") continue
