@@ -63,6 +63,16 @@ class HouseIntentCacheSpec extends Specification {
         app.houseIntentChildApp().is(replacement)
     }
 
+    def 'lookup without an installed parent id does not use a null concurrent map key'() {
+        given:
+        def room = new Room()
+        def app = parent([room])
+        app.binding.setVariable('app', [id:null])
+        expect:
+        app.houseIntentChildApp().is(room)
+        app.houseIntentChildIdCache.isEmpty()
+    }
+
     static class Room {
         String id = '300'
         String profile = 'houseIntent'

@@ -152,7 +152,8 @@ def updated() {
 }
 
 def initialize() {
-    houseIntentChildIdCache.remove(app.id?.toString())
+    String parentId = app?.id?.toString()
+    if (parentId) houseIntentChildIdCache.remove(parentId)
     ensureSimpleHomeAccessToken()
     createOrUpdateSharedDevices()
     validateDefensiveAppCreation()
@@ -514,8 +515,8 @@ private def circadianAppReferenceBulb() {
 }
 
 private def houseIntentChildApp() {
-    String key = app.id?.toString()
-    Map cached = houseIntentChildIdCache.get(key) as Map
+    String key = app?.id?.toString()
+    Map cached = key ? houseIntentChildIdCache.get(key) as Map : null
     if (cached?.id && (now() - safeLong(cached.at, 0L)) < houseIntentChildCacheMs()) {
         def cachedChild = roomStateChildById(cached.id)
         if (houseIntentRoomChild(cachedChild)) return cachedChild
@@ -523,9 +524,9 @@ private def houseIntentChildApp() {
 
     def found = houseIntentChildApps().find { child -> child }
     String foundId = found?.id?.toString()
-    if (foundId) {
+    if (foundId && key) {
         houseIntentChildIdCache.put(key, [id: foundId, at: now()])
-    } else {
+    } else if (key) {
         houseIntentChildIdCache.remove(key)
     }
     return found
