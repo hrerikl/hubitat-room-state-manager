@@ -324,6 +324,9 @@ private Boolean updateAppCode(String codeId, String source) {
             ignoreSSLIssues     : true
         ]) { resp ->
             result = resp?.data?.status == "success"
+            if (!result) {
+                log.warn "${app.label}: App code ${codeId} rejected: ${JsonOutput.toJson(resp?.data)}"
+            }
         }
         return result
     } catch (Exception e) {
