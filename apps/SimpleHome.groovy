@@ -518,7 +518,7 @@ private def houseIntentChildApp() {
     Map cached = houseIntentChildIdCache.get(key) as Map
     if (cached?.id && (now() - safeLong(cached.at, 0L)) < houseIntentChildCacheMs()) {
         def cachedChild = roomStateChildById(cached.id)
-        if (cachedChild) return cachedChild
+        if (houseIntentRoomChild(cachedChild)) return cachedChild
     }
 
     def found = houseIntentChildApps().find { child -> child }
@@ -537,14 +537,19 @@ private Long houseIntentChildCacheMs() {
 
 private List houseIntentChildApps() {
     return roomStateChildApps().findAll { child ->
-        try {
-            if (child.getRoomProfile() == "houseIntent") return true
-            if (child.getConfiguredRoomName() == "House Intent") return true
-        } catch (Throwable ignored) {
-            // Ignore non-room child apps.
-        }
-        return child?.label == "Room House Intent"
+        houseIntentRoomChild(child)
     }
+}
+
+private Boolean houseIntentRoomChild(def child) {
+    if (!child) return false
+    try {
+        if (child.getRoomProfile() == "houseIntent") return true
+        if (child.getConfiguredRoomName() == "House Intent") return true
+    } catch (Throwable ignored) {
+        // Retain the legacy label fallback.
+    }
+    return child.label == "Room House Intent"
 }
 
 private List roomStateChildApps() {
